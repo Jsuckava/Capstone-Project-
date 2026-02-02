@@ -1,0 +1,66 @@
+This is a postgreSQL command
+
+"Do this query once only"
+
+CREATE DATABASE "MainRegistrar_DB";
+CREATE DATABASE "AnnexRegistrar_DB";
+CREATE DATABASE "PubAdRegistrar_DB";
+
+"copy this only inside each database, run once only"
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS StudentRecords (
+    ID UUID PRIMARY KEY,
+
+    Name VARCHAR(255) NOT NULL,
+    Age INT CHECK (Age > 0),
+    Section VARCHAR(50),
+    Year INT CHECK (Year >= 1),
+    Course VARCHAR(100),
+
+    TOR_CopyID BYTEA NOT NULL,
+    Grades_CopyID BYTEA,
+    Others_CopyID BYTEA,
+
+    Grades_Comp NUMERIC(5,2),
+
+    Curr_TorID CHAR(64) NOT NULL,
+    Curr_GradesID CHAR(64),
+    Curr_OthersID CHAR(64),
+
+    Prev_TorID CHAR(64),
+    Prev_GradesID CHAR(64),
+    Prev_OthersID CHAR(64),
+
+    transact_ID CHAR(64) NOT NULL,
+    registrar_source VARCHAR(50) NOT NULL,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE OR REPLACE FUNCTION block_updates()
+RETURNS trigger AS $$
+BEGIN
+    RAISE EXCEPTION 'Direct update not allowed — must insert a new version.';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_block_update
+BEFORE UPDATE ON StudentRecords
+FOR EACH ROW
+EXECUTE FUNCTION block_updates();
+
+CREATE TABLE IF NOT EXISTS ExternalLedger (
+    external_registrar VARCHAR(50) NOT NULL,
+    student_id UUID NOT NULL,
+
+    transact_ID CHAR(64) NOT NULL,
+    Curr_TorID CHAR(64),
+    Curr_GradesID CHAR(64),
+    Curr_OthersID CHAR(64),
+
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (external_registrar, student_id)
+);
