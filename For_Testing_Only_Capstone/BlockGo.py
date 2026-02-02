@@ -15,13 +15,36 @@ from openpyxl.utils import get_column_letter
 import threading
 
 
-DB_CONFIG = {
-    'host': 'localhost',
-    'port': 5432,
-    'database': 'postgres',
-    'user': 'apple',
-    'password': ''
+# Database connection strings for the three registrars
+DB_CONFIGS = {
+    'MainRegistrar': {
+        'host': 'ep-steep-sea-a1q8306c-pooler.ap-southeast-1.aws.neon.tech',
+        'port': 5432,
+        'database': 'MainRegistrar_DB',
+        'user': 'neondb_owner',
+        'password': 'npg_elW96MjQYugc',
+        'sslmode': 'require'
+    },
+    'AnnexRegistrar': {
+        'host': 'ep-steep-sea-a1q8306c-pooler.ap-southeast-1.aws.neon.tech',
+        'port': 5432,
+        'database': 'AnnexRegistrar_DB',
+        'user': 'neondb_owner',
+        'password': 'npg_elW96MjQYugc',
+        'sslmode': 'require'
+    },
+    'PubAdRegistrar': {
+        'host': 'ep-steep-sea-a1q8306c-pooler.ap-southeast-1.aws.neon.tech',
+        'port': 5432,
+        'database': 'PubAdRegistrar_DB',
+        'user': 'neondb_owner',
+        'password': 'npg_elW96MjQYugc',
+        'sslmode': 'require'
+    }
 }
+
+# Default database for initial login/setup
+DB_CONFIG = DB_CONFIGS['MainRegistrar']
 AES_KEY = b'ThisIsA32ByteLongEncryptionKeys!'
 
 
