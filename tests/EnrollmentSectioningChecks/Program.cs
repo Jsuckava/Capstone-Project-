@@ -99,6 +99,14 @@ try
     }
     var races = await Task.WhenAll(AssignConcurrent(1), AssignConcurrent(2));
     Check(races.Count(success => success) == 1, "Competing requests reassigned a student silently.");
+    var previousSection = Convert.ToInt32(await Scalar("SELECT academic_section_id FROM student_enrollments WHERE student_user_id = 9"));
+    var targetSection = previousSection == 1 ? 2 : 1;
+    var expectedSections = new Dictionary<string, int> { ["26-0009"] = previousSection };
+    await EnrollmentSectioningService.AssignAsync(connection, targetSection, new[] { "26-0009" }, "2026-2027", "FIRST", null, expectedSections);
+    Check(Convert.ToInt32(await Scalar("SELECT academic_section_id FROM student_enrollments WHERE student_user_id = 9")) == targetSection,
+        "An intentional move with the saved previous section was rejected.");
+    await Reject(() => EnrollmentSectioningService.AssignAsync(connection, previousSection, new[] { "26-0009" }, "2026-2027", "FIRST", null,
+        new Dictionary<string, int> { ["26-0009"] = 999 }), "Stale section move was accepted.");
     Console.WriteLine("PASS: schema defaults, authoritative period queries, scope, eligibility, atomic rollback, retries, snapshots, and concurrent assignment.");
 }
 finally

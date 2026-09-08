@@ -64,3 +64,24 @@ test('ignores a stale response after the department changes', async () => {
   await act(async () => resolveFirst({ data: [student] }));
   expect(JSON.parse(localStorage.getItem(STUDENT_BATCHES_KEY))).toEqual([]);
 });
+
+test('refreshing the enrolled roster does not duplicate students', async () => {
+  render(<RegistrarStudentSectioning chairpersonDepartment="BSIT" />);
+  await waitFor(() => expect(screen.getByRole('button', { name: /Auto-Populate Enrolled \(1\)/ })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: /Auto-Populate Enrolled/ }));
+  await waitFor(() => expect(fetchUnassignedEnrolledStudents).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByRole('button', { name: /Auto-Populate Enrolled \(1\)/ })).toBeEnabled());
+  expect(JSON.parse(localStorage.getItem(STUDENT_BATCHES_KEY))[0].students).toHaveLength(1);
+});
+
+test('failed assignment does not publish a sectioned roster', async () => {
+  syncSectioningBatchToBackend.mockRejectedValue(new Error('Student already assigned'));
+  render(<RegistrarStudentSectioning chairpersonDepartment="BSIT" />);
+  await waitFor(() => expect(screen.getByRole('button', { name: /Auto-Populate Enrolled/ })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Generate Sections' }));
+  await waitFor(() => expect(window.alert).toHaveBeenCalledWith('Section assignment failed: Student already assigned'));
+  const workspace = JSON.parse(localStorage.getItem(STUDENT_BATCHES_KEY))[0];
+  expect(workspace.sectionPlans).toEqual([]);
+  expect(workspace.students[0].sectionCode).toBe('');
+  expect(localStorage.getItem('studentSections')).toBeNull();
+});

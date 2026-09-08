@@ -580,6 +580,18 @@ export const fetchDepartmentSections = async (department) => {
     return await fetchWithAuth(`/Auth/sections/department/${encodeURIComponent(department)}`);
 };
 
+export const fetchUnassignedEnrolledStudents = async (filters = {}) => {
+    const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== '' && value != null));
+    return await fetchWithAuth(`/Auth/students/unassigned-enrolled?${query}`);
+};
+
+export const assignStudentsToSection = async (sectionId, studentIds, period) => {
+    return await fetchWithAuth(`/Auth/sections/${encodeURIComponent(sectionId)}/assign-students`, {
+        method: 'POST',
+        body: JSON.stringify({ studentIds, ...period }),
+    });
+};
+
 export const deleteAcademicSection = async (id) => {
     return await fetchWithAuth(`/Auth/sections/${encodeURIComponent(id)}`, {
         method: 'DELETE'

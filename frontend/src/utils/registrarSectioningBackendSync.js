@@ -1,12 +1,10 @@
 import {
-  batchEnrollStudentsToSection,
+  assignStudentsToSection,
   createSection,
   fetchDepartmentSections,
 } from "../services/api";
 import {
   YEAR_LEVEL_PREFIXES,
-  buildCsvContent,
-  getStudentMiddleName,
 } from "./studentSectioningHelpers";
 
 const yearLevelNumberFrom = (value = "", sectionCode = "") => {
@@ -31,39 +29,9 @@ const sectionNumberFrom = (sectionCode = "") => {
 const normalizeSectionValue = (value = "") =>
   String(value || "").trim().replace(/\D/g, "");
 
-const buildFullName = (student = {}) =>
-  [
-    student.firstName,
-    getStudentMiddleName(student),
-    student.lastName,
-  ]
-    .filter(Boolean)
-    .join(" ") ||
-  student.fullname ||
-  student.name ||
-  `Student ${student.studentId || ""}`.trim();
-
-const buildEnrollmentFile = (students = [], sectionCode = "section") => {
-  const rows = students.map((student) => [
-    student.studentId || "",
-    student.email || student.studentEmail || "",
-    buildFullName(student),
-    "",
-  ]);
-  const csv = buildCsvContent([
-    ["student_id", "email", "full_name", "dob"],
-    ...rows,
-  ]);
-
-  return new File([csv], `${sectionCode}-students.csv`, {
-    type: "text/csv;charset=utf-8;",
-  });
-};
-
 const findBackendSection = (sections = [], department = "", yearLevel = "", sectionNum = "") =>
   sections.find(
     (section) =>
-      String(section.department || "") === String(department || "") &&
       normalizeSectionValue(section.yearLevel) === normalizeSectionValue(yearLevel) &&
       normalizeSectionValue(section.sectionNum) === normalizeSectionValue(sectionNum)
   );
@@ -79,6 +47,11 @@ export const syncSectioningBatchToBackend = async (batch = {}) => {
 
   if (!department || !sectionPlans.length) {
     return { sectionsSynced: 0, studentsSynced: 0 };
+  }
+
+  const schoolYear = batch.schoolYear || (/^\d{4}-\d{4}$/.test(batch.batchYear || '') ? batch.batchYear : '');
+  if (!schoolYear || !batch.semester) {
+    throw new Error('Select the enrollment school year and semester before saving sections.');
   }
 
   let backendSections = await getDepartmentSections(department);
@@ -134,9 +107,18 @@ export const syncSectioningBatchToBackend = async (batch = {}) => {
 
     if (!backendSection?.id || !sectionStudents.length) continue;
 
-    const enrollmentFile = buildEnrollmentFile(sectionStudents, section.sectionCode);
-    await batchEnrollStudentsToSection(enrollmentFile, backendSection.id);
-    studentsSynced += sectionStudents.length;
+    const studentIds = [...new Set(sectionStudents.map((student) => student.studentId))];
+    const expectedSectionIds = Object.fromEntries(sectionStudents
+      .filter((student) => student.academicSectionId && String(student.academicSectionId) !== String(backendSection.id))
+      .map((student) => [student.studentId, Number(student.academicSectionId)]));
+    const period = { schoolYear, semester: batch.semester };
+    if (Object.keys(expectedSectionIds).length) period.expectedSectionIds = expectedSectionIds;
+    const result = await assignStudentsToSection(backendSection.id, studentIds, period);
+    if (result.errors?.length || result.status !== 'Success' || result.assignedCount !== studentIds.length) {
+      throw new Error(result.errors?.join('; ') || result.message || 'Some students could not be assigned. Refresh the enrolled roster and retry.');
+    }
+    sectionStudents.forEach((student) => { student.academicSectionId = Number(backendSection.id); });
+    studentsSynced += result.assignedCount;
   }
 
   return { sectionsSynced, studentsSynced };

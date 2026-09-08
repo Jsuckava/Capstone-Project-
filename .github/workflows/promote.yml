@@ -30,7 +30,7 @@ jobs:
           TARGET: ${{ inputs.target_branch }}
         shell: bash
         run: |
-          if [[ "$SOURCE" == "Backup-2" && "$TARGET" == "Staging-and-Testing" ]]; then exit 0; fi
+          if [[ "$SOURCE" == "Develop-and-Integration" && "$TARGET" == "Staging-and-Testing" ]]; then exit 0; fi
           if [[ "$SOURCE" == "Staging-and-Testing" && "$TARGET" == "main" ]]; then exit 0; fi
           echo "Promotion path $SOURCE -> $TARGET is not permitted."
           exit 1

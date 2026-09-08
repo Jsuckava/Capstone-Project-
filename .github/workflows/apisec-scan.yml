@@ -1,10 +1,10 @@
-name: Backup-2 APIsec Scan
+name: Develop-and-Integration APIsec Scan
 
 on:
   push:
-    branches: [Backup-2]
+    branches: [Develop-and-Integration]
   pull_request:
-    branches: [Backup-2]
+    branches: [Develop-and-Integration]
   schedule:
     - cron: "24 6 * * 1"
   workflow_dispatch:

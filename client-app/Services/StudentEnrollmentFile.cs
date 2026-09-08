@@ -66,6 +66,9 @@ public static class StudentEnrollmentFile
         {
             if (csv.Parser.Count < columns.Length)
                 throw new ArgumentException($"Row {csv.Parser.Row} has {csv.Parser.Count} values; expected at least {columns.Length}. Quote values containing commas.");
+            if (Enumerable.Range(columns.Length, csv.Parser.Count - columns.Length)
+                .Any(index => !string.IsNullOrWhiteSpace(csv.GetField(index))))
+                throw new ArgumentException($"Row {csv.Parser.Row} has values without column headings. Quote values containing commas.");
             var record = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             for (var index = 0; index < columns.Length; index++) record[columns[index]] = csv.GetField(index)?.Trim() ?? "";
             records.Add(record);

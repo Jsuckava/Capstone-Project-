@@ -1,17 +1,17 @@
-name: Backup-2 Frontend Routes and Container Builds
+name: Develop-and-Integration Frontend Routes and Container Builds
 
 on:
   push:
-    branches: [Backup-2]
+    branches: [Develop-and-Integration]
   pull_request:
-    branches: [Backup-2]
+    branches: [Develop-and-Integration]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: backup-2-containers-${{ github.workflow }}-${{ github.ref }}
+  group: Develop-and-Integration-containers-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Checkout Backup-2 source
+      - name: Checkout Develop-and-Integration source
         uses: actions/checkout@v4
 
       - name: Build current application images

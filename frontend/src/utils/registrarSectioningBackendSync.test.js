@@ -16,6 +16,7 @@ const batch = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  batch.students.forEach((student) => { delete student.academicSectionId; });
   fetchDepartmentSections.mockResolvedValue({ data: [{ id: '7', department: 'Information Technology', yearLevel: '1', sectionNum: '1' }] });
   createSection.mockResolvedValue({ id: 8 });
   assignStudentsToSection.mockResolvedValue({ status: 'Success', assignedCount: 1, errors: [] });
@@ -50,4 +51,13 @@ test('rejects partial success from an older backend', async () => {
 test('requires the enrollment period instead of silently choosing a different period', async () => {
   await expect(syncSectioningBatchToBackend({ ...batch, semester: undefined })).rejects.toThrow('school year and semester');
   expect(assignStudentsToSection).not.toHaveBeenCalled();
+});
+
+test('an intentional section move supplies the previously saved section for conflict checking', async () => {
+  const moved = { ...batch, students: [{ ...batch.students[0], academicSectionId: 3 }] };
+  await syncSectioningBatchToBackend(moved);
+  expect(assignStudentsToSection).toHaveBeenCalledWith('7', ['26-0001'], {
+    schoolYear: '2026-2027', semester: 'SECOND', expectedSectionIds: { '26-0001': 3 },
+  });
+  expect(moved.students[0].academicSectionId).toBe(7);
 });

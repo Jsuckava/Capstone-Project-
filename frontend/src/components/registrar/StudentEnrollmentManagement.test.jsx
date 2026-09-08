@@ -53,6 +53,7 @@ test('manually enrolls a student in the selected academic period and curriculum'
   await waitFor(() => expect(screen.getByLabelText(/curriculum version/i)).toHaveValue('7'));
 
   fireEvent.change(screen.getByLabelText(/school year/i), { target: { value: '2026-2027' } });
+  fireEvent.change(screen.getByLabelText(/^semester/i), { target: { value: 'SECOND' } });
   fireEvent.change(screen.getByLabelText(/^year level/i), { target: { value: '2' } });
   fireEvent.click(screen.getByRole('button', { name: /manual entry/i }));
   fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'Maria' } });
@@ -72,5 +73,6 @@ test('manually enrolls a student in the selected academic period and curriculum'
     curriculumId: '7',
     schoolYear: '2026-2027',
     yearLevel: '2',
+    semester: 'SECOND',
   });
 });

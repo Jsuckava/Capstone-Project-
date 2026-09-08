@@ -51,11 +51,14 @@ public static class EnrollmentSectioningService
     }
 
     public static async Task<(int Count, string Department)> AssignAsync(NpgsqlConnection connection,
-        int sectionId, IEnumerable<string> studentIds, string schoolYear, string semester, string? departmentScope)
+        int sectionId, IEnumerable<string> studentIds, string schoolYear, string semester, string? departmentScope,
+        IReadOnlyDictionary<string, int>? expectedSectionIds = null)
     {
         var identifiers = studentIds.Select(value => value?.Trim() ?? "").ToArray();
         if (identifiers.Length == 0 || identifiers.Any(string.IsNullOrWhiteSpace))
             throw new ArgumentException("At least one nonblank student ID is required.");
+        if (expectedSectionIds?.Any(pair => pair.Value <= 0 || !identifiers.Contains(pair.Key)) == true)
+            throw new ArgumentException("Expected section IDs must be positive and refer to students in this request.");
         await using var transaction = await connection.BeginTransactionAsync();
         string department;
         int programId, yearLevel, sectionNumber;
@@ -101,7 +104,9 @@ public static class EnrollmentSectioningService
                 SET academic_section_id = @sectionId, section = @section, updated_at = CURRENT_TIMESTAMP
                 WHERE student_user_id = @userId AND school_year = @schoolYear AND semester = @semester
                   AND status = 'ENROLLED' AND program_id = @programId AND year_level = @yearLevel
-                  AND (academic_section_id IS NULL OR academic_section_id = @sectionId)
+                  AND (academic_section_id = @sectionId
+                       OR (@expectedSectionId IS NULL AND academic_section_id IS NULL)
+                       OR academic_section_id = @expectedSectionId)
                 RETURNING enrollment_id;", connection, transaction);
             update.Parameters.AddWithValue("sectionId", sectionId);
             update.Parameters.AddWithValue("section", $"{yearLevel}-{sectionNumber}");
@@ -110,6 +115,11 @@ public static class EnrollmentSectioningService
             update.Parameters.AddWithValue("semester", semester);
             update.Parameters.AddWithValue("programId", programId);
             update.Parameters.AddWithValue("yearLevel", yearLevel);
+            // An explicit move must name the previously saved section. A stale roster
+            // cannot overwrite another registrar's intervening assignment.
+            update.Parameters.Add("expectedSectionId", NpgsqlDbType.Integer).Value =
+                expectedSectionIds != null && expectedSectionIds.TryGetValue(identifier, out var expectedSectionId)
+                    ? expectedSectionId : DBNull.Value;
             var enrollmentId = await update.ExecuteScalarAsync();
             if (enrollmentId is null)
                 throw new InvalidOperationException($"Student '{identifier}' needs an unassigned ENROLLED record for {schoolYear} {semester} in this program and year level. The student may already belong to another section.");

@@ -18,6 +18,7 @@ const StudentEnrollmentManagement = ({ programs = [] }) => {
   const [form, setForm] = useState({
     department: programs[0] || '',
     schoolYear: currentSchoolYear(),
+    semester: new Date().getMonth() >= 5 ? 'FIRST' : 'SECOND',
     yearLevel: '1',
     curriculumId: '',
   });
@@ -89,6 +90,7 @@ const StudentEnrollmentManagement = ({ programs = [] }) => {
   const enrollmentPayload = () => ({
     curriculumId: form.curriculumId || undefined,
     schoolYear: form.schoolYear,
+    semester: form.semester,
     yearLevel: form.yearLevel,
   });
 
@@ -162,6 +164,13 @@ const StudentEnrollmentManagement = ({ programs = [] }) => {
           <label className="text-xs font-semibold text-slate-700">Year Level
             <select value={form.yearLevel} onChange={(event) => updateField('yearLevel', event.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-normal">
               {[1, 2, 3, 4].map((year) => <option key={year} value={year}>{year}{year === 1 ? 'st' : year === 2 ? 'nd' : year === 3 ? 'rd' : 'th'} Year</option>)}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-slate-700">Semester
+            <select value={form.semester} onChange={(event) => updateField('semester', event.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-normal">
+              <option value="FIRST">First Semester</option>
+              <option value="SECOND">Second Semester</option>
+              <option value="MIDYEAR">Midyear</option>
             </select>
           </label>
           <label className="text-xs font-semibold text-slate-700">Curriculum Version

@@ -14,11 +14,12 @@ import {
   syncSectionedStudentsToStorage,
 } from "../../utils/studentSectioningHelpers";
 import { downloadTemplateButtonClass } from "../shared/downloadButtonStyles";
-import { fetchNextStudentId } from "../../services/api";
+import { fetchNextStudentId, fetchUnassignedEnrolledStudents } from "../../services/api";
 import { syncSectioningBatchToBackend } from "../../utils/registrarSectioningBackendSync";
 import { pushSectioningSharedState } from "../../utils/sharedClientState";
 
 const buildStudentName = (student) => {
+  if (student.fullName) return student.fullName;
   const firstAndMiddle = [
     student.firstName,
     getStudentMiddleName(student),
@@ -170,8 +171,15 @@ function RegistrarStudentSectioning({
   const [activeWorkspace] = useState("sectioning");
   const [selectedBatchKey, setSelectedBatchKey] = useState("");
   const [sectioningBatchYear, setSectioningBatchYear] = useState(() =>
-    String(getGregorianCalendarYear())
+    String(new Date().getMonth() >= 5 ? CURRENT_YEAR : CURRENT_YEAR - 1)
   );
+  const [sectioningSemester, setSectioningSemester] = useState(() => new Date().getMonth() >= 5 ? "FIRST" : "SECOND");
+  const schoolYear = `${sectioningBatchYear}-${Number(sectioningBatchYear) + 1}`;
+  const [enrolledCount, setEnrolledCount] = useState(0);
+  const [enrolledLoading, setEnrolledLoading] = useState(true);
+  const [enrolledError, setEnrolledError] = useState("");
+  const [enrollmentRefresh, setEnrollmentRefresh] = useState(0);
+  const [savingSections, setSavingSections] = useState(false);
   const [targetSemester] = useState("1st Semester");
   const [promotionSummary, setPromotionSummary] = useState(null);
   const [graduatingStudents, setGraduatingStudents] = useState(() =>
@@ -220,15 +228,17 @@ function RegistrarStudentSectioning({
   const [studentIdError, setStudentIdError] = useState("");
 
   const syncBatchToBackend = async (batch, successMessage = "") => {
-    if (!batch || !isRegistrarMode) return;
+    if (!batch || !isRegistrarMode) return false;
 
     try {
       await syncSectioningBatchToBackend(batch);
       if (successMessage) alert(successMessage);
+      return true;
     } catch (error) {
       alert(
         `Saved locally, but backend sync failed: ${error.message || "Please try saving again."}`
       );
+      return false;
     }
   };
 
@@ -237,9 +247,10 @@ function RegistrarStudentSectioning({
       batches.filter(
         (batch) =>
           batch.program === chairpersonDepartment &&
+          batch.schoolYear === schoolYear && batch.semester === sectioningSemester &&
           batch.status !== "Promoted"
       ),
-    [batches, chairpersonDepartment]
+    [batches, chairpersonDepartment, schoolYear, sectioningSemester]
   );
   const rolloverWorkspaces = isRegistrarMode
     ? batches.filter((batch) => batch.status !== "Promoted")
@@ -264,7 +275,7 @@ function RegistrarStudentSectioning({
   const fallbackSectioningWorkspace =
     savedSectioningWorkspace ||
     departmentWorkspaces.find((batch) => (batch.sectionPlans || []).length > 0) ||
-    null;
+    departmentWorkspaces[0] || null;
   const selectedBatch =
     departmentWorkspaces.find((batch) => batch.key === selectedBatchKey) ||
     (!selectedBatchKey ? fallbackSectioningWorkspace : null) ||
@@ -559,6 +570,47 @@ function RegistrarStudentSectioning({
   }, [batches]);
 
   useEffect(() => {
+    let cancelled = false;
+    setEnrolledLoading(true);
+    setEnrolledError("");
+    setEnrolledCount(0);
+    setSelectedBatchKey("");
+    if (!chairpersonDepartment || !/^\d{4}$/.test(sectioningBatchYear)) {
+      setEnrolledLoading(false);
+      return;
+    }
+    fetchUnassignedEnrolledStudents({ department: chairpersonDepartment, schoolYear,
+      semester: sectioningSemester, yearLevel: YEAR_LEVEL_PREFIXES[selectedYearLevel] })
+      .then((response) => {
+        if (cancelled) return;
+        const enrolled = response.data || [];
+        setEnrolledCount(enrolled.length);
+        const key = [chairpersonDepartment, schoolYear, sectioningSemester, "sectioning"].join("|");
+        setBatches((current) => {
+          const existing = current.find((batch) => batch.key === key);
+          if (!existing && !enrolled.length) return current;
+          const retained = (existing?.students || []).filter((student) =>
+            student.sectionCode || student.yearLevel !== selectedYearLevel);
+          const retainedIds = new Set(retained.map((student) => student.studentId));
+          const nextStudents = enrolled.filter((student) => !retainedIds.has(student.studentNo)).map((student) => ({
+            ...student, studentId: student.studentNo,
+            // Preserve the official full name; do not guess its component parts.
+            firstName: student.fullName, lastName: "", middleName: "",
+            yearLevel: AVAILABLE_YEAR_LEVELS[Number(student.yearLevel) - 1], sectionCode: "",
+          }));
+          const workspace = { id: Date.now(), status: "Sectioning", sectionPlans: [], removedStudents: [],
+            ...existing, key, program: chairpersonDepartment, batchYear: sectioningBatchYear,
+            schoolYear, semester: sectioningSemester, students: [...retained, ...nextStudents] };
+          return [...current.filter((batch) => batch.key !== key), workspace];
+        });
+        setSelectedBatchKey(key);
+      })
+      .catch((error) => { if (!cancelled) setEnrolledError(error.message || "Could not load enrolled students."); })
+      .finally(() => { if (!cancelled) setEnrolledLoading(false); });
+    return () => { cancelled = true; };
+  }, [chairpersonDepartment, schoolYear, sectioningBatchYear, sectioningSemester, selectedYearLevel, enrollmentRefresh]);
+
+  useEffect(() => {
     if (!studentIdYear || Object.prototype.hasOwnProperty.call(persistedSequences, studentIdYear)) {
       return;
     }
@@ -649,19 +701,7 @@ function RegistrarStudentSectioning({
 
     setSectioningBatchYear(nextBatchYear);
 
-    if (!isRegistrarMode || !activeBatchKey) return;
-
-    const nextBatches = batches.map((batch) =>
-      batch.key === activeBatchKey
-        ? {
-            ...batch,
-            batchYear: nextBatchYear,
-            lastSectionedAt: new Date().toISOString(),
-          }
-        : batch
-    );
-
-    persistBatches(nextBatches);
+    setSelectedBatchKey("");
   };
 
   const openBatchYearPicker = () => {
@@ -679,7 +719,8 @@ function RegistrarStudentSectioning({
     setIsBatchYearPickerOpen(false);
   };
 
-  const handleGenerateSections = () => {
+  const handleGenerateSections = async () => {
+    if (enrolledLoading || enrolledError || savingSections) return;
     if (!chairpersonDepartment) {
       alert("Please choose a department first.");
       return;
@@ -711,6 +752,8 @@ function RegistrarStudentSectioning({
         key: workspaceKey,
         program: chairpersonDepartment,
         batchYear: resolvedBatchYear,
+        schoolYear,
+        semester: sectioningSemester,
         submittedTo: isRegistrarMode
           ? "Registrar Sectioning Office"
           : `${chairpersonDepartment} Chairperson`,
@@ -797,8 +840,17 @@ function RegistrarStudentSectioning({
       nextWorkspace,
     ];
 
+    setSavingSections(true);
+    try {
+      await syncSectioningBatchToBackend(nextWorkspace);
+    } catch (error) {
+      alert(`Section assignment failed: ${error.message}`);
+      setSavingSections(false);
+      return;
+    }
+    setSavingSections(false);
     persistBatches(nextBatches);
-    syncBatchToBackend(nextWorkspace);
+    setEnrolledCount((count) => Math.max(0, count - studentsNeedingSection.length));
     setSelectedBatchKey(workspaceKey);
     setSectioningBatchYear(workspace.batchYear || sectioningBatchYear);
     setSelectedYearLevel(targetYearLevel);
@@ -1190,6 +1242,7 @@ function RegistrarStudentSectioning({
   };
 
   const handleSaveSectioning = async () => {
+    if (savingSections) return;
     const nextBatches = batches.map((batch) =>
       batch.key === activeBatchKey && (batch.sectionPlans || []).length > 0
         ? {
@@ -1199,12 +1252,14 @@ function RegistrarStudentSectioning({
         : batch
     );
 
-    setBatches(nextBatches);
-    localStorage.setItem(STUDENT_BATCHES_KEY, JSON.stringify(nextBatches));
-    syncSectionedStudentsToStorage(nextBatches);
-    onSectioningSaved?.();
     const batchToSync = nextBatches.find((batch) => batch.key === activeBatchKey);
-    await syncBatchToBackend(batchToSync, "Sections saved and synced successfully.");
+    setSavingSections(true);
+    const synced = await syncBatchToBackend(batchToSync);
+    setSavingSections(false);
+    if (synced) {
+      persistBatches(nextBatches);
+      alert("Sections saved and synced successfully.");
+    }
   };
 
   const handleShuffleSections = () => {
@@ -2453,6 +2508,25 @@ function RegistrarStudentSectioning({
                 </h3>
               </div>
 
+              <div className="mt-3 flex flex-wrap items-end gap-3">
+                <label className="text-xs font-medium text-slate-700">Enrollment semester
+                  <select aria-label="Enrollment semester" value={sectioningSemester}
+                    onChange={(event) => { setSectioningSemester(event.target.value); setSelectedBatchKey(""); }}
+                    className="ml-2 rounded-md border border-slate-300 px-2 py-2">
+                    <option value="FIRST">First Semester</option>
+                    <option value="SECOND">Second Semester</option>
+                    <option value="MIDYEAR">Midyear</option>
+                  </select>
+                </label>
+                <button type="button" disabled={enrolledLoading || savingSections}
+                  onClick={() => setEnrollmentRefresh((value) => value + 1)}
+                  className="rounded-md border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 disabled:opacity-50">
+                  {enrolledLoading ? "Loading enrolled students..." : `Auto-Populate Enrolled (${enrolledCount})`}
+                </button>
+                <span className="text-xs text-slate-600">School year {schoolYear}. Enrolled students load automatically; no upload is needed.</span>
+              </div>
+              {enrolledError ? <p role="alert" className="mt-2 text-sm text-red-700">{enrolledError}</p> : null}
+
               <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-[135px_135px_135px_auto_auto_auto_auto] xl:items-end">
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium text-slate-700">
@@ -2499,7 +2573,7 @@ function RegistrarStudentSectioning({
 
                 <div className="block">
                   <span className="mb-1 block text-xs font-medium text-slate-700">
-                    Batch year
+                    School year starting
                   </span>
                   <div ref={batchYearPickerRef} className="relative">
                     <input
@@ -2585,6 +2659,7 @@ function RegistrarStudentSectioning({
                 <button
                   type="button"
                   onClick={handleGenerateSections}
+                  disabled={enrolledLoading || !!enrolledError || savingSections}
                   className="h-8 whitespace-nowrap rounded-md bg-[#003366] px-3 text-[11px] font-semibold text-white transition hover:bg-[#00264d]"
                 >
                   Generate Sections
@@ -2607,7 +2682,7 @@ function RegistrarStudentSectioning({
                 <button
                   type="button"
                   onClick={handleSaveSectioning}
-                  disabled={!selectedBatch || !sectionPlans.length}
+                  disabled={!selectedBatch || !sectionPlans.length || savingSections}
                   className="h-8 whitespace-nowrap rounded-md border border-[#003366] px-3 text-[11px] font-semibold text-[#003366] transition hover:bg-[#003366] hover:text-white disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
                 >
                   Save Sections
