@@ -1,0 +1,3 @@
+﻿<Project>
+  <Import Project="../buildMultiTargeting/For_Testing_Only_Capstone.props" />
+</Project>

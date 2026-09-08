@@ -1,0 +1,61 @@
+name: Promote Passed Branch
+
+on:
+  workflow_call:
+    inputs:
+      source_branch:
+        description: Branch whose successfully tested commit will be promoted
+        required: true
+        type: string
+      target_branch:
+        description: Protected branch that receives the promotion pull request
+        required: true
+        type: string
+    secrets:
+      PROMOTION_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    name: Promote ${{ inputs.source_branch }} to ${{ inputs.target_branch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate the permitted promotion path
+        env:
+          SOURCE: ${{ inputs.source_branch }}
+          TARGET: ${{ inputs.target_branch }}
+        shell: bash
+        run: |
+          if [[ "$SOURCE" == "Backup-2" && "$TARGET" == "Staging-and-Testing" ]]; then exit 0; fi
+          if [[ "$SOURCE" == "Staging-and-Testing" && "$TARGET" == "main" ]]; then exit 0; fi
+          echo "Promotion path $SOURCE -> $TARGET is not permitted."
+          exit 1
+
+      - name: Open promotion pull request and enable gated auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.PROMOTION_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE: ${{ inputs.source_branch }}
+          TARGET: ${{ inputs.target_branch }}
+        shell: bash
+        run: |
+          test -n "$GH_TOKEN" || {
+            echo "PROMOTION_TOKEN is required so promotion pull requests trigger their own quality gates."
+            exit 1
+          }
+
+          number="$(gh pr list --head "$SOURCE" --base "$TARGET" --state open --json number --jq '.[0].number // empty')"
+          if [[ -z "$number" ]]; then
+            gh pr create \
+              --head "$SOURCE" \
+              --base "$TARGET" \
+              --title "Promote $SOURCE to $TARGET" \
+              --body "Automated promotion after TDD, CodeQL, dependency, deployment, endpoint smoke, and stress gates passed. The target branch reruns the complete pipeline before the next promotion."
+            number="$(gh pr list --head "$SOURCE" --base "$TARGET" --state open --json number --jq '.[0].number')"
+          fi
+
+          gh pr merge "$number" --auto --merge
