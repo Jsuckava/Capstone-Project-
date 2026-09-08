@@ -641,27 +641,24 @@ jobs:
           echo
           echo "All required XP/TDD/CI checks passed."============================================================
 
-  validate-promotion-token:
+   validate-promotion-token:
     name: Validate Promotion Token
-
     runs-on: ubuntu-latest
 
     needs:
       - ci-gate
 
     if: >-
-      ${{
-        (
-          github.event_name == 'push' &&
-          github.ref == 'refs/heads/Develop-and-Integration'
-        )
-        ||
-        (
-          github.event_name == 'workflow_dispatch' &&
-          github.ref == 'refs/heads/Develop-and-Integration' &&
-          inputs.promote == true
-        )
-      }}
+      (
+        github.event_name == 'push' &&
+        github.ref == 'refs/heads/Develop-and-Integration'
+      )
+      ||
+      (
+        github.event_name == 'workflow_dispatch' &&
+        github.ref == 'refs/heads/Develop-and-Integration' &&
+        inputs.promote == true
+      )
 
     timeout-minutes: 5
 
@@ -674,64 +671,57 @@ jobs:
           set -euo pipefail
 
           if [ -z "${GH_TOKEN:-}" ]; then
-
             echo "::error::PROMOTION_TOKEN is not configured."
-
             echo "::error::Create it under:"
             echo "::error::Repository Settings -> Secrets and variables -> Actions"
-
             exit 1
           fi
 
           if ! command -v gh >/dev/null 2>&1; then
             echo "Installing GitHub CLI..."
-
             sudo apt-get update -y
             sudo apt-get install -y gh
           fi
 
           gh --version
 
-          # Uses GH_TOKEN directly.
-          # No gh auth login and no token written to
-          # a persistent credential configuration.
           gh api \
             "repos/${GITHUB_REPOSITORY}" \
             >/dev/null
 
           echo "PROMOTION_TOKEN can access repository."
-          
-promote:
-  name: Promote → Feature/API Endpoint Testing
 
-  needs:
-    - validate-promotion-token
 
-  if: >-
-    success() &&
-    github.actor != 'github-actions[bot]' &&
-    (
+  promote:
+    name: Promote → Feature/API Endpoint Testing
+
+    needs:
+      - validate-promotion-token
+
+    if: >-
+      success() &&
       (
-        github.event_name == 'push' &&
-        github.ref == 'refs/heads/Develop-and-Integration'
+        (
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/Develop-and-Integration'
+        )
+        ||
+        (
+          github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/Develop-and-Integration' &&
+          inputs.promote == true
+        )
       )
-      ||
-      (
-        github.event_name == 'workflow_dispatch' &&
-        github.ref == 'refs/heads/Develop-and-Integration' &&
-        inputs.promote == true
-      )
-    )
 
-  permissions:
-    contents: read
+    permissions:
+      contents: read
 
-  uses: ./.github/workflows/promote.yml
+    uses: ./.github/workflows/promote.yml
 
-  with:
-    source_branch: Develop-and-Integration
-    target_branch: feature/api-endpoints-Testing
-    tested_sha: ${{ github.sha }}
+    with:
+      source_branch: Develop-and-Integration
+      target_branch: feature/api-endpoints-Testing
+      tested_sha: ${{ github.sha }}
 
-  secrets:
-    PROMOTION_TOKEN: ${{ secrets.PROMOTION_TOKEN }}
+    secrets:
+      PROMOTION_TOKEN: ${{ secrets.PROMOTION_TOKEN }}
