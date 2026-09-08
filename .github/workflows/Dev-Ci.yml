@@ -552,11 +552,6 @@ jobs:
             --severity=warning \
             "$SCRIPT"
 
-
-      # ------------------------------------------------------
-      # NON-DESTRUCTIVE VERIFY
-      # ------------------------------------------------------
-
       - name: Run local infrastructure verification
         env:
           FABRIC_BOOTSTRAP: "false"
@@ -639,9 +634,9 @@ jobs:
           echo "DEVELOP-AND-INTEGRATION QUALITY GATE PASSED"
           echo "=========================================="
           echo
-          echo "All required XP/TDD/CI checks passed."============================================================
+          echo "All required XP/TDD/CI checks passed."
 
-   validate-promotion-token:
+  validate-promotion-token:
     name: Validate Promotion Token
     runs-on: ubuntu-latest
 

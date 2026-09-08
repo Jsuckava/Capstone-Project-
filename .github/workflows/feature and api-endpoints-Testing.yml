@@ -16,11 +16,6 @@ on:
         required: false
         default: false
         type: boolean
-
-  # Weekly deep validation. Scheduled workflows execute from the
-  # default branch, so the jobs below explicitly check out the
-  # feature/api-endpoints-Testing branch for scheduled runs.
-  # Scheduled runs NEVER promote.
   schedule:
     - cron: "17 4 * * 0"
 
@@ -111,7 +106,7 @@ jobs:
           require_file middleware/Dockerfile
 
           require_file chaincode/go.mod
-          require_file chaincode/Dockerfile
+          require_file chaincode/go.sum
 
           require_file client-app/Dockerfile
 
@@ -470,6 +465,24 @@ jobs:
           echo "path=security/openapi-ci.generated.yaml" >> "$GITHUB_OUTPUT"
           echo "fallback=true" >> "$GITHUB_OUTPUT"
 
+      - name: Ensure OpenAPI schema targets only the local CI API
+        env:
+          OPENAPI_PATH: ${{ steps.schema.outputs.path }}
+        run: |
+          set -euo pipefail
+
+          # ZAP reads server URLs from the OpenAPI document. Refuse to scan a
+          # repository-managed schema unless it explicitly points at the isolated
+          # middleware container on this GitHub runner.
+          if ! grep -Eq 'url:[[:space:]]*["'"'"']?http://127\.0\.0\.1:4000["'"'"']?[[:space:]]*$' "$OPENAPI_PATH"; then
+            echo "::error::The CI OpenAPI schema must contain:"
+            echo "::error::  server URL: http://127.0.0.1:4000"
+            echo "::error::This safety check prevents ZAP from accidentally scanning staging or production."
+            exit 1
+          fi
+
+          echo "OpenAPI target is restricted to the local CI middleware."
+
       - name: Prepare ZAP rule policy
         id: zap-rules
         run: |
@@ -573,6 +586,8 @@ jobs:
           fi
 
       - name: Schemathesis API property / fuzz tests
+        id: schemathesis
+        continue-on-error: true
         uses: schemathesis/action@v3
         with:
           schema: ${{ steps.schema.outputs.path }}
@@ -588,6 +603,7 @@ jobs:
 
       - name: Run OWASP ZAP API active scan
         id: zap
+        continue-on-error: true
         env:
           OPENAPI_PATH: ${{ steps.schema.outputs.path }}
           ZAP_RULES_PATH: ${{ steps.zap-rules.outputs.path }}
@@ -595,22 +611,10 @@ jobs:
           set -uo pipefail
           mkdir -p security-results
 
+          # The repository is mounted at /zap/wrk inside the ZAP container.
+          # Use absolute container paths for local OpenAPI/config/report files.
           set +e
-          docker run \
-            --rm \
-            --network host \
-            --volume "$PWD:/zap/wrk/:rw" \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-api-scan.py \
-              -t "$OPENAPI_PATH" \
-              -f openapi \
-              -O http://127.0.0.1:4000 \
-              -c "$ZAP_RULES_PATH" \
-              -I \
-              -r security-results/zap-report.html \
-              -J security-results/zap-report.json \
-              -w security-results/zap-report.md \
-              -T 10
+          timeout 60m docker run             --rm             --network host             --volume "$PWD:/zap/wrk/:rw"             ghcr.io/zaproxy/zaproxy:stable             zap-api-scan.py               -t "/zap/wrk/${OPENAPI_PATH}"               -f openapi               -c "/zap/wrk/${ZAP_RULES_PATH}"               -I               -r /zap/wrk/security-results/zap-report.html               -J /zap/wrk/security-results/zap-report.json               -w /zap/wrk/security-results/zap-report.md               -T 10
           ZAP_EXIT=$?
           set -e
 
@@ -628,6 +632,10 @@ jobs:
             2)
               echo "::warning::ZAP produced warnings only."
               ;;
+            124)
+              echo "::error::ZAP exceeded the 60-minute safety timeout."
+              exit 1
+              ;;
             *)
               echo "::error::ZAP scanner failed unexpectedly with exit code $ZAP_EXIT."
               exit "$ZAP_EXIT"
@@ -635,6 +643,8 @@ jobs:
           esac
 
       - name: Run Nuclei high / critical vulnerability scan
+        id: nuclei
+        continue-on-error: true
         uses: projectdiscovery/nuclei-action@v3
         with:
           args: >-
@@ -644,6 +654,8 @@ jobs:
             -jle nuclei-results.jsonl
 
       - name: Enforce Nuclei vulnerability gate
+        id: nuclei-gate
+        continue-on-error: true
         run: |
           set -euo pipefail
 
@@ -654,6 +666,42 @@ jobs:
           fi
 
           echo "Nuclei found no HIGH/CRITICAL findings."
+
+      - name: Enforce all free API security scanners
+        if: always()
+        env:
+          SCHEMATHESIS_OUTCOME: ${{ steps.schemathesis.outcome }}
+          ZAP_OUTCOME: ${{ steps.zap.outcome }}
+          NUCLEI_OUTCOME: ${{ steps.nuclei.outcome }}
+          NUCLEI_GATE_OUTCOME: ${{ steps.nuclei-gate.outcome }}
+        run: |
+          set -euo pipefail
+
+          FAILED=0
+
+          check_outcome() {
+            local name="$1"
+            local outcome="$2"
+
+            if [ "$outcome" = "success" ]; then
+              echo "PASS: $name"
+            else
+              echo "::error::$name -> ${outcome:-not-run}"
+              FAILED=1
+            fi
+          }
+
+          check_outcome "Schemathesis" "$SCHEMATHESIS_OUTCOME"
+          check_outcome "OWASP ZAP" "$ZAP_OUTCOME"
+          check_outcome "Nuclei execution" "$NUCLEI_OUTCOME"
+          check_outcome "Nuclei HIGH/CRITICAL gate" "$NUCLEI_GATE_OUTCOME"
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::Free API security suite FAILED."
+            exit 1
+          fi
+
+          echo "All free API security scanners passed."
 
       - name: Upload ZAP reports
         if: always()
