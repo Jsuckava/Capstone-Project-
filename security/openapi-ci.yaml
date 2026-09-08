@@ -1,0 +1,95 @@
+openapi: 3.0.3
+
+info:
+  title: BlockGo Feature/API CI
+  description: >
+    CI-only OpenAPI definition for non-destructive BlockGo
+    middleware API security and fuzz testing.
+  version: 1.0.0
+
+servers:
+  - url: http://127.0.0.1:4000
+
+paths:
+
+  /api/health:
+    get:
+      operationId: getHealth
+      summary: Middleware health check
+
+      responses:
+        "200":
+          description: Middleware is operational
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - mode
+                properties:
+                  status:
+                    type: string
+                    example: operational
+                  mode:
+                    type: string
+
+
+  /api/crypto/hash-password:
+    post:
+      operationId: hashPassword
+      summary: Hash password
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+              additionalProperties: false
+              properties:
+                password:
+                  type: string
+                  minLength: 1
+                  maxLength: 256
+
+      responses:
+
+        "200":
+          description: Password successfully hashed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - hash
+                properties:
+                  hash:
+                    type: string
+
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+        "500":
+          description: Internal processing failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+
+components:
+
+  schemas:
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string

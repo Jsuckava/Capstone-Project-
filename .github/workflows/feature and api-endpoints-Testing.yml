@@ -1,0 +1,759 @@
+name: Feature / API Endpoint Heavy Tests
+
+on:
+  push:
+    branches:
+      - feature/api-endpoints-Testing
+
+  pull_request:
+    branches:
+      - feature/api-endpoints-Testing
+
+  workflow_dispatch:
+    inputs:
+      promote:
+        description: "Promote to Staging-and-Testing after all tests pass"
+        required: false
+        default: false
+        type: boolean
+
+  # Weekly deep validation. Scheduled workflows execute from the
+  # default branch, so the jobs below explicitly check out the
+  # feature/api-endpoints-Testing branch for scheduled runs.
+  # Scheduled runs NEVER promote.
+  schedule:
+    - cron: "17 4 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: feature-api-tests-${{ github.event.pull_request.number || github.ref_name || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CI: "true"
+  DOCKER_BUILDKIT: "1"
+
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  heavy-tests:
+    name: Heavy Integration, Container & Route Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    outputs:
+      tested_sha: ${{ steps.resolve-sha.outputs.sha }}
+
+    steps:
+      - name: Checkout triggering revision
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout Feature/API branch for manual/scheduled run
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+        uses: actions/checkout@v4
+        with:
+          ref: feature/api-endpoints-Testing
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve exact tested commit
+        id: resolve-sha
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse HEAD)"
+          echo "Testing exact commit: $SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Verify required application structure
+        run: |
+          set -euo pipefail
+
+          FAILED=0
+
+          require_dir() {
+            if [ ! -d "$1" ]; then
+              echo "::error::Required directory missing: $1"
+              FAILED=1
+            else
+              echo "FOUND directory: $1"
+            fi
+          }
+
+          require_file() {
+            if [ ! -f "$1" ]; then
+              echo "::error::Required file missing: $1"
+              FAILED=1
+            else
+              echo "FOUND file: $1"
+            fi
+          }
+
+          require_dir frontend
+          require_dir middleware
+          require_dir chaincode
+          require_dir client-app
+
+          require_file frontend/package.json
+          require_file frontend/package-lock.json
+          require_file frontend/Dockerfile
+
+          require_file middleware/package.json
+          require_file middleware/package-lock.json
+          require_file middleware/Dockerfile
+
+          require_file chaincode/go.mod
+          require_file chaincode/Dockerfile
+
+          require_file client-app/Dockerfile
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::Repository preflight failed."
+            exit 1
+          fi
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            middleware/package-lock.json
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: chaincode/go.mod
+          cache-dependency-path: chaincode/go.sum
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --fund=false
+
+      - name: Frontend lint
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm run lint --if-present
+
+      - name: Frontend tests
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm test --if-present
+
+      - name: Build frontend production bundle
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm run build
+
+      - name: Frontend production dependency audit
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm audit --omit=dev --audit-level=high
+
+      - name: Install middleware dependencies
+        working-directory: middleware
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --fund=false
+
+      - name: Middleware lint
+        working-directory: middleware
+        run: |
+          set -euo pipefail
+          npm run lint --if-present
+
+      - name: Run middleware base tests when configured
+        working-directory: middleware
+        run: |
+          set -euo pipefail
+
+          TEST_SCRIPT="$(node -e "const p=require('./package.json'); process.stdout.write((p.scripts && p.scripts.test) || '')")"
+
+          if [ -z "$TEST_SCRIPT" ]; then
+            echo "::warning::middleware/package.json has no test script; skipping base middleware tests."
+            exit 0
+          fi
+
+          if [[ "$TEST_SCRIPT" == *"Error: no test specified"* ]]; then
+            echo "::warning::middleware test script is still the npm placeholder; skipping it until real tests are added."
+            exit 0
+          fi
+
+          npm test
+
+      - name: Run middleware API / integration / E2E suites when present
+        working-directory: middleware
+        run: |
+          set -euo pipefail
+
+          has_script() {
+            SCRIPT_NAME="$1" node -e '
+              const p = require("./package.json");
+              process.exit(p.scripts && p.scripts[process.env.SCRIPT_NAME] ? 0 : 1);
+            '
+          }
+
+          FOUND=0
+
+          for SCRIPT in test:api test:integration test:e2e; do
+            if has_script "$SCRIPT"; then
+              echo "Running middleware script: $SCRIPT"
+              npm run "$SCRIPT"
+              FOUND=1
+            else
+              echo "Not configured: $SCRIPT"
+            fi
+          done
+
+          if [ "$FOUND" -eq 0 ]; then
+            echo "::warning::No dedicated middleware API/integration/E2E npm script is configured yet."
+          fi
+
+      - name: Middleware production dependency audit
+        working-directory: middleware
+        run: |
+          set -euo pipefail
+          npm audit --omit=dev --audit-level=high
+
+      - name: Verify Go modules
+        working-directory: chaincode
+        run: |
+          set -euo pipefail
+          go mod download
+          go mod verify
+
+      - name: Vet chaincode
+        working-directory: chaincode
+        run: |
+          set -euo pipefail
+          go vet ./...
+
+      - name: Run chaincode unit and race tests
+        working-directory: chaincode
+        run: |
+          set -euo pipefail
+          go test -race -count=1 ./...
+
+      - name: Run Enrollment Import .NET tests
+        run: |
+          set -euo pipefail
+          PROJECT="tests/EnrollmentImportChecks/EnrollmentImportChecks.csproj"
+
+          if [ -f "$PROJECT" ]; then
+            dotnet test "$PROJECT" --configuration Release --verbosity minimal
+          else
+            echo "::notice::No EnrollmentImportChecks .NET project found; skipping optional .NET tests."
+          fi
+
+      - name: Test client-app if it is a Node project
+        run: |
+          set -euo pipefail
+
+          if [ ! -f client-app/package.json ]; then
+            echo "client-app is not a Node package; skipping Node tests."
+            exit 0
+          fi
+
+          cd client-app
+
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --fund=false
+          else
+            npm install --no-audit --fund=false
+          fi
+
+          npm run lint --if-present
+          npm test --if-present
+          npm run build --if-present
+
+      - name: Build current application images
+        run: |
+          set -euo pipefail
+
+          docker build --pull \
+            --tag blockgo/frontend:ci \
+            --file frontend/Dockerfile \
+            frontend
+
+          docker build --pull \
+            --tag blockgo/middleware:ci \
+            --file middleware/Dockerfile \
+            middleware
+
+          docker build --pull \
+            --tag blockgo/client-app:ci \
+            --file client-app/Dockerfile \
+            client-app
+
+      - name: Verify built images
+        run: |
+          set -euo pipefail
+
+          for IMAGE in \
+            blockgo/frontend:ci \
+            blockgo/middleware:ci \
+            blockgo/client-app:ci
+          do
+            docker image inspect "$IMAGE" >/dev/null
+            echo "PASS: $IMAGE"
+          done
+
+      - name: Start frontend production-like container
+        run: |
+          set -euo pipefail
+          docker rm --force blockgo-route-test 2>/dev/null || true
+          docker run \
+            --detach \
+            --name blockgo-route-test \
+            --publish 8080:80 \
+            blockgo/frontend:ci
+
+      - name: Wait for frontend container readiness
+        run: |
+          set -euo pipefail
+
+          READY=0
+
+          for ATTEMPT in $(seq 1 45); do
+            STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/login || true)"
+            echo "Attempt $ATTEMPT/45 -> HTTP $STATUS"
+
+            if [ "$STATUS" = "200" ]; then
+              READY=1
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [ "$READY" -ne 1 ]; then
+            echo "::error::Frontend container did not become ready."
+            docker logs blockgo-route-test || true
+            exit 1
+          fi
+
+      - name: Verify SPA deep routes
+        run: |
+          set -euo pipefail
+
+          ROUTES=(
+            login
+            registrar
+            department-admin
+            faculty
+            student
+            system-admin
+          )
+
+          FAILED=0
+
+          for ROUTE in "${ROUTES[@]}"; do
+            RESPONSE_FILE="/tmp/blockgo-${ROUTE}.html"
+            STATUS="$(curl --silent --show-error --output "$RESPONSE_FILE" --write-out '%{http_code}' "http://127.0.0.1:8080/${ROUTE}")"
+
+            if [ "$STATUS" != "200" ]; then
+              echo "::error::/${ROUTE} returned HTTP ${STATUS}"
+              FAILED=1
+              continue
+            fi
+
+            if ! grep -Eq "<div[^>]*id=[\"']root[\"'][^>]*>" "$RESPONSE_FILE"; then
+              echo "::error::/${ROUTE} does not contain the React root element."
+              FAILED=1
+              continue
+            fi
+
+            echo "PASS: /${ROUTE} -> HTTP ${STATUS}"
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            docker logs blockgo-route-test || true
+            exit 1
+          fi
+
+      - name: Inspect frontend security headers
+        run: |
+          set -euo pipefail
+
+          HEADERS="/tmp/blockgo-headers.txt"
+          curl --silent --show-error --dump-header "$HEADERS" --output /dev/null http://127.0.0.1:8080/login
+
+          for HEADER in X-Content-Type-Options X-Frame-Options Referrer-Policy; do
+            if grep -qi "^${HEADER}:" "$HEADERS"; then
+              echo "FOUND: $HEADER"
+            else
+              echo "::warning::Recommended HTTP header missing: $HEADER"
+            fi
+          done
+
+      - name: Stop frontend route-test container
+        if: always()
+        run: docker rm --force blockgo-route-test 2>/dev/null || true
+
+      - name: Show Docker diagnostics on failure
+        if: failure()
+        run: |
+          docker ps -a || true
+          docker images || true
+          docker system df || true
+
+  free-api-security:
+    name: Free API Security — Schemathesis / ZAP / Nuclei
+    runs-on: ubuntu-latest
+    needs:
+      - heavy-tests
+    timeout-minutes: 120
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout exact tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.heavy-tests.outputs.tested_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare OpenAPI schema for CI security tests
+        id: schema
+        run: |
+          set -euo pipefail
+          mkdir -p security security-results
+
+          if [ -f security/openapi-ci.yaml ]; then
+            echo "Using repository-managed security/openapi-ci.yaml"
+            echo "path=security/openapi-ci.yaml" >> "$GITHUB_OUTPUT"
+            echo "fallback=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "::warning::security/openapi-ci.yaml does not exist. Generating a minimal /api/health schema so the free security stack can run."
+          echo "::warning::Add a repository-managed OpenAPI schema to expand API security coverage."
+
+          cat > security/openapi-ci.generated.yaml <<'EOF'
+          openapi: 3.0.3
+          info:
+            title: BlockGo CI Security API
+            version: 1.0.0
+          servers:
+            - url: http://127.0.0.1:4000
+          paths:
+            /api/health:
+              get:
+                operationId: getHealth
+                responses:
+                  "200":
+                    description: Middleware health response
+          EOF
+
+          echo "path=security/openapi-ci.generated.yaml" >> "$GITHUB_OUTPUT"
+          echo "fallback=true" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare ZAP rule policy
+        id: zap-rules
+        run: |
+          set -euo pipefail
+          mkdir -p security
+
+          if [ -f security/zap-rules.tsv ]; then
+            echo "Using repository-managed security/zap-rules.tsv"
+            echo "path=security/zap-rules.tsv" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          cat > security/zap-rules.generated.tsv <<'EOF'
+          6	FAIL	(Path Traversal)
+          7	FAIL	(Remote File Inclusion)
+          40018	FAIL	(SQL Injection)
+          40019	FAIL	(SQL Injection MySQL Time Based)
+          40020	FAIL	(SQL Injection Hypersonic Time Based)
+          40021	FAIL	(SQL Injection Oracle Time Based)
+          40022	FAIL	(SQL Injection PostgreSQL Time Based)
+          40024	FAIL	(SQL Injection SQLite Time Based)
+          40033	FAIL	(NoSQL Injection MongoDB)
+          40046	FAIL	(Server Side Request Forgery)
+          90019	FAIL	(Code Injection)
+          90020	FAIL	(Command Injection)
+          90023	FAIL	(XXE External Entity)
+          90035	FAIL	(Server Side Template Injection)
+          10020	WARN	(Anti-clickjacking Header)
+          10021	WARN	(X-Content-Type-Options Header Missing)
+          90022	WARN	(Application Error Disclosure)
+          EOF
+
+          echo "path=security/zap-rules.generated.tsv" >> "$GITHUB_OUTPUT"
+
+      - name: Build middleware security-test image
+        run: |
+          set -euo pipefail
+          docker build \
+            --tag blockgo/middleware:security-ci \
+            --file middleware/Dockerfile \
+            middleware
+
+      - name: Start isolated middleware security-test container
+        run: |
+          set -euo pipefail
+
+          docker rm --force blockgo-security-api 2>/dev/null || true
+
+          docker run \
+            --detach \
+            --name blockgo-security-api \
+            --publish 4000:4000 \
+            --env PORT=4000 \
+            --env NODE_ENV=test \
+            --env CI=true \
+            --env JWT_SECRET="ci-only-jwt-secret-not-production" \
+            --env INTERNAL_API_KEY="ci-only-internal-key-not-production" \
+            --env FABRIC_BOOTSTRAP=false \
+            blockgo/middleware:security-ci
+
+      - name: Wait for middleware health endpoint
+        run: |
+          set -euo pipefail
+
+          READY=0
+
+          for ATTEMPT in $(seq 1 60); do
+            STATUS="$(curl --silent --output /tmp/blockgo-health.json --write-out '%{http_code}' http://127.0.0.1:4000/api/health || true)"
+            echo "Attempt $ATTEMPT/60 -> HTTP $STATUS"
+
+            if [ "$STATUS" = "200" ]; then
+              READY=1
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [ "$READY" -ne 1 ]; then
+            echo "::error::Middleware security-test container failed to become healthy."
+            docker logs blockgo-security-api || true
+            exit 1
+          fi
+
+          cat /tmp/blockgo-health.json || true
+
+      - name: Basic anonymous-access negative test
+        run: |
+          set -euo pipefail
+
+          # If this endpoint exists, it must not return a successful 2xx to an
+          # anonymous caller. 404 is accepted here because endpoint naming may
+          # still change while the feature branch is under development.
+          STATUS="$(curl --silent --output /tmp/anonymous.json --write-out '%{http_code}' http://127.0.0.1:4000/api/all-grades || true)"
+          echo "Anonymous /api/all-grades -> HTTP $STATUS"
+
+          if [[ "$STATUS" =~ ^2 ]]; then
+            echo "::error::Potential authorization failure: anonymous request returned HTTP $STATUS."
+            cat /tmp/anonymous.json || true
+            exit 1
+          fi
+
+      - name: Schemathesis API property / fuzz tests
+        uses: schemathesis/action@v3
+        with:
+          schema: ${{ steps.schema.outputs.path }}
+          base-url: http://127.0.0.1:4000
+          checks: all
+          max-examples: 50
+          wait-for-schema: 30
+          coverage: "true"
+          coverage-report: "true"
+          coverage-report-path: schemathesis-coverage.html
+          coverage-artifact-name: schemathesis-feature-api-coverage
+          coverage-pr-comment: "false"
+
+      - name: Run OWASP ZAP API active scan
+        id: zap
+        env:
+          OPENAPI_PATH: ${{ steps.schema.outputs.path }}
+          ZAP_RULES_PATH: ${{ steps.zap-rules.outputs.path }}
+        run: |
+          set -uo pipefail
+          mkdir -p security-results
+
+          set +e
+          docker run \
+            --rm \
+            --network host \
+            --volume "$PWD:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-api-scan.py \
+              -t "$OPENAPI_PATH" \
+              -f openapi \
+              -O http://127.0.0.1:4000 \
+              -c "$ZAP_RULES_PATH" \
+              -I \
+              -r security-results/zap-report.html \
+              -J security-results/zap-report.json \
+              -w security-results/zap-report.md \
+              -T 10
+          ZAP_EXIT=$?
+          set -e
+
+          echo "ZAP exit code: $ZAP_EXIT"
+          echo "exit_code=$ZAP_EXIT" >> "$GITHUB_OUTPUT"
+
+          case "$ZAP_EXIT" in
+            0)
+              echo "ZAP security gate passed."
+              ;;
+            1)
+              echo "::error::ZAP detected at least one finding configured as FAIL."
+              exit 1
+              ;;
+            2)
+              echo "::warning::ZAP produced warnings only."
+              ;;
+            *)
+              echo "::error::ZAP scanner failed unexpectedly with exit code $ZAP_EXIT."
+              exit "$ZAP_EXIT"
+              ;;
+          esac
+
+      - name: Run Nuclei high / critical vulnerability scan
+        uses: projectdiscovery/nuclei-action@v3
+        with:
+          args: >-
+            -u http://127.0.0.1:4000
+            -severity high,critical
+            -silent
+            -jle nuclei-results.jsonl
+
+      - name: Enforce Nuclei vulnerability gate
+        run: |
+          set -euo pipefail
+
+          if [ -s nuclei-results.jsonl ]; then
+            echo "::error::Nuclei detected HIGH or CRITICAL findings."
+            cat nuclei-results.jsonl
+            exit 1
+          fi
+
+          echo "Nuclei found no HIGH/CRITICAL findings."
+
+      - name: Upload ZAP reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blockgo-zap-feature-api
+          path: security-results/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Nuclei report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blockgo-nuclei-feature-api
+          path: nuclei-results.jsonl
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Show middleware logs on failure
+        if: failure()
+        run: docker logs blockgo-security-api || true
+
+      - name: Stop middleware security-test container
+        if: always()
+        run: docker rm --force blockgo-security-api 2>/dev/null || true
+
+  feature-api-gate:
+    name: Required Feature/API Gate
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - heavy-tests
+      - free-api-security
+    timeout-minutes: 5
+
+    steps:
+      - name: Evaluate all Feature/API gates
+        env:
+          HEAVY_RESULT: ${{ needs.heavy-tests.result }}
+          SECURITY_RESULT: ${{ needs.free-api-security.result }}
+        run: |
+          set -euo pipefail
+
+          FAILED=0
+
+          check_job() {
+            NAME="$1"
+            RESULT="$2"
+
+            if [ "$RESULT" = "success" ]; then
+              echo "PASS: $NAME"
+            else
+              echo "::error::$NAME -> $RESULT"
+              FAILED=1
+            fi
+          }
+
+          check_job "Heavy integration/container tests" "$HEAVY_RESULT"
+          check_job "Schemathesis/ZAP/Nuclei security tests" "$SECURITY_RESULT"
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::Feature/API Endpoint gate FAILED."
+            exit 1
+          fi
+
+          echo "=========================================="
+          echo "FEATURE / API ENDPOINT GATE PASSED"
+          echo "=========================================="
+          echo "Eligible for promotion to Staging-and-Testing."
+
+  promote:
+    name: Promote → Staging-and-Testing
+    needs:
+      - heavy-tests
+      - feature-api-gate
+
+    if: >-
+      success() &&
+      (
+        (
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/feature/api-endpoints-Testing'
+        )
+        ||
+        (
+          github.event_name == 'workflow_dispatch' &&
+          inputs.promote == true
+        )
+      )
+
+    permissions:
+      contents: read
+
+    uses: ./.github/workflows/promote.yml
+
+    with:
+      source_branch: feature/api-endpoints-Testing
+      target_branch: Staging-and-Testing
+      tested_sha: ${{ needs.heavy-tests.outputs.tested_sha }}
+
+    secrets:
+      PROMOTION_TOKEN: ${{ secrets.PROMOTION_TOKEN }}
