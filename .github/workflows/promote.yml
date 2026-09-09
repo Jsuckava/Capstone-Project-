@@ -357,7 +357,7 @@ jobs:
               ]
             }'
 
-      - name: Enable gated auto-merge
+      - name: Queue or merge promotion safely
         shell: bash
         env:
           PR_NUMBER: ${{ steps.create-pr.outputs.pr_number }}
@@ -365,43 +365,142 @@ jobs:
           set -euo pipefail
 
           echo
-          echo "Enabling gated auto-merge for PR #$PR_NUMBER..."
-          echo
+          echo "=========================================="
+          echo "PROMOTION FINALIZATION"
+          echo "=========================================="
+          echo "PR:     #$PR_NUMBER"
           echo "Source: $SOURCE"
           echo "Target: $TARGET"
           echo "SHA:    $TESTED_SHA"
           echo
 
-          gh pr merge "$PR_NUMBER" \
-            --repo "$GH_REPO" \
-            --auto \
-            --merge \
-            --match-head-commit "$TESTED_SHA" \
-          || {
-            echo
-            echo "::error::Unable to enable gated auto-merge."
-            echo
-            echo "The PR will remain OPEN."
-            echo
-            echo "Possible causes:"
-            echo "- Auto-merge is disabled in repository settings"
-            echo "- Merge commits are disabled"
-            echo "- Required approval has not been configured correctly"
-            echo "- PROMOTION_TOKEN lacks required permissions"
-            echo "- Branch rules prevent auto-merge"
-            echo "- Merge conflicts exist"
-            echo
-            echo "IMPORTANT: Direct merge will NOT be attempted."
-            exit 1
-          }
+          # Re-read the PR immediately before attempting any merge action.
+          PR_HEAD_SHA="$(
+            gh pr view "$PR_NUMBER" \
+              --repo "$GH_REPO" \
+              --json headRefOid \
+              --jq '.headRefOid'
+          )"
 
+          if [ "$PR_HEAD_SHA" != "$TESTED_SHA" ]; then
+            echo "::error::Promotion blocked: PR head changed."
+            echo "::error::Expected: $TESTED_SHA"
+            echo "::error::Actual:   $PR_HEAD_SHA"
+            exit 1
+          fi
+
+          echo "✓ PR still contains the exact CI-tested commit."
           echo
-          echo "=========================================="
-          echo "PROMOTION QUEUED"
-          echo "=========================================="
+
+          ALLOW_AUTO_MERGE="$(
+            gh api "repos/${GH_REPO}" \
+              --jq '.allow_auto_merge // false'
+          )"
+
+          echo "Repository allow_auto_merge: $ALLOW_AUTO_MERGE"
           echo
-          echo "PR #$PR_NUMBER"
-          echo "$SOURCE → $TARGET"
+
+          # First use GitHub's normal gated auto-merge behavior.
+          #
+          # This also supports branches using a merge queue:
+          # gh will enqueue when the branch rules require it and the PR
+          # is ready, or enable auto-merge while requirements are pending.
+          if [ "$ALLOW_AUTO_MERGE" = "true" ]; then
+            echo "Attempting GitHub gated auto-merge / merge queue..."
+
+            if gh pr merge "$PR_NUMBER" \
+              --repo "$GH_REPO" \
+              --auto \
+              --merge \
+              --match-head-commit "$TESTED_SHA"; then
+
+              echo
+              echo "=========================================="
+              echo "PROMOTION QUEUED"
+              echo "=========================================="
+              echo
+              echo "PR #$PR_NUMBER"
+              echo "$SOURCE → $TARGET"
+              echo
+              echo "GitHub accepted gated auto-merge."
+              echo "Repository rules and required checks remain enforced."
+              exit 0
+            fi
+
+            echo
+            echo "::notice::GitHub did not accept enablePullRequestAutoMerge."
+            echo "::notice::Checking whether the PR is already immediately mergeable."
+            echo
+          else
+            echo "::notice::Repository API reports allow_auto_merge=false."
+            echo "::notice::Checking whether the PR is already immediately mergeable."
+            echo
+          fi
+
+          # GitHub may reject enablePullRequestAutoMerge when the PR has
+          # nothing left to wait for. In that case, inspect the live PR
+          # state before using a normal, non-admin merge.
+          #
+          # IMPORTANT:
+          # - This never uses --admin.
+          # - Branch protection/rulesets are NOT bypassed.
+          # - The exact tested head SHA is still required.
+          MERGEABLE="$(
+            gh pr view "$PR_NUMBER" \
+              --repo "$GH_REPO" \
+              --json mergeable \
+              --jq '.mergeable'
+          )"
+
+          MERGE_STATE="$(
+            gh pr view "$PR_NUMBER" \
+              --repo "$GH_REPO" \
+              --json mergeStateStatus \
+              --jq '.mergeStateStatus'
+          )"
+
+          echo "PR mergeable:        $MERGEABLE"
+          echo "PR mergeStateStatus: $MERGE_STATE"
           echo
-          echo "GitHub will merge it only when all required"
-          echo "checks and repository rules are satisfied."
+
+          if [ "$MERGEABLE" = "MERGEABLE" ] && [ "$MERGE_STATE" = "CLEAN" ]; then
+            echo "The PR is already clean and immediately mergeable."
+            echo "Performing a normal protected merge..."
+            echo
+
+            gh pr merge "$PR_NUMBER" \
+              --repo "$GH_REPO" \
+              --merge \
+              --match-head-commit "$TESTED_SHA"
+
+            echo
+            echo "=========================================="
+            echo "PROMOTION MERGED"
+            echo "=========================================="
+            echo
+            echo "PR #$PR_NUMBER"
+            echo "$SOURCE → $TARGET"
+            echo
+            echo "Merged without --admin."
+            echo "Branch protection and repository rules were not bypassed."
+            exit 0
+          fi
+
+          echo "::error::Promotion could not be queued or merged safely."
+          echo
+          echo "The PR remains OPEN."
+          echo
+          echo "Current state:"
+          echo "- mergeable:        $MERGEABLE"
+          echo "- mergeStateStatus: $MERGE_STATE"
+          echo "- allow_auto_merge: $ALLOW_AUTO_MERGE"
+          echo
+          echo "Possible reasons:"
+          echo "- Required checks are still pending or failing"
+          echo "- Required review is still missing"
+          echo "- Merge conflicts exist"
+          echo "- A branch ruleset is blocking the merge"
+          echo "- The token lacks merge permission"
+          echo
+          echo "No admin bypass or force merge was attempted."
+          exit 1
