@@ -35,14 +35,30 @@ const StudentBlockchainTransactions = () => {
   const [currentPage, setCurrentPage] = useState(1);
 
   const load = useCallback(async () => {
-    setLoading(true); setError('');
-    try {
-      const response = await fetchStudentBlockchainTransactions();
-      setTransactions(Array.isArray(response?.data) ? response.data : []);
-      setCurrentPage(1);
-    } catch (err) { setError(err.message || 'Unable to retrieve blockchain transactions.'); }
-    finally { setLoading(false); }
-  }, []);
+  setLoading(true);
+  setError('');
+
+  try {
+    const response = await fetchStudentBlockchainTransactions();
+
+    const transactionData = Array.isArray(response?.data)
+      ? response.data
+      : Array.isArray(response)
+        ? response
+        : [];
+
+    setTransactions(transactionData);
+    setCurrentPage(1);
+  } catch (err) {
+    setTransactions([]);
+    setError(
+      err?.message ||
+      'Unable to retrieve blockchain transactions.'
+    );
+  } finally {
+    setLoading(false);
+  }
+}, []);;
 
   useEffect(() => { load(); }, [load]);
 
