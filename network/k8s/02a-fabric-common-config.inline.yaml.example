@@ -1,0 +1,166 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fabric-common-config
+  namespace: plv-main-campus
+data:
+  core.yaml: |
+    peer:
+        listenAddress: 0.0.0.0:7051
+        address: 0.0.0.0:7051
+        addressAutoDetect: false
+        gateway:
+            enabled: true
+        keepalive:
+            interval: 7200s
+            timeout: 20s
+        gossip:
+            bootstrap: 127.0.0.1:7051
+            useLeaderElection: true
+            orgLeader: false
+        tls:
+            enabled: true
+            cert:
+                file: /var/hyperledger/tls/server.crt
+            key:
+                file: /var/hyperledger/tls/server.key
+            rootcert:
+                file: /var/hyperledger/tls/ca.crt
+        fileSystemPath: /var/hyperledger/production
+        BCCSP:
+            Default: SW
+            SW:
+                Hash: SHA2
+                Security: 256
+        mspConfigPath: /var/hyperledger/msp
+        localMspType: bccsp
+    vm:
+        endpoint: unix:///host/var/run/docker.sock
+    chaincode:
+        externalBuilders:
+           - name: ccaas_builder
+             path: /opt/hyperledger/ccaas_builder
+             propagateEnvironment:
+               - CHAINCODE_AS_A_SERVICE_BUILDER_CONFIG
+    ledger:
+      state:
+        stateDatabase: CouchDB
+        couchDBConfig:
+           couchDBAddress: 127.0.0.1:5984
+  orderer.yaml: |
+    General:
+        ListenAddress: 0.0.0.0
+        ListenPort: 7050
+        TLS:
+            Enabled: true
+            PrivateKey: /var/hyperledger/orderer/tls/server.key
+            Certificate: /var/hyperledger/orderer/tls/server.crt
+            RootCAs:
+              - /var/hyperledger/orderer/tls/ca.crt
+        BootstrapMethod: file
+        BootstrapFile: /var/hyperledger/orderer/orderer.genesis.block
+        LocalMSPDir: /var/hyperledger/orderer/msp
+        LocalMSPID: OrdererMSP
+        BCCSP:
+            Default: SW
+            SW:
+                Hash: SHA2
+                Security: 256
+        Authentication:
+            TimeWindow: 15m
+    FileLedger:
+        Location: /var/hyperledger/production/orderer
+    ChannelParticipation:
+        Enabled: true
+    Admin:
+        ListenAddress: 0.0.0.0:7053
+        TLS:
+            Enabled: true
+            Certificate: /var/hyperledger/orderer/tls/server.crt
+            PrivateKey: /var/hyperledger/orderer/tls/server.key
+            RootCAs: [/var/hyperledger/orderer/tls/ca.crt]
+            ClientAuthRequired: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fabric-common-config
+  namespace: plv-annex-campus
+data:
+  core.yaml: |
+    peer:
+        listenAddress: 0.0.0.0:7051
+        address: 0.0.0.0:7051
+        addressAutoDetect: false
+        gateway:
+            enabled: true
+        tls:
+            enabled: true
+            cert:
+                file: /var/hyperledger/tls/server.crt
+            key:
+                file: /var/hyperledger/tls/server.key
+            rootcert:
+                file: /var/hyperledger/tls/ca.crt
+        BCCSP:
+            Default: SW
+            SW:
+                Hash: SHA2
+                Security: 256
+        mspConfigPath: /var/hyperledger/msp
+        localMspType: bccsp
+    vm:
+        endpoint: unix:///host/var/run/docker.sock
+    chaincode:
+        externalBuilders:
+           - name: ccaas_builder
+             path: /opt/hyperledger/ccaas_builder
+             propagateEnvironment:
+               - CHAINCODE_AS_A_SERVICE_BUILDER_CONFIG
+    ledger:
+      state:
+        stateDatabase: CouchDB
+        couchDBConfig:
+           couchDBAddress: 127.0.0.1:5984
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fabric-common-config
+  namespace: plv-pubad-campus
+data:
+  core.yaml: |
+    peer:
+        listenAddress: 0.0.0.0:7051
+        address: 0.0.0.0:7051
+        addressAutoDetect: false
+        gateway:
+            enabled: true
+        tls:
+            enabled: true
+            cert:
+                file: /var/hyperledger/tls/server.crt
+            key:
+                file: /var/hyperledger/tls/server.key
+            rootcert:
+                file: /var/hyperledger/tls/ca.crt
+        BCCSP:
+            Default: SW
+            SW:
+                Hash: SHA2
+                Security: 256
+        mspConfigPath: /var/hyperledger/msp
+        localMspType: bccsp
+    vm:
+        endpoint: unix:///host/var/run/docker.sock
+    chaincode:
+        externalBuilders:
+           - name: ccaas_builder
+             path: /opt/hyperledger/ccaas_builder
+             propagateEnvironment:
+               - CHAINCODE_AS_A_SERVICE_BUILDER_CONFIG
+    ledger:
+      state:
+        stateDatabase: CouchDB
+        couchDBConfig:
+           couchDBAddress: 127.0.0.1:5984

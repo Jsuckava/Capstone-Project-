@@ -1,0 +1,621 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ipfs-init-config
+  namespace: plv-fabric
+data:
+  01-disable-autoconf.sh: |-
+    #!/bin/sh
+    set -eu
+    echo "Disabling AutoConf and clearing auto-placeholders for private network..."
+    ipfs config --json AutoConf.Enabled false
+    if [ ! -e /data/ipfs/.private-bootstrap-initialized ]; then
+      ipfs config --json Bootstrap "[]"
+      touch /data/ipfs/.private-bootstrap-initialized
+    fi
+    ipfs config --json DNS.Resolvers "{}"
+    ipfs config --json Routing.DelegatedRouters "[]"
+    ipfs config --json Ipns.DelegatedPublishers "[]"
+    ipfs config Routing.Type dht
+    ipfs config --json Swarm.AddrFilters "[]"
+    ipfs config --json AutoTLS.Enabled false
+    ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001
+    ipfs config Addresses.Gateway /ip4/0.0.0.0/tcp/8080
+    install -m 0400 /etc/ipfs/swarm.key /data/ipfs/swarm.key
+---
+# IPFS Node StatefulSet (Distributed Storage)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ipfs-node
+  namespace: plv-fabric
+  labels:
+    app: ipfs-node
+    campus: main
+spec:
+  serviceName: ipfs-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ipfs-node
+  template:
+    metadata:
+      labels:
+        app: ipfs-node
+        campus: main
+    spec:
+      serviceAccountName: fabric-sa
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_A__"
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        fsGroup: 0
+      initContainers:
+      - name: fix-permissions
+        image: busybox:1.36.1
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 0
+        command: ["sh", "-c", "mkdir -p /data/ipfs && chown -R 1000:100 /data/ipfs && chmod -R u+rwX,g+rwX /data/ipfs"]
+        resources:
+          requests: { cpu: 1m, memory: 4Mi }
+          limits: { memory: 32Mi }
+        volumeMounts:
+        - name: ipfs-data
+          mountPath: /data/ipfs
+      containers:
+      - name: ipfs
+        image: ipfs/kubo:v0.41.0
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -ec
+        - |
+          if [ "${IPFS_RUN_AS_ROOT:-false}" = "true" ]; then
+            if [ ! -e "${IPFS_PATH}/config" ]; then
+              if [ -n "${IPFS_PROFILE:-}" ]; then
+                ipfs init --profile="${IPFS_PROFILE}"
+              else
+                ipfs init
+              fi
+              ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001
+              ipfs config Addresses.Gateway /ip4/0.0.0.0/tcp/8080
+            fi
+
+            for script in /container-init.d/*.sh; do
+              [ -f "$script" ] || continue
+              /bin/sh "$script"
+            done
+
+            exec /sbin/tini -- ipfs daemon --migrate=true
+          fi
+
+          exec /sbin/tini -- /usr/local/bin/start_ipfs daemon --migrate=true
+        ports:
+        - containerPort: 4001
+          name: swarm
+          protocol: TCP
+        - containerPort: 5001
+          name: api
+          protocol: TCP
+        - containerPort: 8080
+          name: gateway
+          protocol: TCP
+        env:
+        - name: IPFS_PROFILE
+          value: server
+        - name: IPFS_SWARM_KEY_FILE
+          value: "/etc/ipfs/swarm.key"
+        - name: LIBP2P_FORCE_PNET
+          value: "1"
+        - name: LIBP2P_TCP_MUX
+          value: "false"
+        - name: IPFS_TELEMETRY
+          value: "off"
+        - name: IPFS_RUN_AS_ROOT
+          value: "false"
+        volumeMounts:
+        - name: ipfs-data
+          mountPath: /data/ipfs
+        - name: swarm-key
+          mountPath: /etc/ipfs/swarm.key
+          subPath: swarm.key
+        - name: ipfs-export
+          mountPath: /export
+        - name: ipfs-init-volume
+          mountPath: /container-init.d/01-disable-autoconf.sh
+          subPath: 01-disable-autoconf.sh
+        startupProbe:
+          tcpSocket:
+            port: 5001
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 60
+        livenessProbe:
+          tcpSocket:
+            port: 5001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          tcpSocket:
+            port: 5001
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          timeoutSeconds: 5
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 256Mi
+      volumes:
+      - name: swarm-key
+        configMap:
+          name: ipfs-swarm-key
+      - name: ipfs-export
+        emptyDir: {}
+      - name: ipfs-init-volume
+        configMap:
+          name: ipfs-init-config
+          defaultMode: 511
+  volumeClaimTemplates:
+  - metadata:
+      name: ipfs-data
+    spec:
+      storageClassName: fabric-storage
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipfs-headless
+  namespace: plv-fabric
+  labels:
+    app: ipfs-node
+spec:
+  clusterIP: None
+  selector:
+    app: ipfs-node
+  ports:
+  - port: 4001
+    targetPort: 4001
+    protocol: TCP
+    name: swarm
+  - port: 5001
+    targetPort: 5001
+    protocol: TCP
+    name: api
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: gateway
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipfs-api
+  namespace: plv-fabric
+  labels:
+    app: ipfs-node
+spec:
+  type: ClusterIP
+  selector:
+    app: ipfs-node
+  ports:
+  - port: 5001
+    targetPort: 5001
+    protocol: TCP
+    name: api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipfs-gateway
+  namespace: plv-fabric
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
+  labels:
+    app: ipfs-node
+spec:
+  type: ClusterIP
+  selector:
+    app: ipfs-node
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: gateway
+---
+# Ingress for IPFS Gateway
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ipfs-ingress
+  namespace: plv-fabric
+  annotations:
+    kubernetes.io/ingress.class: gce
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /ipfs
+        pathType: Prefix
+        backend:
+          service:
+            name: ipfs-ha-gateway
+            port:
+              number: 8080
+---
+# Annex campus IPFS configuration. Every campus uses the same private swarm key,
+# but keeps an independent repository and persistent volume.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ipfs-init-config
+  namespace: plv-annex-campus
+data:
+  01-disable-autoconf.sh: |-
+    #!/bin/sh
+    set -eu
+    ipfs config --json AutoConf.Enabled false
+    if [ ! -e /data/ipfs/.private-bootstrap-initialized ]; then
+      ipfs config --json Bootstrap "[]"
+      touch /data/ipfs/.private-bootstrap-initialized
+    fi
+    ipfs config --json DNS.Resolvers "{}"
+    ipfs config --json Routing.DelegatedRouters "[]"
+    ipfs config --json Ipns.DelegatedPublishers "[]"
+    ipfs config Routing.Type dht
+    ipfs config --json Swarm.AddrFilters "[]"
+    ipfs config --json AutoTLS.Enabled false
+    ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001
+    ipfs config Addresses.Gateway /ip4/0.0.0.0/tcp/8080
+    install -m 0400 /etc/ipfs/swarm.key /data/ipfs/swarm.key
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ipfs-init-config
+  namespace: plv-pubad-campus
+data:
+  01-disable-autoconf.sh: |-
+    #!/bin/sh
+    set -eu
+    ipfs config --json AutoConf.Enabled false
+    if [ ! -e /data/ipfs/.private-bootstrap-initialized ]; then
+      ipfs config --json Bootstrap "[]"
+      touch /data/ipfs/.private-bootstrap-initialized
+    fi
+    ipfs config --json DNS.Resolvers "{}"
+    ipfs config --json Routing.DelegatedRouters "[]"
+    ipfs config --json Ipns.DelegatedPublishers "[]"
+    ipfs config Routing.Type dht
+    ipfs config --json Swarm.AddrFilters "[]"
+    ipfs config --json AutoTLS.Enabled false
+    ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001
+    ipfs config Addresses.Gateway /ip4/0.0.0.0/tcp/8080
+    install -m 0400 /etc/ipfs/swarm.key /data/ipfs/swarm.key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipfs-annex-headless
+  namespace: plv-annex-campus
+spec:
+  clusterIP: None
+  selector:
+    app: ipfs-annex
+  ports:
+  - { name: swarm, port: 4001, targetPort: 4001 }
+  - { name: api, port: 5001, targetPort: 5001 }
+  - { name: gateway, port: 8080, targetPort: 8080 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipfs-annex-api
+  namespace: plv-annex-campus
+spec:
+  selector:
+    app: ipfs-annex
+  ports:
+  - { name: api, port: 5001, targetPort: 5001 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipfs-annex-gateway
+  namespace: plv-annex-campus
+spec:
+  selector:
+    app: ipfs-annex
+  ports:
+  - { name: gateway, port: 8080, targetPort: 8080 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipfs-pubad-headless
+  namespace: plv-pubad-campus
+spec:
+  clusterIP: None
+  selector:
+    app: ipfs-pubad
+  ports:
+  - { name: swarm, port: 4001, targetPort: 4001 }
+  - { name: api, port: 5001, targetPort: 5001 }
+  - { name: gateway, port: 8080, targetPort: 8080 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipfs-pubad-api
+  namespace: plv-pubad-campus
+spec:
+  selector:
+    app: ipfs-pubad
+  ports:
+  - { name: api, port: 5001, targetPort: 5001 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipfs-pubad-gateway
+  namespace: plv-pubad-campus
+spec:
+  selector:
+    app: ipfs-pubad
+  ports:
+  - { name: gateway, port: 8080, targetPort: 8080 }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ipfs-annex
+  namespace: plv-annex-campus
+  labels:
+    app: ipfs-annex
+    campus: annex
+spec:
+  serviceName: ipfs-annex-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ipfs-annex
+  template:
+    metadata:
+      labels:
+        app: ipfs-annex
+        campus: annex
+    spec:
+      serviceAccountName: fabric-sa
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_B__"
+      securityContext: { runAsUser: 0, runAsGroup: 0, fsGroup: 0 }
+      initContainers:
+      - name: fix-permissions
+        image: busybox:1.36.1
+        imagePullPolicy: IfNotPresent
+        securityContext: { runAsUser: 0 }
+        command: ["sh", "-c", "mkdir -p /data/ipfs && chown -R 1000:100 /data/ipfs && chmod -R u+rwX,g+rwX /data/ipfs"]
+        resources:
+          requests: { cpu: 1m, memory: 4Mi }
+          limits: { memory: 32Mi }
+        volumeMounts:
+        - { name: ipfs-data, mountPath: /data/ipfs }
+      containers:
+      - name: ipfs
+        image: ipfs/kubo:v0.41.0
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-ec"]
+        args:
+        - |
+          if [ ! -e "${IPFS_PATH}/config" ]; then ipfs init --profile=server; fi
+          for script in /container-init.d/*.sh; do [ -f "$script" ] && /bin/sh "$script"; done
+          exec /sbin/tini -- ipfs daemon --migrate=true
+        ports:
+        - { containerPort: 4001, name: swarm }
+        - { containerPort: 5001, name: api }
+        - { containerPort: 8080, name: gateway }
+        env:
+        - { name: IPFS_PROFILE, value: server }
+        - { name: IPFS_SWARM_KEY_FILE, value: /etc/ipfs/swarm.key }
+        - { name: LIBP2P_FORCE_PNET, value: "1" }
+        - { name: IPFS_TELEMETRY, value: "off" }
+        volumeMounts:
+        - { name: ipfs-data, mountPath: /data/ipfs }
+        - { name: swarm-key, mountPath: /etc/ipfs/swarm.key, subPath: swarm.key }
+        - { name: ipfs-init-volume, mountPath: /container-init.d/01-disable-autoconf.sh, subPath: 01-disable-autoconf.sh }
+        startupProbe: { tcpSocket: { port: 5001 }, periodSeconds: 5, timeoutSeconds: 5, failureThreshold: 60 }
+        livenessProbe: { tcpSocket: { port: 5001 }, initialDelaySeconds: 30, periodSeconds: 10, timeoutSeconds: 5 }
+        readinessProbe: { tcpSocket: { port: 5001 }, initialDelaySeconds: 15, periodSeconds: 5, timeoutSeconds: 5 }
+        resources:
+          requests: { cpu: 10m, memory: 32Mi }
+          limits: { memory: 256Mi }
+      volumes:
+      - { name: swarm-key, configMap: { name: ipfs-swarm-key } }
+      - { name: ipfs-init-volume, configMap: { name: ipfs-init-config, defaultMode: 511 } }
+  volumeClaimTemplates:
+  - metadata: { name: ipfs-data }
+    spec:
+      storageClassName: fabric-storage
+      accessModes: [ ReadWriteOnce ]
+      resources: { requests: { storage: 5Gi } }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ipfs-pubad
+  namespace: plv-pubad-campus
+  labels:
+    app: ipfs-pubad
+    campus: pubad
+spec:
+  serviceName: ipfs-pubad-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ipfs-pubad
+  template:
+    metadata:
+      labels:
+        app: ipfs-pubad
+        campus: pubad
+    spec:
+      serviceAccountName: fabric-sa
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_C__"
+      securityContext: { runAsUser: 0, runAsGroup: 0, fsGroup: 0 }
+      initContainers:
+      - name: fix-permissions
+        image: busybox:1.36.1
+        imagePullPolicy: IfNotPresent
+        securityContext: { runAsUser: 0 }
+        command: ["sh", "-c", "mkdir -p /data/ipfs && chown -R 1000:100 /data/ipfs && chmod -R u+rwX,g+rwX /data/ipfs"]
+        resources:
+          requests: { cpu: 1m, memory: 4Mi }
+          limits: { memory: 32Mi }
+        volumeMounts:
+        - { name: ipfs-data, mountPath: /data/ipfs }
+      containers:
+      - name: ipfs
+        image: ipfs/kubo:v0.41.0
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-ec"]
+        args:
+        - |
+          if [ ! -e "${IPFS_PATH}/config" ]; then ipfs init --profile=server; fi
+          for script in /container-init.d/*.sh; do [ -f "$script" ] && /bin/sh "$script"; done
+          exec /sbin/tini -- ipfs daemon --migrate=true
+        ports:
+        - { containerPort: 4001, name: swarm }
+        - { containerPort: 5001, name: api }
+        - { containerPort: 8080, name: gateway }
+        env:
+        - { name: IPFS_PROFILE, value: server }
+        - { name: IPFS_SWARM_KEY_FILE, value: /etc/ipfs/swarm.key }
+        - { name: LIBP2P_FORCE_PNET, value: "1" }
+        - { name: IPFS_TELEMETRY, value: "off" }
+        volumeMounts:
+        - { name: ipfs-data, mountPath: /data/ipfs }
+        - { name: swarm-key, mountPath: /etc/ipfs/swarm.key, subPath: swarm.key }
+        - { name: ipfs-init-volume, mountPath: /container-init.d/01-disable-autoconf.sh, subPath: 01-disable-autoconf.sh }
+        startupProbe: { tcpSocket: { port: 5001 }, periodSeconds: 5, timeoutSeconds: 5, failureThreshold: 60 }
+        livenessProbe: { tcpSocket: { port: 5001 }, initialDelaySeconds: 30, periodSeconds: 10, timeoutSeconds: 5 }
+        readinessProbe: { tcpSocket: { port: 5001 }, initialDelaySeconds: 15, periodSeconds: 5, timeoutSeconds: 5 }
+        resources:
+          requests: { cpu: 10m, memory: 32Mi }
+          limits: { memory: 256Mi }
+      volumes:
+      - { name: swarm-key, configMap: { name: ipfs-swarm-key } }
+      - { name: ipfs-init-volume, configMap: { name: ipfs-init-config, defaultMode: 511 } }
+  volumeClaimTemplates:
+  - metadata: { name: ipfs-data }
+    spec:
+      storageClassName: fabric-storage
+      accessModes: [ ReadWriteOnce ]
+      resources: { requests: { storage: 5Gi } }
+---
+# Stable application endpoint. Nginx retries both reads and non-idempotent API
+# requests on another campus when a node is unavailable.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ipfs-ha-router-config
+  namespace: plv-fabric
+data:
+  default.conf: |-
+    upstream ipfs_api_cluster {
+      zone ipfs_api_cluster 64k;
+      server ipfs-api.plv-fabric.svc.cluster.local:5001 max_fails=1 fail_timeout=5s;
+      server ipfs-annex-api.plv-annex-campus.svc.cluster.local:5001 max_fails=1 fail_timeout=5s;
+      server ipfs-pubad-api.plv-pubad-campus.svc.cluster.local:5001 max_fails=1 fail_timeout=5s;
+    }
+    upstream ipfs_gateway_cluster {
+      zone ipfs_gateway_cluster 64k;
+      server ipfs-gateway.plv-fabric.svc.cluster.local:8080 max_fails=1 fail_timeout=5s;
+      server ipfs-annex-gateway.plv-annex-campus.svc.cluster.local:8080 max_fails=1 fail_timeout=5s;
+      server ipfs-pubad-gateway.plv-pubad-campus.svc.cluster.local:8080 max_fails=1 fail_timeout=5s;
+    }
+    server {
+      listen 5001;
+      client_max_body_size 100m;
+      location = /router-health { return 200 "ok\n"; }
+      location / {
+        proxy_pass http://ipfs_api_cluster;
+        proxy_http_version 1.1;
+        proxy_set_header Host localhost:5001;
+        proxy_set_header Origin "";
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 300s;
+        proxy_next_upstream error timeout http_502 http_503 http_504 non_idempotent;
+        proxy_next_upstream_tries 3;
+      }
+    }
+    server {
+      listen 8080;
+      location = /router-health { return 200 "ok\n"; }
+      location / {
+        proxy_pass http://ipfs_gateway_cluster;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 300s;
+        proxy_next_upstream error timeout http_404 http_502 http_503 http_504;
+        proxy_next_upstream_tries 3;
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ipfs-ha-router
+  namespace: plv-fabric
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ipfs-ha-router }
+  template:
+    metadata:
+      labels: { app: ipfs-ha-router }
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.27-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - { name: api, containerPort: 5001 }
+        - { name: gateway, containerPort: 8080 }
+        volumeMounts:
+        - { name: config, mountPath: /etc/nginx/conf.d/default.conf, subPath: default.conf, readOnly: true }
+        readinessProbe: { httpGet: { path: /router-health, port: 5001 }, periodSeconds: 5 }
+        livenessProbe: { httpGet: { path: /router-health, port: 5001 }, initialDelaySeconds: 10, periodSeconds: 15 }
+        resources:
+          requests: { cpu: 10m, memory: 16Mi }
+          limits: { memory: 64Mi }
+      volumes:
+      - { name: config, configMap: { name: ipfs-ha-router-config } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipfs-ha-api
+  namespace: plv-fabric
+spec:
+  selector: { app: ipfs-ha-router }
+  ports:
+  - { name: api, port: 5001, targetPort: 5001 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipfs-ha-gateway
+  namespace: plv-fabric
+spec:
+  selector: { app: ipfs-ha-router }
+  ports:
+  - { name: gateway, port: 8080, targetPort: 8080 }

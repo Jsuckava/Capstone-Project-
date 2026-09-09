@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+tar xfz "$1/code.tar.gz" -C "$3"
+exit 0

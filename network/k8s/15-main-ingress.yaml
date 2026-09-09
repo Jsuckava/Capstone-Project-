@@ -1,0 +1,174 @@
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: blockgo-managed-cert
+  namespace: plv-fabric
+spec:
+  domains:
+    - plv-blockgo.com
+---
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: blockgo-frontend-config
+  namespace: plv-fabric
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: MOVED_PERMANENTLY_DEFAULT
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: main-ingress
+  namespace: plv-fabric
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    networking.gke.io/managed-certificates: "blockgo-managed-cert"
+    networking.gke.io/v1beta1.FrontendConfig: "blockgo-frontend-config"
+spec:
+  rules:
+  - host: plv-blockgo.com
+    http:
+      paths:
+      - path: /api/Auth
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/Grades
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/Student
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/student
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/GradeTemplate
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/SystemSettings
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/SystemMonitoring
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/BulkUpload
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/RegistrarDashboard
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/Sectioning
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/AccountManagement
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/Curriculums
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/SupportTickets
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/registrar
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/backend/health
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /chatHub
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /api/chatHub
+        pathType: Prefix
+        backend:
+          service:
+            name: client-app-service
+            port:
+              number: 5000
+      - path: /ipfs
+        pathType: Prefix
+        backend:
+          service:
+            name: ipfs-ha-gateway
+            port:
+              number: 8080
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: middleware-api
+            port:
+              number: 4000
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 80

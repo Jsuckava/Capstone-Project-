@@ -1,0 +1,11 @@
+Faculty Name,Subject Title,Subject Code,Section,Units,Semester,Day,Time
+Juan Dela Cruz,Introduction to Computing,IT 101,BSIT 1-1,3,1st Semester,Monday,7:00 AM - 10:00 AM
+Juan Dela Cruz,Networking 1,IT 302,BSIT 3-2,3,1st Semester,Monday,1:00 PM - 4:00 PM
+Maria Santos,Computer Programming 1,IT 102,BSIT 1-1,3,1st Semester,Tuesday,10:00 AM - 1:00 PM
+Maria Santos,Computer Programming 1,IT 102,BSIT 1-2,3,1st Semester,Tuesday,2:00 PM - 5:00 PM
+Alan Turing,Data Structures and Algorithms,IT 201,BSIT 2-1,3,1st Semester,Wednesday,8:00 AM - 11:00 AM
+Alan Turing,Data Structures and Algorithms,IT 201,BSIT 2-2,3,1st Semester,Wednesday,1:00 PM - 4:00 PM
+Grace Hopper,Object-Oriented Programming,IT 202,BSIT 2-1,3,1st Semester,Thursday,1:00 PM - 4:00 PM
+Ada Lovelace,Information Management,IT 301,BSIT 3-1,3,1st Semester,Friday,9:00 AM - 12:00 PM
+Ada Lovelace,Information Management,IT 301,BSIT 3-2,3,1st Semester,Friday,1:00 PM - 4:00 PM
+Linus Torvalds,Capstone Project 1,IT 401,BSIT 4-1,3,1st Semester,Saturday,8:00 AM - 11:00 AM

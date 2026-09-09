@@ -1,0 +1,212 @@
+{
+  "API": {
+    "HTTPHeaders": {
+      "Access-Control-Allow-Methods": [
+        "PUT",
+        "POST",
+        "GET",
+        "OPTIONS"
+      ],
+      "Access-Control-Allow-Origin": [
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:8090",
+        "http://127.0.0.1:8090",
+        "http://localhost:8100",
+        "http://127.0.0.1:8100"
+      ]
+    }
+  },
+  "Addresses": {
+    "API": "/ip4/0.0.0.0/tcp/5001",
+    "Announce": [],
+    "AppendAnnounce": [],
+    "Gateway": "/ip4/0.0.0.0/tcp/8080",
+    "NoAnnounce": [
+      "/ip4/10.0.0.0/ipcidr/8",
+      "/ip4/100.64.0.0/ipcidr/10",
+      "/ip4/169.254.0.0/ipcidr/16",
+      "/ip4/172.16.0.0/ipcidr/12",
+      "/ip4/192.0.0.0/ipcidr/24",
+      "/ip4/192.0.2.0/ipcidr/24",
+      "/ip4/192.168.0.0/ipcidr/16",
+      "/ip4/198.18.0.0/ipcidr/15",
+      "/ip4/198.51.100.0/ipcidr/24",
+      "/ip4/203.0.113.0/ipcidr/24",
+      "/ip4/240.0.0.0/ipcidr/4",
+      "/ip6/100::/ipcidr/64",
+      "/ip6/2001:2::/ipcidr/48",
+      "/ip6/2001:db8::/ipcidr/32",
+      "/ip6/fc00::/ipcidr/7",
+      "/ip6/fe80::/ipcidr/10"
+    ],
+    "Swarm": [
+      "/ip4/0.0.0.0/tcp/4001",
+      "/ip6/::/tcp/4001",
+      "/ip4/0.0.0.0/udp/4001/webrtc-direct",
+      "/ip4/0.0.0.0/udp/4001/quic-v1",
+      "/ip4/0.0.0.0/udp/4001/quic-v1/webtransport",
+      "/ip6/::/udp/4001/webrtc-direct",
+      "/ip6/::/udp/4001/quic-v1",
+      "/ip6/::/udp/4001/quic-v1/webtransport"
+    ]
+  },
+  "AutoConf": {
+    "Enabled": false
+  },
+  "AutoNAT": {},
+  "AutoTLS": {
+    "Enabled": false
+  },
+  "Bitswap": {},
+  "Bootstrap": [
+    "/dns4/ipfs0/tcp/4001/p2p/12D3KooW9y66PLW5ysYbSfYyDT3D5V8GCtKgKEBKu67kF2y3e8vf"
+  ],
+  "DNS": {
+    "Resolvers": {}
+  },
+  "Datastore": {
+    "BlockKeyCacheSize": null,
+    "BloomFilterSize": 0,
+    "GCPeriod": "1h",
+    "HashOnRead": false,
+    "Spec": {
+      "mounts": [
+        {
+          "mountpoint": "/blocks",
+          "path": "blocks",
+          "prefix": "flatfs.datastore",
+          "shardFunc": "/repo/flatfs/shard/v1/next-to-last/2",
+          "sync": false,
+          "type": "flatfs"
+        },
+        {
+          "compression": "none",
+          "mountpoint": "/",
+          "path": "datastore",
+          "prefix": "leveldb.datastore",
+          "type": "levelds"
+        }
+      ],
+      "type": "mount"
+    },
+    "StorageGCWatermark": 90,
+    "StorageMax": "10GB"
+  },
+  "Discovery": {
+    "MDNS": {
+      "Enabled": false
+    }
+  },
+  "Experimental": {
+    "FilestoreEnabled": false,
+    "Libp2pStreamMounting": false,
+    "OptimisticProvide": false,
+    "OptimisticProvideJobsPoolSize": 0,
+    "P2pHttpProxy": false,
+    "UrlstoreEnabled": false
+  },
+  "Gateway": {
+    "AllowCodecConversion": null,
+    "DeserializedResponses": null,
+    "DisableHTMLErrors": null,
+    "ExposeRoutingAPI": null,
+    "HTTPHeaders": {},
+    "NoDNSLink": false,
+    "NoFetch": false,
+    "PublicGateways": null,
+    "RootRedirect": ""
+  },
+  "HTTPRetrieval": {},
+  "Identity": {
+    "PeerID": "12D3KooWFe7zn3uvoewvPaqaWHh3FYQjQsDLgq22JwHxrdPWdWfP",
+    "PrivKey": "CAESQEeZgg34c5TogOnR7Ep167t7qQGZXJODiAujucbi67KbVoZKEG2/OBZHdcCExDL5dIXOlOVxCku2NK+mY1rslHY="
+  },
+  "Import": {
+    "BatchMaxNodes": null,
+    "BatchMaxSize": null,
+    "CidVersion": null,
+    "FastProvideDAG": null,
+    "FastProvideRoot": null,
+    "FastProvideWait": null,
+    "HashFunction": null,
+    "UnixFSChunker": null,
+    "UnixFSDAGLayout": null,
+    "UnixFSDirectoryMaxLinks": null,
+    "UnixFSFileMaxLinks": null,
+    "UnixFSHAMTDirectoryMaxFanout": null,
+    "UnixFSHAMTDirectorySizeEstimation": null,
+    "UnixFSHAMTDirectorySizeThreshold": null,
+    "UnixFSRawLeaves": null
+  },
+  "Internal": {},
+  "Ipns": {
+    "DelegatedPublishers": [],
+    "RecordLifetime": "",
+    "RepublishPeriod": "",
+    "ResolveCacheSize": 128
+  },
+  "Migration": {},
+  "Mounts": {
+    "FuseAllowOther": false,
+    "IPFS": "/ipfs",
+    "IPNS": "/ipns",
+    "MFS": "/mfs",
+    "StoreMode": null,
+    "StoreMtime": null
+  },
+  "Peering": {
+    "Peers": null
+  },
+  "Pinning": {
+    "RemoteServices": {}
+  },
+  "Plugins": {
+    "Plugins": null
+  },
+  "Provide": {
+    "DHT": {}
+  },
+  "Provider": {},
+  "Pubsub": {
+    "DisableSigning": false,
+    "Router": ""
+  },
+  "Reprovider": {},
+  "Routing": {
+    "DelegatedRouters": [],
+    "Type": "dht"
+  },
+  "Swarm": {
+    "AddrFilters": [
+      "/ip4/10.0.0.0/ipcidr/8",
+      "/ip4/100.64.0.0/ipcidr/10",
+      "/ip4/169.254.0.0/ipcidr/16",
+      "/ip4/172.16.0.0/ipcidr/12",
+      "/ip4/192.0.0.0/ipcidr/24",
+      "/ip4/192.0.2.0/ipcidr/24",
+      "/ip4/192.168.0.0/ipcidr/16",
+      "/ip4/198.18.0.0/ipcidr/15",
+      "/ip4/198.51.100.0/ipcidr/24",
+      "/ip4/203.0.113.0/ipcidr/24",
+      "/ip4/240.0.0.0/ipcidr/4",
+      "/ip6/100::/ipcidr/64",
+      "/ip6/2001:2::/ipcidr/48",
+      "/ip6/2001:db8::/ipcidr/32",
+      "/ip6/fc00::/ipcidr/7",
+      "/ip6/fe80::/ipcidr/10"
+    ],
+    "ConnMgr": {},
+    "DisableBandwidthMetrics": false,
+    "DisableNatPortMap": true,
+    "RelayClient": {},
+    "RelayService": {},
+    "ResourceMgr": {},
+    "Transports": {
+      "Multiplexers": {},
+      "Network": {},
+      "Security": {}
+    }
+  },
+  "Version": {}
+}

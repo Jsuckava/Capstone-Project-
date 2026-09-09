@@ -1,0 +1,10 @@
+node_modules
+**/node_modules
+bin
+obj
+.git
+network/fabric-k8s-data
+network/channel-artifacts-final
+network/ipfs_data
+frontend
+chaincode

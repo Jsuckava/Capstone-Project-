@@ -1,0 +1,120 @@
+{
+    "name": "blockgo-network-profile",
+    "version": "1.0.0",
+    "client": {
+        "organization": "Registrar",
+        "connection": {
+            "timeout": {
+                "peer": {
+                    "endorser": "300"
+                },
+                "orderer": "300"
+            }
+        }
+    },
+    "channels": {
+        "registrar-channel": {
+            "peers": {
+                "peer0.registrar.capstone.com": {
+                    "endorsingPeer": true, "chaincodeQuery": true, "ledgerQuery": true, "eventSource": true
+                },
+                "peer0.faculty.capstone.com": {
+                    "endorsingPeer": true, "chaincodeQuery": true, "ledgerQuery": true, "eventSource": true
+                },
+                "peer0.department.capstone.com": {
+                    "endorsingPeer": true, "chaincodeQuery": true, "ledgerQuery": true, "eventSource": true
+                }
+            }
+        }
+    },
+    "organizations": {
+        "Registrar": {
+            "mspid": "RegistrarMSP",
+            "peers": [
+                "peer0.registrar.capstone.com"
+            ],
+            "certificateAuthorities": [
+                "ca.registrar.capstone.com"
+            ]
+        },
+        "Faculty": {
+            "mspid": "FacultyMSP",
+            "peers": [
+                "peer0.faculty.capstone.com"
+            ],
+            "certificateAuthorities": [
+                "ca.faculty.capstone.com"
+            ]
+        },
+        "Department": {
+            "mspid": "DepartmentMSP",
+            "peers": [
+                "peer0.department.capstone.com"
+            ],
+            "certificateAuthorities": [
+                "ca.department.capstone.com"
+            ]
+        }
+    },
+    "peers": {
+        "peer0.registrar.capstone.com": {
+            "url": "grpcs://localhost:7051",
+            "tlsCACerts": {
+                "path": "../network/crypto-config-final-v2/peerOrganizations/registrar.capstone.com/tlsca/tlsca.registrar.capstone.com-cert.pem"
+            },
+            "grpcOptions": {
+                "ssl-target-name-override": "peer0.registrar.capstone.com"
+            }
+        },
+        "peer0.faculty.capstone.com": {
+            "url": "grpcs://localhost:9051",
+            "tlsCACerts": {
+                "path": "../network/crypto-config-final-v2/peerOrganizations/faculty.capstone.com/tlsca/tlsca.faculty.capstone.com-cert.pem"
+            },
+            "grpcOptions": {
+                "ssl-target-name-override": "peer0.faculty.capstone.com"
+            }
+        },
+        "peer0.department.capstone.com": {
+            "url": "grpcs://localhost:11051",
+            "tlsCACerts": {
+                "path": "../network/crypto-config-final-v2/peerOrganizations/department.capstone.com/tlsca/tlsca.department.capstone.com-cert.pem"
+            },
+            "grpcOptions": {
+                "ssl-target-name-override": "peer0.department.capstone.com"
+            }
+        }
+    },
+    "certificateAuthorities": {
+        "ca.registrar.capstone.com": {
+            "url": "https://localhost:7054",
+            "caName": "ca-registrar",
+            "tlsCACerts": {
+                "path": "../network/fabric-ca/registrar/tls-cert.pem"
+            },
+            "httpOptions": {
+                "verify": false
+            }
+        },
+        "ca.faculty.capstone.com": {
+            "url": "https://localhost:8054",
+            "caName": "ca-faculty",
+            "tlsCACerts": {
+                "path": "../network/fabric-ca/faculty/tls-cert.pem"
+            },
+            "httpOptions": {
+                "verify": false
+            }
+        },
+        "ca.department.capstone.com": {
+            "url": "https://localhost:9054",
+            "caName": "ca-department",
+            "tlsCACerts": {
+                "path": "../network/fabric-ca/department/tls-cert.pem"
+            },
+            "httpOptions": {
+                "verify": false
+            }
+        }
+    }
+}

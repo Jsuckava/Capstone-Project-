@@ -1,0 +1,82 @@
+2026-04-25 20:22:33.288 +08:00 [INF] Application starting up...
+2026-04-25 20:22:33.461 +08:00 [INF] HSTS enabled (HTTPS Redirection disabled for Nginx)
+2026-04-25 20:22:33.534 +08:00 [INF] Application configured successfully
+2026-04-25 20:22:33.535 +08:00 [INF] Listening on 
+2026-04-25 20:22:33.589 +08:00 [INF] Now listening on: http://0.0.0.0:5000
+2026-04-25 20:22:33.593 +08:00 [INF] Application started. Press Ctrl+C to shut down.
+2026-04-25 20:22:33.594 +08:00 [INF] Hosting environment: Production
+2026-04-25 20:22:33.595 +08:00 [INF] Content root path: C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app
+2026-04-25 20:35:30.907 +08:00 [INF] Application is shutting down...
+2026-04-25 12:36:39.328 +00:00 [INF] Application starting up...
+2026-04-25 12:36:40.683 +00:00 [INF] HSTS enabled (HTTPS Redirection disabled for Nginx)
+2026-04-25 12:36:41.897 +00:00 [INF] Application configured successfully
+2026-04-25 12:36:41.899 +00:00 [INF] Listening on 
+2026-04-25 12:36:41.912 +00:00 [WRN] Overriding HTTP_PORTS '8080' and HTTPS_PORTS ''. Binding to values defined by URLS instead 'http://0.0.0.0:5000'.
+2026-04-25 12:36:41.961 +00:00 [INF] Now listening on: http://0.0.0.0:5000
+2026-04-25 12:36:41.962 +00:00 [INF] Application started. Press Ctrl+C to shut down.
+2026-04-25 12:36:41.962 +00:00 [INF] Hosting environment: Production
+2026-04-25 12:36:41.963 +00:00 [INF] Content root path: /app
+2026-04-25 12:51:46.502 +00:00 [INF] Request starting HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - application/json null
+2026-04-25 12:51:46.735 +00:00 [INF] Executing endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:51:47.345 +00:00 [INF] Route matched with {action = "GetUserProfile", controller = "Auth"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetUserProfile(System.String, System.String) on controller Client_app.Controllers.AuthController (For_Testing_Only_Capstone).
+2026-04-25 12:51:48.398 +00:00 [INF] Executing NotFoundObjectResult, writing value of type '<>f__AnonymousType0`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-04-25 12:51:48.613 +00:00 [INF] Request starting HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - application/json null
+2026-04-25 12:51:48.617 +00:00 [INF] Executing endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:51:48.618 +00:00 [INF] Route matched with {action = "GetUserProfile", controller = "Auth"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetUserProfile(System.String, System.String) on controller Client_app.Controllers.AuthController (For_Testing_Only_Capstone).
+2026-04-25 12:51:48.621 +00:00 [INF] Executing NotFoundObjectResult, writing value of type '<>f__AnonymousType0`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-04-25 12:51:48.647 +00:00 [INF] Executed action Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone) in 1298.9975ms
+2026-04-25 12:51:48.647 +00:00 [INF] Executed action Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone) in 26.227ms
+2026-04-25 12:51:48.651 +00:00 [INF] Executed endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:51:48.651 +00:00 [INF] Executed endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:51:48.654 +00:00 [INF] HTTP GET /api/Auth/user-profile responded 404 in 37.0419 ms
+2026-04-25 12:51:48.654 +00:00 [INF] HTTP GET /api/Auth/user-profile responded 404 in 1972.7429 ms
+2026-04-25 12:51:48.657 +00:00 [INF] Request finished HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - 404 null application/json; charset=utf-8 43.2714ms
+2026-04-25 12:51:48.657 +00:00 [INF] Request finished HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - 404 null application/json; charset=utf-8 2157.4886ms
+2026-04-25 12:51:50.039 +00:00 [INF] Request starting HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - application/json null
+2026-04-25 12:51:50.040 +00:00 [INF] Executing endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:51:50.041 +00:00 [INF] Route matched with {action = "GetUserProfile", controller = "Auth"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetUserProfile(System.String, System.String) on controller Client_app.Controllers.AuthController (For_Testing_Only_Capstone).
+2026-04-25 12:51:50.044 +00:00 [INF] Executing NotFoundObjectResult, writing value of type '<>f__AnonymousType0`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-04-25 12:51:50.046 +00:00 [INF] Executed action Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone) in 4.1742ms
+2026-04-25 12:51:50.046 +00:00 [INF] Executed endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:51:50.047 +00:00 [INF] HTTP GET /api/Auth/user-profile responded 404 in 6.7730 ms
+2026-04-25 12:51:50.047 +00:00 [INF] Request finished HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - 404 null application/json; charset=utf-8 8.5028ms
+2026-04-25 12:51:57.073 +00:00 [INF] Request starting HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - application/json null
+2026-04-25 12:51:57.073 +00:00 [INF] Executing endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:51:57.074 +00:00 [INF] Route matched with {action = "GetUserProfile", controller = "Auth"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetUserProfile(System.String, System.String) on controller Client_app.Controllers.AuthController (For_Testing_Only_Capstone).
+2026-04-25 12:51:57.075 +00:00 [INF] Executing NotFoundObjectResult, writing value of type '<>f__AnonymousType0`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-04-25 12:51:57.076 +00:00 [INF] Executed action Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone) in 1.8474ms
+2026-04-25 12:51:57.076 +00:00 [INF] Executed endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:51:57.077 +00:00 [INF] HTTP GET /api/Auth/user-profile responded 404 in 3.4827 ms
+2026-04-25 12:51:57.077 +00:00 [INF] Request finished HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - 404 null application/json; charset=utf-8 4.4198ms
+2026-04-25 12:52:05.580 +00:00 [INF] Request starting HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - application/json null
+2026-04-25 12:52:05.581 +00:00 [INF] Executing endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:52:05.581 +00:00 [INF] Route matched with {action = "GetUserProfile", controller = "Auth"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetUserProfile(System.String, System.String) on controller Client_app.Controllers.AuthController (For_Testing_Only_Capstone).
+2026-04-25 12:52:05.583 +00:00 [INF] Executing NotFoundObjectResult, writing value of type '<>f__AnonymousType0`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-04-25 12:52:05.584 +00:00 [INF] Executed action Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone) in 2.2035ms
+2026-04-25 12:52:05.584 +00:00 [INF] Executed endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:52:05.584 +00:00 [INF] HTTP GET /api/Auth/user-profile responded 404 in 3.9745 ms
+2026-04-25 12:52:05.585 +00:00 [INF] Request finished HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - 404 null application/json; charset=utf-8 4.9669ms
+2026-04-25 12:52:09.478 +00:00 [INF] Request starting HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - application/json null
+2026-04-25 12:52:09.479 +00:00 [INF] Executing endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:52:09.479 +00:00 [INF] Route matched with {action = "GetUserProfile", controller = "Auth"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetUserProfile(System.String, System.String) on controller Client_app.Controllers.AuthController (For_Testing_Only_Capstone).
+2026-04-25 12:52:09.481 +00:00 [INF] Executing NotFoundObjectResult, writing value of type '<>f__AnonymousType0`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-04-25 12:52:09.482 +00:00 [INF] Executed action Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone) in 2.1156ms
+2026-04-25 12:52:09.483 +00:00 [INF] Executed endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:52:09.483 +00:00 [INF] HTTP GET /api/Auth/user-profile responded 404 in 4.3210 ms
+2026-04-25 12:52:09.484 +00:00 [INF] Request finished HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - 404 null application/json; charset=utf-8 5.6821ms
+2026-04-25 12:52:12.635 +00:00 [INF] Request starting HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - application/json null
+2026-04-25 12:52:12.636 +00:00 [INF] Executing endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:52:12.636 +00:00 [INF] Route matched with {action = "GetUserProfile", controller = "Auth"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetUserProfile(System.String, System.String) on controller Client_app.Controllers.AuthController (For_Testing_Only_Capstone).
+2026-04-25 12:52:12.638 +00:00 [INF] Executing NotFoundObjectResult, writing value of type '<>f__AnonymousType0`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-04-25 12:52:12.638 +00:00 [INF] Executed action Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone) in 2.0176ms
+2026-04-25 12:52:12.639 +00:00 [INF] Executed endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:52:12.639 +00:00 [INF] HTTP GET /api/Auth/user-profile responded 404 in 3.8431 ms
+2026-04-25 12:52:12.640 +00:00 [INF] Request finished HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - 404 null application/json; charset=utf-8 4.7993ms
+2026-04-25 12:52:39.612 +00:00 [INF] Request starting HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - application/json null
+2026-04-25 12:52:39.613 +00:00 [INF] Executing endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:52:39.613 +00:00 [INF] Route matched with {action = "GetUserProfile", controller = "Auth"}. Executing controller action with signature System.Threading.Tasks.Task`1[Microsoft.AspNetCore.Mvc.IActionResult] GetUserProfile(System.String, System.String) on controller Client_app.Controllers.AuthController (For_Testing_Only_Capstone).
+2026-04-25 12:52:39.615 +00:00 [INF] Executing NotFoundObjectResult, writing value of type '<>f__AnonymousType0`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+2026-04-25 12:52:39.615 +00:00 [INF] Executed action Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone) in 2.0334ms
+2026-04-25 12:52:39.616 +00:00 [INF] Executed endpoint 'Client_app.Controllers.AuthController.GetUserProfile (For_Testing_Only_Capstone)'
+2026-04-25 12:52:39.616 +00:00 [INF] HTTP GET /api/Auth/user-profile responded 404 in 3.7737 ms
+2026-04-25 12:52:39.617 +00:00 [INF] Request finished HTTP/1.0 GET http://localhost/api/Auth/user-profile?email=registrar%40plv.edu.ph&role=registrar - 404 null application/json; charset=utf-8 4.7731ms

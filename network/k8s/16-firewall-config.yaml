@@ -1,0 +1,147 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: firewall-main-dbs
+  namespace: plv-main-campus
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [couchdb-registrar, couchdb-wallet-registrar, postgres-primary]
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: peer-registrar
+    ports:
+    - protocol: TCP
+      port: 5984
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: plv-fabric
+      podSelector:
+        matchExpressions:
+          - key: app
+            operator: In
+            values: [auth-service, settings-service, fabric-identity-service, ledger-service, client-app, plv-client-app]
+    ports:
+    - protocol: TCP
+      port: 5984
+    - protocol: TCP
+      port: 5432
+  - from:
+    - podSelector:
+        matchLabels:
+          app: postgres-exporter
+    ports:
+    - protocol: TCP
+      port: 5432
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: plv-annex-campus
+      podSelector:
+        matchLabels:
+          app: postgres-replica-annex
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: plv-pubad-campus
+      podSelector:
+        matchLabels:
+          app: postgres-replica-pubad
+    ports:
+    - protocol: TCP
+      port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: firewall-annex-dbs
+  namespace: plv-annex-campus
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [couchdb-faculty, couchdb-wallet-faculty, postgres-replica-annex]
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: peer-faculty
+    ports:
+    - protocol: TCP
+      port: 5984
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: plv-fabric
+      podSelector:
+        matchExpressions:
+          - key: app
+            operator: In
+            values: [fabric-identity-service, ledger-service, client-app, plv-client-app]
+    ports:
+    - protocol: TCP
+      port: 5984
+    - protocol: TCP
+      port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: firewall-pubad-dbs
+  namespace: plv-pubad-campus
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [couchdb-department, couchdb-wallet-department, postgres-replica-pubad]
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: peer-department
+    ports:
+    - protocol: TCP
+      port: 5984
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: plv-fabric
+      podSelector:
+        matchExpressions:
+          - key: app
+            operator: In
+            values: [fabric-identity-service, ledger-service, client-app, plv-client-app]
+    ports:
+    - protocol: TCP
+      port: 5984
+    - protocol: TCP
+      port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-ingress
+  namespace: plv-fabric
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+  - Ingress
+  ingress:
+  - ports:
+    - protocol: TCP
+      port: 80

@@ -1,0 +1,70 @@
+---
+# Department Chaincode Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: department-chaincode
+  namespace: plv-pubad-campus
+spec:
+  selector:
+    app: department-chaincode
+  ports:
+  - port: 9999
+    targetPort: 9999
+    protocol: TCP
+    name: grpc
+---
+# Department Chaincode Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: department-chaincode
+  namespace: plv-pubad-campus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: department-chaincode
+  template:
+    metadata:
+      labels:
+        app: department-chaincode
+    spec:
+      serviceAccountName: fabric-sa
+      containers:
+      - name: chaincode
+        image: registry.example.com/plv-repo/department-chaincode:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 9999
+          name: grpc
+        env:
+        - name: CHAINCODE_SERVER_ADDRESS
+          value: "0.0.0.0:9999"
+        - name: CORE_PEER_TLS_ENABLED
+          value: "true"
+        - name: CHAINCODE_TLS_DISABLED
+          value: "false"
+        - name: CHAINCODE_TLS_CERT_FILE
+          value: "/etc/hyperledger/chaincode/tls/server.crt"
+        - name: CHAINCODE_TLS_KEY_FILE
+          value: "/etc/hyperledger/chaincode/tls/server.key"
+        - name: CHAINCODE_CLIENT_CA_CERT_FILE
+          value: "/etc/hyperledger/chaincode/tls/ca-bundle.pem"
+        - name: CHAINCODE_ID
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: CHAINCODE_ID_DEPARTMENT
+        volumeMounts:
+        - name: tls
+          mountPath: /etc/hyperledger/chaincode/tls
+          readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+      volumes:
+      - name: tls
+        secret:
+          secretName: chaincode-department-tls

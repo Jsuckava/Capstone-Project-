@@ -1,51 +1,99 @@
+# =========================
+# GLOBAL OS & IDE TEMP FILES
+# =========================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.user
+*.suo
+.project
+.classpath
+.c9/
+tmp/
+temp/
+.cache/
+*.cache
+*.cache.json
+
+# =========================
+# GLOBAL DEPENDENCIES & BUILD
+# =========================
 node_modules/
 **/node_modules/
-bin/
-obj/
+frontend/package-lock.json
 *.dll
 *.exe
 *.pdb
-*.user
-*.suo
-.env
-.fake
+.venv/
+venv/
+ENV/
 __pycache__/
 *.pyc
-network/crypto-config/
-network/fabric-ca/*/msp/
-network/fabric-ca/*/tls/
-network/fabric-ca/**/*.db
-network/fabric-ca/**/*.pem
-network/fabric-ca/**/Issuer*
-client-app/bin/
-client-app/obj/
-*.cache
-*.cache.json
+.Python
+
+# =========================
+# GLOBAL SECRETS & LOGS
+# =========================
+.env
+.env.*
+*.bak
+appsettings.*.json
+.fake
+network/.local-frontend-port-forward*.log
+network/.local-frontend-port-forward*.pid
+network/.local-couchdb-*-port-forward*.log
+network/.local-couchdb-*-port-forward*.pid
+
+# =========================
+# GLOBAL DATABASES
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+*.mdb
+
+# =========================
+# DOCKER & DEPLOYMENT
+# =========================
+docker-compose.override.yml
+network/.tmp-k8s/
+network/k8s/.tmp-k8s/
+# =========================
+# BLOCKCHAIN NETWORK SPECIFIC
+# =========================
+fabric_deploy_*/
 network/postgres-data/
 network/ipfs/
-network/bin/
-network/*.block
-network/*.tar.gz
+network/fabric-k8s-data/
+network/crypto-config*/
+network/channel-artifacts*/
+network/organizations/
+network/swarm.key
+network/swarm-clean.key
+**/msp/keystore/
+**/msp/signcerts/
+**/tls/*.key
+**/tls/*.crt
 
-# Chaincode dynamically generated variables
+# Dynamic Chaincode Env
 chaincode/.env
 
-# Build output
-frontend/build/
+# Ignore Cryptogen materials but KEEP directories
+!network/crypto-config-final-v2/.gitkeep
 
-# Logs
-*.log
-client-app/logs/
+# Ignore Artifacts but KEEP directory
+!network/channel-artifacts-final/.gitkeep
 
-# Hyperledger Fabric & Application Generated Artifacts
-network/channel-artifacts/
-middleware/wallet/
-network/fabric-samples/
-network/connection.json
-network/metadata.json
-network/collections.json
-
-# OS & Editor specific (good practice)
-.vscode/
-.idea/
-.DS_Store
+# Ignore Binaries but KEEP directory
+network/bin/*
+!network/bin/.gitkeep

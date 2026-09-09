@@ -11,6 +11,20 @@ peer:
   tls:
     enabled: true
     clientAuthRequired: false
+  chaincodeListenAddress: 0.0.0.0:7052
+  chaincodeAddress: 0.0.0.0:7052
+  
+  # BCCSP (Blockchain crypto provider)
+  BCCSP:
+    Default: SW
+    SW:
+      Hash: SHA2
+      Security: 256
+      # The FileKeyStore is intentionally left blank.
+      # The peer will default to using the 'keystore' directory
+      # inside the CORE_PEER_MSPCONFIGPATH, which is correct.
+      FileKeyStore:
+        KeyStore:
 
 vm:
   endpoint: unix:///var/run/docker.sock
@@ -20,9 +34,11 @@ vm:
 
 chaincode:
   externalBuilders:
-    - path: /usr/local/bin/ccaas_builder
+    - path: /opt/hyperledger/ccaas_builder
       name: ccaas_builder
       propagateEnvironment:
-        - HOME
-        - PATH
-        - LD_LIBRARY_PATH
+        - CHAINCODE_AS_A_SERVICE_BUILDER_CONFIG
+    - path: /etc/hyperledger/fabric/builders/ccaas
+      name: ccaas_builder_fallback
+      propagateEnvironment:
+        - CHAINCODE_AS_A_SERVICE_BUILDER_CONFIG

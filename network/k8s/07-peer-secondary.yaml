@@ -1,0 +1,499 @@
+# Production-only secondary Fabric peers. The deployment script excludes this
+# manifest from the local profile so local development remains lightweight.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: peer-registrar-2-pvc
+  namespace: plv-main-campus
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: fabric-storage
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: couchdb-registrar-2
+  namespace: plv-main-campus
+spec:
+  serviceName: couchdb-registrar-2
+  replicas: 1
+  selector:
+    matchLabels:
+      app: couchdb-registrar-2
+  template:
+    metadata:
+      labels:
+        app: couchdb-registrar-2
+    spec:
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_B__"
+      initContainers:
+      - name: prepare-couchdb-config
+        image: busybox:1.36.1
+        command: ["/bin/sh", "-ec", "cp /config-source/10-single-node.ini /config-local/10-single-node.ini && chmod 0644 /config-local/10-single-node.ini"]
+        volumeMounts:
+        - {name: couchdb-single-node-config, mountPath: /config-source, readOnly: true}
+        - {name: couchdb-local-config, mountPath: /config-local}
+      containers:
+      - name: couchdb
+        image: couchdb:3.2.2
+        ports:
+        - containerPort: 5984
+          name: couchdb
+        env:
+        - name: COUCHDB_USER
+          valueFrom:
+            secretKeyRef: {name: blockgo-secrets, key: COUCHDB_USER}
+        - name: COUCHDB_PASSWORD
+          valueFrom:
+            secretKeyRef: {name: blockgo-secrets, key: COUCHDB_PASS}
+        volumeMounts:
+        - name: couchdb-storage
+          mountPath: /opt/couchdb/data
+        - {name: couchdb-local-config, mountPath: /opt/couchdb/etc/local.d}
+        startupProbe: &couchdbProbe
+          httpGet: {path: /_up, port: couchdb}
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe: *couchdbProbe
+        readinessProbe: *couchdbProbe
+      volumes:
+      - name: couchdb-single-node-config
+        configMap: {name: couchdb-single-node-config}
+      - name: couchdb-local-config
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: couchdb-storage
+    spec:
+      storageClassName: fabric-storage
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 30Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: couchdb-registrar-2
+  namespace: plv-main-campus
+spec:
+  selector:
+    app: couchdb-registrar-2
+  ports:
+  - {name: couchdb, port: 5984, targetPort: 5984}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: peer-registrar-2
+  namespace: plv-main-campus
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      app: peer-registrar-2
+  template:
+    metadata:
+      labels: {app: peer-registrar-2, org: registrar}
+    spec:
+      serviceAccountName: peer-sa
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_B__"
+      initContainers:
+      - name: wait-for-couchdb
+        image: busybox:1.36.1
+        command: ["/bin/sh", "-ec", "until nc -w 2 couchdb-registrar-2 5984 </dev/null; do sleep 2; done"]
+      containers:
+      - name: peer
+        image: hyperledger/fabric-peer:2.5.4
+        ports:
+        - {containerPort: 7051, name: peer}
+        - {containerPort: 7052, name: chaincode}
+        - {containerPort: 9443, name: operations}
+        env:
+        - {name: FABRIC_CFG_PATH, value: /etc/hyperledger/fabric}
+        - {name: CORE_PEER_ID, value: peer1.registrar.capstone.com}
+        - {name: CORE_PEER_ADDRESS, value: "peer-registrar-2:7051"}
+        - {name: CORE_PEER_LISTENADDRESS, value: "0.0.0.0:7051"}
+        - {name: CORE_PEER_CHAINCODELISTENADDRESS, value: "0.0.0.0:7052"}
+        - {name: CORE_PEER_CHAINCODEADDRESS, value: "peer-registrar-2:7052"}
+        - {name: CORE_PEER_GOSSIP_BOOTSTRAP, value: "peer-registrar:7051"}
+        - {name: CORE_PEER_GOSSIP_EXTERNALENDPOINT, value: "peer-registrar-2:7051"}
+        - {name: CORE_PEER_LOCALMSPID, value: RegistrarMSP}
+        - {name: CORE_PEER_MSPCONFIGPATH, value: /var/hyperledger/msp}
+        - {name: CORE_PEER_TLS_ENABLED, value: "true"}
+        - {name: CORE_PEER_TLS_CERT_FILE, value: /var/hyperledger/tls/server.crt}
+        - {name: CORE_PEER_TLS_KEY_FILE, value: /var/hyperledger/tls/server.key}
+        - {name: CORE_PEER_TLS_ROOTCERT_FILE, value: /var/hyperledger/tls/ca.crt}
+        - {name: CORE_LEDGER_STATE_STATEDATABASE, value: CouchDB}
+        - {name: CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS, value: "couchdb-registrar-2:5984"}
+        - name: CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME
+          valueFrom:
+            secretKeyRef: {name: blockgo-secrets, key: COUCHDB_USER}
+        - name: CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD
+          valueFrom:
+            secretKeyRef: {name: blockgo-secrets, key: COUCHDB_PASS}
+        - {name: CORE_METRICS_PROVIDER, value: prometheus}
+        - {name: CORE_OPERATIONS_LISTENADDRESS, value: "0.0.0.0:9443"}
+        volumeMounts: &peerMounts
+        - {name: peer-storage, mountPath: /var/hyperledger/production}
+        - {name: config, mountPath: /etc/hyperledger/fabric/core.yaml, subPath: core.yaml}
+        - {name: crypto, mountPath: /var/hyperledger/msp/signcerts/cert.pem, subPath: msp-cert.pem}
+        - {name: crypto, mountPath: /var/hyperledger/msp/keystore/priv_sk, subPath: msp-key.pem}
+        - {name: crypto, mountPath: /var/hyperledger/msp/cacerts/ca.pem, subPath: msp-ca.pem}
+        - {name: crypto, mountPath: /var/hyperledger/msp/admincerts/admin-cert.pem, subPath: admin-cert.pem}
+        - {name: crypto, mountPath: /var/hyperledger/tls/server.crt, subPath: server.crt}
+        - {name: crypto, mountPath: /var/hyperledger/tls/server.key, subPath: server.key}
+        - {name: crypto, mountPath: /var/hyperledger/tls/ca.crt, subPath: ca.crt}
+        startupProbe: &peerProbe
+          tcpSocket: {port: peer}
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe: *peerProbe
+        readinessProbe: *peerProbe
+      volumes:
+      - name: peer-storage
+        persistentVolumeClaim: {claimName: peer-registrar-2-pvc}
+      - name: config
+        configMap: {name: fabric-common-config}
+      - name: crypto
+        secret: {secretName: peer-registrar-2-crypto}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: peer-registrar-2
+  namespace: plv-main-campus
+spec:
+  selector: {app: peer-registrar-2}
+  ports:
+  - {name: peer, port: 7051, targetPort: 7051}
+  - {name: operations, port: 9443, targetPort: 9443}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: peer-faculty-2-pvc
+  namespace: plv-annex-campus
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: fabric-storage
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: couchdb-faculty-2
+  namespace: plv-annex-campus
+spec:
+  serviceName: couchdb-faculty-2
+  replicas: 1
+  selector:
+    matchLabels: {app: couchdb-faculty-2}
+  template:
+    metadata:
+      labels: {app: couchdb-faculty-2}
+    spec:
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_C__"
+      initContainers:
+      - name: prepare-couchdb-config
+        image: busybox:1.36.1
+        command: ["/bin/sh", "-ec", "cp /config-source/10-single-node.ini /config-local/10-single-node.ini && chmod 0644 /config-local/10-single-node.ini"]
+        volumeMounts:
+        - {name: couchdb-single-node-config, mountPath: /config-source, readOnly: true}
+        - {name: couchdb-local-config, mountPath: /config-local}
+      containers:
+      - name: couchdb
+        image: couchdb:3.2.2
+        ports:
+        - {containerPort: 5984, name: couchdb}
+        env:
+        - name: COUCHDB_USER
+          valueFrom:
+            secretKeyRef: {name: blockgo-secrets, key: COUCHDB_USER}
+        - name: COUCHDB_PASSWORD
+          valueFrom:
+            secretKeyRef: {name: blockgo-secrets, key: COUCHDB_PASS}
+        volumeMounts:
+        - {name: couchdb-storage, mountPath: /opt/couchdb/data}
+        - {name: couchdb-local-config, mountPath: /opt/couchdb/etc/local.d}
+        startupProbe: &couchdbFacultyProbe
+          httpGet: {path: /_up, port: couchdb}
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe: *couchdbFacultyProbe
+        readinessProbe: *couchdbFacultyProbe
+      volumes:
+      - name: couchdb-single-node-config
+        configMap: {name: couchdb-single-node-config}
+      - name: couchdb-local-config
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata: {name: couchdb-storage}
+    spec:
+      storageClassName: fabric-storage
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests: {storage: 30Gi}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: couchdb-faculty-2, namespace: plv-annex-campus}
+spec:
+  selector: {app: couchdb-faculty-2}
+  ports:
+  - {name: couchdb, port: 5984, targetPort: 5984}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: peer-faculty-2, namespace: plv-annex-campus}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: peer-faculty-2}
+  template:
+    metadata:
+      labels: {app: peer-faculty-2, org: faculty}
+    spec:
+      serviceAccountName: peer-sa
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_C__"
+      initContainers:
+      - name: wait-for-couchdb
+        image: busybox:1.36.1
+        command: ["/bin/sh", "-ec", "until nc -w 2 couchdb-faculty-2 5984 </dev/null; do sleep 2; done"]
+      containers:
+      - name: peer
+        image: hyperledger/fabric-peer:2.5.4
+        ports:
+        - {containerPort: 7051, name: peer}
+        - {containerPort: 7052, name: chaincode}
+        - {containerPort: 9443, name: operations}
+        env:
+        - {name: FABRIC_CFG_PATH, value: /etc/hyperledger/fabric}
+        - {name: CORE_PEER_ID, value: peer1.faculty.capstone.com}
+        - {name: CORE_PEER_ADDRESS, value: "peer-faculty-2:7051"}
+        - {name: CORE_PEER_LISTENADDRESS, value: "0.0.0.0:7051"}
+        - {name: CORE_PEER_CHAINCODELISTENADDRESS, value: "0.0.0.0:7052"}
+        - {name: CORE_PEER_CHAINCODEADDRESS, value: "peer-faculty-2:7052"}
+        - {name: CORE_PEER_GOSSIP_BOOTSTRAP, value: "peer-faculty:7051"}
+        - {name: CORE_PEER_GOSSIP_EXTERNALENDPOINT, value: "peer-faculty-2:7051"}
+        - {name: CORE_PEER_LOCALMSPID, value: FacultyMSP}
+        - {name: CORE_PEER_MSPCONFIGPATH, value: /var/hyperledger/msp}
+        - {name: CORE_PEER_TLS_ENABLED, value: "true"}
+        - {name: CORE_PEER_TLS_CERT_FILE, value: /var/hyperledger/tls/server.crt}
+        - {name: CORE_PEER_TLS_KEY_FILE, value: /var/hyperledger/tls/server.key}
+        - {name: CORE_PEER_TLS_ROOTCERT_FILE, value: /var/hyperledger/tls/ca.crt}
+        - {name: CORE_LEDGER_STATE_STATEDATABASE, value: CouchDB}
+        - {name: CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS, value: "couchdb-faculty-2:5984"}
+        - name: CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME
+          valueFrom:
+            secretKeyRef: {name: blockgo-secrets, key: COUCHDB_USER}
+        - name: CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD
+          valueFrom:
+            secretKeyRef: {name: blockgo-secrets, key: COUCHDB_PASS}
+        - {name: CORE_METRICS_PROVIDER, value: prometheus}
+        - {name: CORE_OPERATIONS_LISTENADDRESS, value: "0.0.0.0:9443"}
+        volumeMounts:
+        - {name: peer-storage, mountPath: /var/hyperledger/production}
+        - {name: config, mountPath: /etc/hyperledger/fabric/core.yaml, subPath: core.yaml}
+        - {name: crypto, mountPath: /var/hyperledger/msp/signcerts/cert.pem, subPath: msp-cert.pem}
+        - {name: crypto, mountPath: /var/hyperledger/msp/keystore/priv_sk, subPath: msp-key.pem}
+        - {name: crypto, mountPath: /var/hyperledger/msp/cacerts/ca.pem, subPath: msp-ca.pem}
+        - {name: crypto, mountPath: /var/hyperledger/msp/admincerts/admin-cert.pem, subPath: admin-cert.pem}
+        - {name: crypto, mountPath: /var/hyperledger/tls/server.crt, subPath: server.crt}
+        - {name: crypto, mountPath: /var/hyperledger/tls/server.key, subPath: server.key}
+        - {name: crypto, mountPath: /var/hyperledger/tls/ca.crt, subPath: ca.crt}
+        startupProbe: &peerFacultyProbe
+          tcpSocket: {port: peer}
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe: *peerFacultyProbe
+        readinessProbe: *peerFacultyProbe
+      volumes:
+      - name: peer-storage
+        persistentVolumeClaim: {claimName: peer-faculty-2-pvc}
+      - name: config
+        configMap: {name: fabric-common-config}
+      - name: crypto
+        secret: {secretName: peer-faculty-2-crypto}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: peer-faculty-2, namespace: plv-annex-campus}
+spec:
+  selector: {app: peer-faculty-2}
+  ports:
+  - {name: peer, port: 7051, targetPort: 7051}
+  - {name: operations, port: 9443, targetPort: 9443}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: peer-department-2-pvc, namespace: plv-pubad-campus}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: fabric-storage
+  resources:
+    requests: {storage: 50Gi}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: couchdb-department-2, namespace: plv-pubad-campus}
+spec:
+  serviceName: couchdb-department-2
+  replicas: 1
+  selector:
+    matchLabels: {app: couchdb-department-2}
+  template:
+    metadata:
+      labels: {app: couchdb-department-2}
+    spec:
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_A__"
+      initContainers:
+      - name: prepare-couchdb-config
+        image: busybox:1.36.1
+        command: ["/bin/sh", "-ec", "cp /config-source/10-single-node.ini /config-local/10-single-node.ini && chmod 0644 /config-local/10-single-node.ini"]
+        volumeMounts:
+        - {name: couchdb-single-node-config, mountPath: /config-source, readOnly: true}
+        - {name: couchdb-local-config, mountPath: /config-local}
+      containers:
+      - name: couchdb
+        image: couchdb:3.2.2
+        ports:
+        - {containerPort: 5984, name: couchdb}
+        env:
+        - name: COUCHDB_USER
+          valueFrom:
+            secretKeyRef: {name: blockgo-secrets, key: COUCHDB_USER}
+        - name: COUCHDB_PASSWORD
+          valueFrom:
+            secretKeyRef: {name: blockgo-secrets, key: COUCHDB_PASS}
+        volumeMounts:
+        - {name: couchdb-storage, mountPath: /opt/couchdb/data}
+        - {name: couchdb-local-config, mountPath: /opt/couchdb/etc/local.d}
+        startupProbe: &couchdbDepartmentProbe
+          httpGet: {path: /_up, port: couchdb}
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe: *couchdbDepartmentProbe
+        readinessProbe: *couchdbDepartmentProbe
+      volumes:
+      - name: couchdb-single-node-config
+        configMap: {name: couchdb-single-node-config}
+      - name: couchdb-local-config
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata: {name: couchdb-storage}
+    spec:
+      storageClassName: fabric-storage
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests: {storage: 30Gi}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: couchdb-department-2, namespace: plv-pubad-campus}
+spec:
+  selector: {app: couchdb-department-2}
+  ports:
+  - {name: couchdb, port: 5984, targetPort: 5984}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: peer-department-2, namespace: plv-pubad-campus}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: peer-department-2}
+  template:
+    metadata:
+      labels: {app: peer-department-2, org: department}
+    spec:
+      serviceAccountName: peer-sa
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_A__"
+      initContainers:
+      - name: wait-for-couchdb
+        image: busybox:1.36.1
+        command: ["/bin/sh", "-ec", "until nc -w 2 couchdb-department-2 5984 </dev/null; do sleep 2; done"]
+      containers:
+      - name: peer
+        image: hyperledger/fabric-peer:2.5.4
+        ports:
+        - {containerPort: 7051, name: peer}
+        - {containerPort: 7052, name: chaincode}
+        - {containerPort: 9443, name: operations}
+        env:
+        - {name: FABRIC_CFG_PATH, value: /etc/hyperledger/fabric}
+        - {name: CORE_PEER_ID, value: peer1.department.capstone.com}
+        - {name: CORE_PEER_ADDRESS, value: "peer-department-2:7051"}
+        - {name: CORE_PEER_LISTENADDRESS, value: "0.0.0.0:7051"}
+        - {name: CORE_PEER_CHAINCODELISTENADDRESS, value: "0.0.0.0:7052"}
+        - {name: CORE_PEER_CHAINCODEADDRESS, value: "peer-department-2:7052"}
+        - {name: CORE_PEER_GOSSIP_BOOTSTRAP, value: "peer-department:7051"}
+        - {name: CORE_PEER_GOSSIP_EXTERNALENDPOINT, value: "peer-department-2:7051"}
+        - {name: CORE_PEER_LOCALMSPID, value: DepartmentMSP}
+        - {name: CORE_PEER_MSPCONFIGPATH, value: /var/hyperledger/msp}
+        - {name: CORE_PEER_TLS_ENABLED, value: "true"}
+        - {name: CORE_PEER_TLS_CERT_FILE, value: /var/hyperledger/tls/server.crt}
+        - {name: CORE_PEER_TLS_KEY_FILE, value: /var/hyperledger/tls/server.key}
+        - {name: CORE_PEER_TLS_ROOTCERT_FILE, value: /var/hyperledger/tls/ca.crt}
+        - {name: CORE_LEDGER_STATE_STATEDATABASE, value: CouchDB}
+        - {name: CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS, value: "couchdb-department-2:5984"}
+        - name: CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME
+          valueFrom:
+            secretKeyRef: {name: blockgo-secrets, key: COUCHDB_USER}
+        - name: CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD
+          valueFrom:
+            secretKeyRef: {name: blockgo-secrets, key: COUCHDB_PASS}
+        - {name: CORE_METRICS_PROVIDER, value: prometheus}
+        - {name: CORE_OPERATIONS_LISTENADDRESS, value: "0.0.0.0:9443"}
+        volumeMounts:
+        - {name: peer-storage, mountPath: /var/hyperledger/production}
+        - {name: config, mountPath: /etc/hyperledger/fabric/core.yaml, subPath: core.yaml}
+        - {name: crypto, mountPath: /var/hyperledger/msp/signcerts/cert.pem, subPath: msp-cert.pem}
+        - {name: crypto, mountPath: /var/hyperledger/msp/keystore/priv_sk, subPath: msp-key.pem}
+        - {name: crypto, mountPath: /var/hyperledger/msp/cacerts/ca.pem, subPath: msp-ca.pem}
+        - {name: crypto, mountPath: /var/hyperledger/msp/admincerts/admin-cert.pem, subPath: admin-cert.pem}
+        - {name: crypto, mountPath: /var/hyperledger/tls/server.crt, subPath: server.crt}
+        - {name: crypto, mountPath: /var/hyperledger/tls/server.key, subPath: server.key}
+        - {name: crypto, mountPath: /var/hyperledger/tls/ca.crt, subPath: ca.crt}
+        startupProbe: &peerDepartmentProbe
+          tcpSocket: {port: peer}
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe: *peerDepartmentProbe
+        readinessProbe: *peerDepartmentProbe
+      volumes:
+      - name: peer-storage
+        persistentVolumeClaim: {claimName: peer-department-2-pvc}
+      - name: config
+        configMap: {name: fabric-common-config}
+      - name: crypto
+        secret: {secretName: peer-department-2-crypto}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: peer-department-2, namespace: plv-pubad-campus}
+spec:
+  selector: {app: peer-department-2}
+  ports:
+  - {name: peer, port: 7051, targetPort: 7051}
+  - {name: operations, port: 9443, targetPort: 9443}

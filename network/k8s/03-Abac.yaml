@@ -1,0 +1,144 @@
+---
+# ServiceAccounts for plv-fabric (IPFS, Middleware, etc)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fabric-sa
+  namespace: plv-fabric
+  labels:
+    app: fabric
+---
+# ServiceAccounts for plv-main-campus (Orderer, Registrar Peer, Postgres)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orderer-sa
+  namespace: plv-main-campus
+  labels:
+    app: orderer
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: peer-sa
+  namespace: plv-main-campus
+  labels:
+    app: peer
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fabric-sa
+  namespace: plv-main-campus
+  labels:
+    app: fabric
+---
+# ServiceAccounts for plv-annex-campus (Faculty Peer, CA)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orderer-sa
+  namespace: plv-annex-campus
+  labels:
+    app: orderer
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: peer-sa
+  namespace: plv-annex-campus
+  labels:
+    app: peer
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fabric-sa
+  namespace: plv-annex-campus
+  labels:
+    app: fabric
+---
+# ServiceAccounts for plv-pubad-campus (Department Peer, CA)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orderer-sa
+  namespace: plv-pubad-campus
+  labels:
+    app: orderer
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: peer-sa
+  namespace: plv-pubad-campus
+  labels:
+    app: peer
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fabric-sa
+  namespace: plv-pubad-campus
+  labels:
+    app: fabric
+---
+# K8s RBAC: Shared reader permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fabric-pod-debug-reader
+  annotations:
+    description: "K8s permissions for Fabric pods to read pod/configmap/secret metadata (for health checks only)"
+  labels:
+    app: fabric-rbac
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fabric-pod-debug-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: fabric-pod-debug-reader
+subjects:
+- kind: ServiceAccount
+  name: fabric-sa
+  namespace: plv-fabric
+- kind: ServiceAccount
+  name: orderer-sa
+  namespace: plv-main-campus
+- kind: ServiceAccount
+  name: orderer-sa
+  namespace: plv-annex-campus
+- kind: ServiceAccount
+  name: orderer-sa
+  namespace: plv-pubad-campus
+- kind: ServiceAccount
+  name: peer-sa
+  namespace: plv-main-campus
+- kind: ServiceAccount
+  name: peer-sa
+  namespace: plv-annex-campus
+- kind: ServiceAccount
+  name: peer-sa
+  namespace: plv-pubad-campus
+- kind: ServiceAccount
+  name: fabric-sa
+  namespace: plv-main-campus
+- kind: ServiceAccount
+  name: fabric-sa
+  namespace: plv-annex-campus
+- kind: ServiceAccount
+  name: fabric-sa
+  namespace: plv-pubad-campus

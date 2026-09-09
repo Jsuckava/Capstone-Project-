@@ -1,0 +1,157 @@
+---
+# Fabric Orderer 1 (Main Campus) - RAFT Consensus
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: orderer
+  namespace: plv-main-campus
+spec:
+  serviceName: orderer-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orderer
+      instance: "1"
+  template:
+    metadata:
+      labels:
+        app: orderer
+        instance: "1"
+        org: orderer
+    spec:
+      serviceAccountName: orderer-sa
+      containers:
+      - name: orderer
+        image: hyperledger/fabric-orderer:2.5.4
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 7050
+          name: orderer
+        - containerPort: 7051
+          name: metrics
+        env:
+        - name: FABRIC_CFG_PATH
+          value: /etc/hyperledger/fabric
+        - name: ORDERER_GENERAL_LISTENADDRESS
+          value: "0.0.0.0"
+        - name: ORDERER_GENERAL_LISTENPORT
+          value: "7050"
+        - name: ORDERER_GENERAL_BOOTSTRAPMETHOD
+          value: none
+        - name: ORDERER_GENERAL_LOCALMSPID
+          value: OrdererMSP
+        - name: ORDERER_GENERAL_LOCALMSPDIR
+          value: /var/hyperledger/orderer/msp
+        - name: ORDERER_GENERAL_TLS_ENABLED
+          value: "true"
+        - name: ORDERER_GENERAL_TLS_PRIVATEKEY
+          value: /var/hyperledger/orderer/tls/server.key
+        - name: ORDERER_GENERAL_TLS_CERTIFICATE
+          value: /var/hyperledger/orderer/tls/server.crt
+        - name: ORDERER_GENERAL_TLS_ROOTCAS
+          value: "[/var/hyperledger/orderer/tls/ca.crt]"
+        - name: ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE
+          value: /var/hyperledger/orderer/tls/server.crt
+        - name: ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY
+          value: /var/hyperledger/orderer/tls/server.key
+        - name: ORDERER_GENERAL_CLUSTER_ROOTCAS
+          value: "[/var/hyperledger/orderer/tls/ca.crt]"
+        - name: ORDERER_GENERAL_CLUSTER_LISTENADDRESS
+          value: "0.0.0.0"
+        - name: ORDERER_GENERAL_CLUSTER_LISTENPORT
+          value: "7051"
+        - name: ORDERER_CHANNELPARTICIPATION_ENABLED
+          value: "true"
+        - name: ORDERER_ADMIN_LISTENADDRESS
+          value: "0.0.0.0:7053"
+        - name: ORDERER_ADMIN_TLS_ENABLED
+          value: "true"
+        - name: ORDERER_ADMIN_TLS_CERTIFICATE
+          value: /var/hyperledger/orderer/tls/server.crt
+        - name: ORDERER_ADMIN_TLS_PRIVATEKEY
+          value: /var/hyperledger/orderer/tls/server.key
+        - name: ORDERER_ADMIN_TLS_ROOTCAS
+          value: "[/var/hyperledger/orderer/tls/ca.crt]"
+        volumeMounts:
+        - name: orderer-storage
+          mountPath: /var/hyperledger/production
+        - name: orderer-config
+          mountPath: /etc/hyperledger/fabric
+        - name: orderer-msp
+          mountPath: /var/hyperledger/orderer/msp
+        - name: orderer-tls
+          mountPath: /var/hyperledger/orderer/tls
+        - name: genesis-block
+          mountPath: /var/hyperledger/orderer/orderer.genesis.block
+        livenessProbe:
+          tcpSocket:
+            port: 7050
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 7050
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: orderer-config
+        configMap:
+          name: fabric-config
+      - name: orderer-msp
+        secret:
+          secretName: orderer-msp-secret
+      - name: orderer-tls
+        secret:
+          secretName: orderer-tls-secret
+      - name: genesis-block
+        configMap:
+          name: orderer-genesis-block
+  volumeClaimTemplates:
+  - metadata:
+      name: orderer-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: fabric-storage
+      resources:
+        requests:
+          storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orderer-headless
+  namespace: plv-main-campus
+  labels:
+    app: orderer
+spec:
+  clusterIP: None
+  selector:
+    app: orderer
+  ports:
+  - port: 7050
+    targetPort: 7050
+    name: orderer
+  - port: 7051
+    targetPort: 7051
+    name: cluster
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orderer
+  namespace: plv-main-campus
+  labels:
+    app: orderer
+spec:
+  type: LoadBalancer
+  selector:
+    app: orderer
+  ports:
+  - port: 7050
+    targetPort: 7050
+    protocol: TCP
+    name: orderer
+  - port: 7053
+    targetPort: 7053
+    protocol: TCP
+    name: admin

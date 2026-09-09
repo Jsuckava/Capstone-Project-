@@ -1,18 +1,18 @@
 #!/bin/bash
 # ============================================================
-# CAPSTONE PROJECT - FULL DEPLOYMENT
+# BLOCKGO - FULL DEPLOYMENT (FABRIC CA BOOTSTRAP VERSION)
 # ============================================================
-# Master deployment script combining Fabric setup, App services,
-# Bootstrapping, and process management.
-# ============================================================
-
 set -e
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# --- Configuration ---
+CRYPTO_DIR="./crypto-config-final-v2"
+ARTIFACTS_DIR="./channel-artifacts-final"
+CHANNEL_NAME="registrar-channel"
+CC_NAME="registrar"
+CC_VERSION="1.0"
+EXPECTED_FABRIC_VERSION="2.5.4"
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
@@ -21,705 +21,416 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Store PIDs of background processes to clean up on exit
 declare -a PIDS
 
 cleanup_processes() {
     echo ""
-    log_info "Shutting down background application services..."
+    log_info "Shutting down background services..."
     for pid in "${PIDS[@]}"; do
-        if ps -p $pid > /dev/null 2>&1; then
-            kill $pid 2>/dev/null || true
-        fi
+        if ps -p $pid > /dev/null 2>&1; then kill $pid 2>/dev/null || true; fi
     done
-    log_info "Background processes stopped."
+    if [ -f .watchdog.pid ]; then
+        kill -9 $(cat .watchdog.pid) 2>/dev/null || true
+        rm -f .watchdog.pid
+    fi
+    pkill -9 -f nginx_failover_watchdog.sh 2>/dev/null || true
+    docker compose -f docker-compose-main.yaml -f docker-compose-annex.yaml -f docker-compose-pubad.yaml down -v --remove-orphans 2>/dev/null || true
+    docker rm -f -v couchdb_wallet couchdb_wallet_faculty couchdb_wallet_department blockgo-middleware blockgo-api-gateway blockgo-auth-service blockgo-fabric-identity-service blockgo-ledger-service blockgo-grade-upload-service blockgo-settings-service nginx-shield-main-failover nginx-shield-annex-failover nginx-shield-pubad-failover 2>/dev/null || true
+    log_info "All processes stopped and volumes wiped."
 }
 
-# Register the cleanup function to be called on EXIT or script interruption
-trap cleanup_processes EXIT
+trap cleanup_processes SIGINT SIGTERM ERR
 
-# Helper function to wait for a service
 wait_for_service() {
-    local host=$1
-    local port=$2
-    local service_name=$3
-    local timeout=$4 # seconds
+    local host=$1; local port=$2; local name=$3; local timeout=$4
     local start_time=$(date +%s)
-    log_info "Waiting for $service_name ($host:$port) to be available..."
-    while true; do
-        current_time=$(date +%s)
-        if [ $((current_time - start_time)) -ge $timeout ]; then
-            log_error "$service_name ($host:$port) did not become available within $timeout seconds."
+    log_info "Waiting for $name ($host:$port)..."
+    while ! nc -z -w 2 $host $port > /dev/null 2>&1 && ! bash -c "echo > /dev/tcp/$host/$port" > /dev/null 2>&1 && ! curl -s http://$host:$port > /dev/null 2>&1 && ! curl -s -k https://$host:$port > /dev/null 2>&1; do
+        if [ $(($(date +%s) - start_time)) -ge $timeout ]; then 
+            if [ "$port" == "7054" ]; then
+                echo -e "\n--- CA REGISTRAR DOCKER LOGS ---"
+                docker logs ca.registrar.capstone.com || true
+                echo "--------------------------------"
+            fi
+            log_error "$name timeout on $host:$port!"
         fi
-        if nc -z -w 2 $host $port > /dev/null 2>&1; then
-            log_info "$service_name is available!"
+        sleep 2
+    done
+    log_info "$name is ready!"
+}
+
+wait_for_optional_service() {
+    local host=$1; local port=$2; local name=$3; local timeout=$4
+    local start_time=$(date +%s)
+    log_info "Checking optional $name ($host:$port)..."
+    while ! nc -z -w 2 $host $port > /dev/null 2>&1 && ! bash -c "echo > /dev/tcp/$host/$port" > /dev/null 2>&1; do
+        if [ $(($(date +%s) - start_time)) -ge $timeout ]; then
+            log_warn "$name is not reachable. Continuing because core services do not depend on nginx-shield."
             return 0
         fi
         sleep 2
     done
+    log_info "$name is ready!"
+}
+
+wait_for_container_health() {
+    local container_name=$1; local timeout=$2
+    local start_time=$(date +%s)
+    log_info "Waiting for $container_name to become healthy..."
+    while true; do
+        local status=$(docker inspect --format '{{.State.Health.Status}}' "$container_name" 2>/dev/null)
+        if [ "$status" == "healthy" ]; then
+            log_info "$container_name is healthy!"
+            break
+        fi
+        if [ "$status" == "unhealthy" ]; then
+                # Do not exit immediately; Postgres restarts itself during initialization which can temporarily flag it as unhealthy
+                log_warn "$container_name reported as unhealthy. Waiting for recovery..."
+        fi
+        if [ $(($(date +%s) - start_time)) -ge $timeout ]; then
+            log_error "Timeout waiting for $container_name to become healthy. Last status: ${status:-not_found}"
+        fi
+        sleep 5
+    done
+}
+
+load_env_vars() {
+    if [ -f .env ]; then
+        log_info "Loading environment variables from .env file..."
+        while IFS='=' read -r key value || [ -n "$key" ]; do
+            # Skip empty lines and comments
+            [[ -z "$key" || "$key" =~ ^# ]] && continue
+            
+            # Remove any leading/trailing quotes from the value
+            value="${value%\"}"
+            value="${value#\"}"
+            value="${value%\'}"
+            value="${value#\'}"
+            
+            export "$key"="$value"
+        done < .env
+    fi
+}
+load_env_vars
+
+# Critical Secret Validation
+if [ -z "$JWT_SECRET" ] || [ -z "$INTERNAL_API_KEY" ] || [ -z "$POSTGRES_PASS" ]; then
+    log_error "Critical environment variables (JWT_SECRET, INTERNAL_API_KEY, POSTGRES_PASS) are not set. Please define them in your .env file."
+fi
+
+spawn_couchdb_wallet() {
+    log_info "Spawning standalone CouchDB Wallet container on port 5990..."
+    # Prune existing wallet to ensure a clean state
+    docker rm -f -v couchdb_wallet 2>/dev/null || true
+    docker run -d --name couchdb_wallet \
+        --network registrar-net \
+        -e COUCHDB_USER="${COUCHDB_USER:-PLVADMIN}" \
+        -e COUCHDB_PASSWORD="${COUCHDB_PASS:-PLVSYSTEM2026}" \
+        -p 5990:5984 \
+        couchdb:3.2.2
 }
 
 # ============================================================
-# PHASE 0: SYSTEM DEPENDENCIES
+# PHASE 1: INITIAL CLEANING & CA STARTUP
 # ============================================================
-log_info "Phase 0: Checking system dependencies..."
-SUDO=""
-if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
-    SUDO="sudo"
+log_info "Phase 1: Initializing CA infrastructure..."
+log_warn "Wiping previous CA databases and crypto material..."
+
+# Gracefully stop the orphaned watchdog if it's still running
+if [ -f .watchdog.pid ]; then
+    kill -9 $(cat .watchdog.pid) 2>/dev/null || true
+    rm -f .watchdog.pid
 fi
+    pkill -9 -f nginx_failover_watchdog.sh 2>/dev/null || true
 
-# The main check: Are we on Ubuntu/Debian?
-if command -v apt-get >/dev/null 2>&1; then
-    
-    # 1. Base Utilities
-    if ! command -v jq >/dev/null 2>&1 || ! command -v nc >/dev/null 2>&1 || ! command -v fuser >/dev/null 2>&1; then
-        log_info "Installing missing system dependencies (curl, wget, netcat, jq, psmisc)..."
-        $SUDO apt-get update -yqq >/dev/null 2>&1 || true
-        $SUDO apt-get install -y curl wget netcat jq psmisc >/dev/null 2>&1
-    fi
+docker compose -f docker-compose-main.yaml -f docker-compose-annex.yaml -f docker-compose-pubad.yaml down -v --remove-orphans 2>/dev/null || true
+docker rm -f -v couchdb_wallet couchdb_wallet_faculty couchdb_wallet_department blockgo-middleware blockgo-api-gateway blockgo-auth-service blockgo-fabric-identity-service blockgo-ledger-service blockgo-grade-upload-service blockgo-settings-service nginx-shield-main-failover nginx-shield-annex-failover nginx-shield-pubad-failover 2>/dev/null || true
 
-    # 2. .NET 8.0 SDK (Moved safely inside the apt-get check)
-    if ! command -v dotnet >/dev/null 2>&1; then
-        log_info ".NET SDK not found. Installing .NET 8.0 SDK..."
-        wget https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb >/dev/null 2>&1
-        $SUDO dpkg -i packages-microsoft-prod.deb >/dev/null 2>&1
-        rm packages-microsoft-prod.deb
-        
-        $SUDO apt-get update -yqq >/dev/null 2>&1 || true
-        $SUDO apt-get install -y dotnet-sdk-8.0 >/dev/null 2>&1
-        log_info ".NET SDK 8.0 installed successfully."
-    else
-        log_info ".NET SDK is already installed ($(dotnet --version))."
-    fi
+# Force remove root-owned files created by containers to prevent CA container crashes
+docker run --rm -v "$(pwd):/tmp/network" alpine sh -c "find /tmp/network/fabric-ca -type f ! -name '*.yaml' -delete && rm -rf /tmp/network/${CRYPTO_DIR} /tmp/network/${ARTIFACTS_DIR} /tmp/network/../middleware/wallet" 2>/dev/null || true
 
-    # 3. Node.js
-    if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
-        log_info "Node.js or NPM not found. Installing Node.js 20.x LTS..."
-        curl -fsSL https://deb.nodesource.com/setup_20.x | $SUDO bash - >/dev/null 2>&1
-        $SUDO apt-get install -y nodejs >/dev/null 2>&1
-        log_info "Node.js and NPM installed successfully."
-    else
-        log_info "Node.js ($(node -v)) and NPM ($(npm -v)) are installed."
-    fi
-
-else
-    log_warn "'apt-get' not found. Please ensure curl, wget, netcat, jq, psmisc, nodejs, and dotnet-sdk-8.0 are installed manually."
-fi
-
-log_info "Checking Docker accessibility..."
-if ! docker ps >/dev/null 2>&1; then
-    log_error "Cannot connect to the Docker daemon. Is Docker running? Does your user have permission to run Docker commands without sudo?"
-fi
-
-# ============================================================
-# PHASE 1: GENERATE SECURE .ENV CREDENTIALS
-# ============================================================
-log_info "Phase 1: Checking/Generating secure credentials..."
-ENV_FILE="$(pwd)/.env"
-if [ ! -f "$ENV_FILE" ]; then
-    touch "$ENV_FILE"
-fi
-
-# Ensure .env ends with a newline to prevent merged variables
-if [ -s "$ENV_FILE" ] && [ -n "$(tail -c 1 "$ENV_FILE")" ]; then
-    echo "" >> "$ENV_FILE"
-fi
-
-add_to_env_if_missing() {
-    local KEY=$1
-    local VAL=$2
-    if ! grep -q "^${KEY}=" "$ENV_FILE"; then
-        echo "${KEY}=${VAL}" >> "$ENV_FILE"
-        log_info "Generated new secure value for ${KEY}"
-    fi
-}
-
-add_to_env_if_missing "COUCHDB_USER" "capstone"
-add_to_env_if_missing "COUCHDB_PASS" "pass123"
-
-LOCAL_COUCH_USER=$(grep "^COUCHDB_USER=" "$ENV_FILE" | cut -d '=' -f 2)
-LOCAL_COUCH_PASS=$(grep "^COUCHDB_PASS=" "$ENV_FILE" | cut -d '=' -f 2)
-
-add_to_env_if_missing "POSTGRES_USER" "BLOCKGO"
-add_to_env_if_missing "POSTGRES_PASS" "PLVBLOCKGO"
-add_to_env_if_missing "POSTGRES_DB" "ActivityLogs"
-add_to_env_if_missing "JWT_SECRET" "$(openssl rand -base64 32)"
-
-# Added Cryptographic Security Keys
-add_to_env_if_missing "BOOTSTRAP_REGISTRAR_PASS" "admin123"
-add_to_env_if_missing "WALLET_ENCRYPTION_KEY" "$(openssl rand -hex 32)"
-add_to_env_if_missing "INTERNAL_API_KEY" "$(openssl rand -base64 32)"
-
-# ============================================================
-# PHASE 2: NPM DEPENDENCIES
-# ============================================================
-log_info "Phase 2: Installing project NPM dependencies..."
-
-# Frontend
-if [ -d "../frontend" ]; then
-    if [ ! -d "../frontend/node_modules" ]; then
-        log_info "Installing frontend dependencies..."
-        (cd ../frontend && npm install) > /dev/null 2>&1 || log_warn "npm install for frontend failed"
-    fi
-fi
-
-# Middleware
-if [ -d "../middleware" ]; then
-    if [ ! -d "../middleware/node_modules" ]; then
-        log_info "Installing middleware dependencies..."
-        (cd ../middleware && npm install) > /dev/null 2>&1 || log_warn "npm install for middleware failed"
-    fi
-fi
-
-log_info "Dependencies ready"
-
-# ============================================================
-# PHASE 3: SETUP & BINARIES
-# ============================================================
-log_info "Phase 3: Checking binaries and setup..."
+find ./fabric-ca -type f ! -name '*.yaml' -delete 2>/dev/null || true
+rm -rf "$CRYPTO_DIR" "$ARTIFACTS_DIR" 2>/dev/null || true
+rm -rf ../middleware/wallet 2>/dev/null || true
+mkdir -p "$ARTIFACTS_DIR"
 
 export PATH=$PATH:$(pwd)/bin
 export FABRIC_CFG_PATH=$(pwd)
-export CHANNEL_NAME="registrar-channel"
-export CC_NAME="registrar"
-export CC_VERSION="1.0"
-export EXPECTED_FABRIC_VERSION="2.5.4" 
 
-verify_fabric_version() {
-    if [ -f "./bin/cryptogen" ]; then
-        local current_version=$(./bin/cryptogen version | grep -i 'version:' | awk '{print $2}' | tr -d '\r')
-        if [ "$current_version" == "$EXPECTED_FABRIC_VERSION" ]; then
-            return 0
-        fi
-        log_warn "Fabric version mismatch. Expected $EXPECTED_FABRIC_VERSION but found $current_version."
-    fi
-    return 1
+TMP_DOCKER_CFG=$(mktemp -d)
+echo "{}" > "$TMP_DOCKER_CFG/config.json"
+DOCKER_CONFIG=$TMP_DOCKER_CFG docker compose -f docker-compose-main.yaml -f docker-compose-annex.yaml -f docker-compose-pubad.yaml up -d ca.registrar.capstone.com ca.faculty.capstone.com ca.department.capstone.com cli
+rm -rf "$TMP_DOCKER_CFG"
+
+wait_for_service 127.0.0.1 7054 "Registrar CA" 120
+
+# ============================================================
+# PHASE 2: DYNAMIC ENROLLMENT
+# ============================================================
+log_info "Phase 2: Enrolling Identities via Fabric CA..."
+
+enroll_org_identities() {
+    local ORG=$1; local DOMAIN=$2; local PORT=$3; local MSP_ID=$4
+    local ADMIN_PASS=${BOOTSTRAP_REGISTRAR_PASS:-adminpw}
+    local ORG_DIR="$(pwd)/${CRYPTO_DIR}/peerOrganizations/${DOMAIN}"
+    local TLS_CERT="$(pwd)/fabric-ca/${ORG}/tls-cert.pem" 
+    local K8S_PEER_SERVICE=""
+    local K8S_NAMESPACE=""
+
+    case "$ORG" in
+        registrar) K8S_PEER_SERVICE="peer-registrar"; K8S_NAMESPACE="plv-main-campus" ;;
+        faculty) K8S_PEER_SERVICE="peer-faculty"; K8S_NAMESPACE="plv-annex-campus" ;;
+        department) K8S_PEER_SERVICE="peer-department"; K8S_NAMESPACE="plv-pubad-campus" ;;
+        *) log_error "Unknown organization for Kubernetes TLS SANs: $ORG" ;;
+    esac
+    
+    log_info "Bootstrapping ${MSP_ID}..."
+    mkdir -p "${ORG_DIR}/msp" "${ORG_DIR}/users/Admin@${DOMAIN}/msp" "${ORG_DIR}/peers/peer0.${DOMAIN}/msp" "${ORG_DIR}/peers/peer0.${DOMAIN}/tls" "${ORG_DIR}/peers/peer1.${DOMAIN}/msp" "${ORG_DIR}/peers/peer1.${DOMAIN}/tls"
+
+    while [ ! -f "${TLS_CERT}" ]; do sleep 2; done
+
+    fabric-ca-client enroll -u https://admin:${ADMIN_PASS}@localhost:${PORT} --caname ca-${ORG} --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
+    fabric-ca-client register --caname ca-${ORG} --id.name peer0 --id.secret peer0pw --id.type peer --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
+    fabric-ca-client enroll -u https://peer0:peer0pw@localhost:${PORT} --caname ca-${ORG} -M "${ORG_DIR}/peers/peer0.${DOMAIN}/msp" --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
+
+    fabric-ca-client enroll -u https://peer0:peer0pw@localhost:${PORT} --caname ca-${ORG} -M "${ORG_DIR}/peers/peer0.${DOMAIN}/tls" --enrollment.profile tls --csr.hosts "peer0.${DOMAIN},localhost,${K8S_PEER_SERVICE},${K8S_PEER_SERVICE}.${K8S_NAMESPACE}.svc.cluster.local" --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
+
+    cp "${ORG_DIR}/peers/peer0.${DOMAIN}/tls/signcerts/"* "${ORG_DIR}/peers/peer0.${DOMAIN}/tls/server.crt"
+    cp "${ORG_DIR}/peers/peer0.${DOMAIN}/tls/keystore/"* "${ORG_DIR}/peers/peer0.${DOMAIN}/tls/server.key"
+    cp "${ORG_DIR}/msp/cacerts/localhost-${PORT}-ca-${ORG}.pem" "${ORG_DIR}/peers/peer0.${DOMAIN}/tls/ca.crt"
+    fabric-ca-client register --caname ca-${ORG} --id.name peer1 --id.secret peer1pw --id.type peer --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
+    fabric-ca-client enroll -u https://peer1:peer1pw@localhost:${PORT} --caname ca-${ORG} -M "${ORG_DIR}/peers/peer1.${DOMAIN}/msp" --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
+    fabric-ca-client enroll -u https://peer1:peer1pw@localhost:${PORT} --caname ca-${ORG} -M "${ORG_DIR}/peers/peer1.${DOMAIN}/tls" --enrollment.profile tls --csr.hosts "peer1.${DOMAIN},localhost,${K8S_PEER_SERVICE}-2,${K8S_PEER_SERVICE}-2.${K8S_NAMESPACE}.svc.cluster.local" --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
+    cp "${ORG_DIR}/peers/peer1.${DOMAIN}/tls/signcerts/"* "${ORG_DIR}/peers/peer1.${DOMAIN}/tls/server.crt"
+    cp "${ORG_DIR}/peers/peer1.${DOMAIN}/tls/keystore/"* "${ORG_DIR}/peers/peer1.${DOMAIN}/tls/server.key"
+    # The peer's TLS CA cert is the root cert of the CA that issued its TLS cert.
+    cp "${ORG_DIR}/msp/cacerts/localhost-${PORT}-ca-${ORG}.pem" "${ORG_DIR}/peers/peer1.${DOMAIN}/tls/ca.crt"
+
+    fabric-ca-client register --caname ca-${ORG} --id.name orgadmin --id.secret adminpw --id.type admin --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
+    fabric-ca-client enroll -u https://orgadmin:adminpw@localhost:${PORT} --caname ca-${ORG} -M "${ORG_DIR}/users/Admin@${DOMAIN}/msp" --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
+
+    local CA_FILENAME="localhost-${PORT}-ca-${ORG}.pem"
+
+    # Create tlscacerts for configtxgen and a compatibility link for Node.js Gateway
+    mkdir -p "${ORG_DIR}/msp/tlscacerts" "${ORG_DIR}/tlsca"
+    cp "${ORG_DIR}/msp/cacerts/${CA_FILENAME}" "${ORG_DIR}/msp/tlscacerts/tlsca.${DOMAIN}-cert.pem"
+    cp "${ORG_DIR}/msp/cacerts/${CA_FILENAME}" "${ORG_DIR}/tlsca/tlsca.${DOMAIN}-cert.pem"
+
+    cat <<EOF > "${ORG_DIR}/msp/config.yaml"
+NodeOUs:
+  Enable: true
+  ClientOUIdentifier:
+    Certificate: cacerts/${CA_FILENAME}
+    OrganizationalUnitIdentifier: client
+  PeerOUIdentifier:
+    Certificate: cacerts/${CA_FILENAME}
+    OrganizationalUnitIdentifier: peer
+  AdminOUIdentifier:
+    Certificate: cacerts/${CA_FILENAME}
+    OrganizationalUnitIdentifier: admin
+  OrdererOUIdentifier:
+    Certificate: cacerts/${CA_FILENAME}
+    OrganizationalUnitIdentifier: orderer
+EOF
+    cp "${ORG_DIR}/msp/config.yaml" "${ORG_DIR}/users/Admin@${DOMAIN}/msp/config.yaml"
+    cp "${ORG_DIR}/msp/config.yaml" "${ORG_DIR}/peers/peer0.${DOMAIN}/msp/config.yaml"
+    cp "${ORG_DIR}/msp/config.yaml" "${ORG_DIR}/peers/peer1.${DOMAIN}/msp/config.yaml"
 }
 
-verify_fabric_images() {
-    if [ -z "$(docker images -q hyperledger/fabric-peer:$EXPECTED_FABRIC_VERSION 2> /dev/null)" ]; then
-        return 1
-    fi
-    return 0
+enroll_orderer_identities() {
+    local DOMAIN="capstone.com"
+    local PORT=7054 # Using Registrar CA for Orderer
+    local ADMIN_PASS=${BOOTSTRAP_REGISTRAR_PASS:-adminpw}
+    local ORDERER_DIR="$(pwd)/${CRYPTO_DIR}/ordererOrganizations/${DOMAIN}"
+    local TLS_CERT="$(pwd)/fabric-ca/registrar/tls-cert.pem"
+
+    log_info "Bootstrapping Orderer (capstone.com)..."
+    mkdir -p "${ORDERER_DIR}/msp"
+    local orderer_name
+    for orderer_name in orderer orderer2 orderer3 orderer4 orderer5 orderer6; do
+        mkdir -p "${ORDERER_DIR}/orderers/${orderer_name}.${DOMAIN}/msp" "${ORDERER_DIR}/orderers/${orderer_name}.${DOMAIN}/tls"
+    done
+
+    while [ ! -f "${TLS_CERT}" ]; do log_warn "Waiting for Orderer's CA TLS cert..."; sleep 2; done
+
+    fabric-ca-client enroll -u https://admin:${ADMIN_PASS}@localhost:${PORT} --caname ca-registrar --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+    fabric-ca-client register --caname ca-registrar --id.name orderer --id.secret ordererpw --id.type orderer --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+    
+    # Enroll for MSP
+    fabric-ca-client enroll -u https://orderer:ordererpw@localhost:${PORT} --caname ca-registrar -M "${ORDERER_DIR}/orderers/orderer.${DOMAIN}/msp" --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+
+    # Enroll for TLS (This is what configtxgen needs!)
+    fabric-ca-client enroll -u https://orderer:ordererpw@localhost:${PORT} --caname ca-registrar -M "${ORDERER_DIR}/orderers/orderer.${DOMAIN}/tls" --enrollment.profile tls --csr.hosts "orderer.capstone.com,localhost,orderer-1.plv-main-campus.svc.cluster.local" --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+
+    # Normalize TLS filenames for Fabric
+    cp "${ORDERER_DIR}/orderers/orderer.${DOMAIN}/tls/signcerts/"* "${ORDERER_DIR}/orderers/orderer.${DOMAIN}/tls/server.crt"
+    cp "${ORDERER_DIR}/orderers/orderer.${DOMAIN}/tls/keystore/"* "${ORDERER_DIR}/orderers/orderer.${DOMAIN}/tls/server.key"
+    # The orderer's TLS CA cert is the root cert of the CA that issued its TLS cert.
+    cp "${ORDERER_DIR}/msp/cacerts/localhost-7054-ca-registrar.pem" "${ORDERER_DIR}/orderers/orderer.${DOMAIN}/tls/ca.crt"
+
+    # Create admincerts directory for the orderer's MSP to satisfy admin requirement
+    mkdir -p "${ORDERER_DIR}/orderers/orderer.${DOMAIN}/msp/admincerts"
+    cp "${CRYPTO_DIR}/peerOrganizations/registrar.capstone.com/users/Admin@registrar.capstone.com/msp/signcerts/cert.pem" \
+       "${ORDERER_DIR}/orderers/orderer.${DOMAIN}/msp/admincerts/cert.pem"
+    
+    # === ORDERER 2 (Annex) ===
+    fabric-ca-client register --caname ca-registrar --id.name orderer2 --id.secret ordererpw --id.type orderer --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+    fabric-ca-client enroll -u https://orderer2:ordererpw@localhost:${PORT} --caname ca-registrar -M "${ORDERER_DIR}/orderers/orderer2.${DOMAIN}/msp" --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+    fabric-ca-client enroll -u https://orderer2:ordererpw@localhost:${PORT} --caname ca-registrar -M "${ORDERER_DIR}/orderers/orderer2.${DOMAIN}/tls" --enrollment.profile tls --csr.hosts "orderer2.capstone.com,localhost,orderer-2.plv-main-campus.svc.cluster.local" --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+    cp "${ORDERER_DIR}/orderers/orderer2.${DOMAIN}/tls/signcerts/"* "${ORDERER_DIR}/orderers/orderer2.${DOMAIN}/tls/server.crt"
+    cp "${ORDERER_DIR}/orderers/orderer2.${DOMAIN}/tls/keystore/"* "${ORDERER_DIR}/orderers/orderer2.${DOMAIN}/tls/server.key"
+    cp "${ORDERER_DIR}/msp/cacerts/localhost-7054-ca-registrar.pem" "${ORDERER_DIR}/orderers/orderer2.${DOMAIN}/tls/ca.crt"
+    mkdir -p "${ORDERER_DIR}/orderers/orderer2.${DOMAIN}/msp/admincerts"
+    cp "${CRYPTO_DIR}/peerOrganizations/registrar.capstone.com/users/Admin@registrar.capstone.com/msp/signcerts/cert.pem" "${ORDERER_DIR}/orderers/orderer2.${DOMAIN}/msp/admincerts/cert.pem"
+
+    # === ORDERER 3 (Pubad) ===
+    fabric-ca-client register --caname ca-registrar --id.name orderer3 --id.secret ordererpw --id.type orderer --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+    fabric-ca-client enroll -u https://orderer3:ordererpw@localhost:${PORT} --caname ca-registrar -M "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/msp" --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+    fabric-ca-client enroll -u https://orderer3:ordererpw@localhost:${PORT} --caname ca-registrar -M "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/tls" --enrollment.profile tls --csr.hosts "orderer3.capstone.com,localhost,orderer-3.plv-annex-campus.svc.cluster.local" --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+    cp "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/tls/signcerts/"* "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/tls/server.crt"
+    cp "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/tls/keystore/"* "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/tls/server.key"
+    cp "${ORDERER_DIR}/msp/cacerts/localhost-7054-ca-registrar.pem" "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/tls/ca.crt"
+    mkdir -p "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/msp/admincerts"
+    cp "${CRYPTO_DIR}/peerOrganizations/registrar.capstone.com/users/Admin@registrar.capstone.com/msp/signcerts/cert.pem" "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/msp/admincerts/cert.pem"
+
+    # Production orderers 4-6. The local configtx profile still uses only 1-3.
+    local orderer_number
+    local orderer_namespace
+    for orderer_number in 4 5 6; do
+        case "$orderer_number" in
+            4) orderer_namespace="plv-annex-campus" ;;
+            5|6) orderer_namespace="plv-pubad-campus" ;;
+        esac
+        fabric-ca-client register --caname ca-registrar --id.name "orderer${orderer_number}" --id.secret ordererpw --id.type orderer --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+        fabric-ca-client enroll -u "https://orderer${orderer_number}:ordererpw@localhost:${PORT}" --caname ca-registrar -M "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/msp" --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+        fabric-ca-client enroll -u "https://orderer${orderer_number}:ordererpw@localhost:${PORT}" --caname ca-registrar -M "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/tls" --enrollment.profile tls --csr.hosts "orderer${orderer_number}.capstone.com,localhost,orderer-${orderer_number},orderer-${orderer_number}.${orderer_namespace}.svc.cluster.local" --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+        cp "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/tls/signcerts/"* "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/tls/server.crt"
+        cp "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/tls/keystore/"* "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/tls/server.key"
+        cp "${ORDERER_DIR}/msp/cacerts/localhost-7054-ca-registrar.pem" "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/tls/ca.crt"
+        mkdir -p "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/msp/admincerts"
+        cp "${CRYPTO_DIR}/peerOrganizations/registrar.capstone.com/users/Admin@registrar.capstone.com/msp/signcerts/cert.pem" "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/msp/admincerts/cert.pem"
+    done
+
+    # Generate Orderer MSP config
+    local CA_FILENAME="localhost-${PORT}-ca-registrar.pem"
+
+    # Create tlscacerts for configtxgen and a compatibility link
+    mkdir -p "${ORDERER_DIR}/msp/tlscacerts" "${ORDERER_DIR}/tlsca"
+    cp "${ORDERER_DIR}/msp/cacerts/${CA_FILENAME}" "${ORDERER_DIR}/msp/tlscacerts/tlsca.${DOMAIN}-cert.pem"
+    cp "${ORDERER_DIR}/msp/cacerts/${CA_FILENAME}" "${ORDERER_DIR}/tlsca/tlsca.${DOMAIN}-cert.pem"
+
+    cat <<EOF > "${ORDERER_DIR}/msp/config.yaml"
+NodeOUs:
+  Enable: true
+  ClientOUIdentifier:
+    Certificate: cacerts/${CA_FILENAME}
+    OrganizationalUnitIdentifier: client
+  PeerOUIdentifier:
+    Certificate: cacerts/${CA_FILENAME}
+    OrganizationalUnitIdentifier: peer
+  AdminOUIdentifier:
+    Certificate: cacerts/${CA_FILENAME}
+    OrganizationalUnitIdentifier: admin
+  OrdererOUIdentifier:
+    Certificate: cacerts/${CA_FILENAME}
+    OrganizationalUnitIdentifier: orderer
+EOF
+    cp "${ORDERER_DIR}/msp/config.yaml" "${ORDERER_DIR}/orderers/orderer.${DOMAIN}/msp/config.yaml"
+    cp "${ORDERER_DIR}/msp/config.yaml" "${ORDERER_DIR}/orderers/orderer2.${DOMAIN}/msp/config.yaml"
+    cp "${ORDERER_DIR}/msp/config.yaml" "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/msp/config.yaml"
+    cp "${ORDERER_DIR}/msp/config.yaml" "${ORDERER_DIR}/orderers/orderer4.${DOMAIN}/msp/config.yaml"
+    cp "${ORDERER_DIR}/msp/config.yaml" "${ORDERER_DIR}/orderers/orderer5.${DOMAIN}/msp/config.yaml"
+    cp "${ORDERER_DIR}/msp/config.yaml" "${ORDERER_DIR}/orderers/orderer6.${DOMAIN}/msp/config.yaml"
 }
 
-DOWNLOAD_ARGS=""
-if ! verify_fabric_version || [ ! -f "./bin/configtxgen" ]; then DOWNLOAD_ARGS="b"; fi
-if ! verify_fabric_images; then DOWNLOAD_ARGS="$DOWNLOAD_ARGS d"; fi
+# Run all enrollments
+enroll_org_identities "registrar" "registrar.capstone.com" 7054 "RegistrarMSP"
+enroll_org_identities "faculty" "faculty.capstone.com" 8054 "FacultyMSP"
+enroll_org_identities "department" "department.capstone.com" 9054 "DepartmentMSP"
+enroll_orderer_identities
 
-if [ -n "$DOWNLOAD_ARGS" ]; then
-    log_info "Fabric binaries or Docker images (v$EXPECTED_FABRIC_VERSION) missing. Downloading them now..."
-    curl -sSLO https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh
-    chmod +x install-fabric.sh
-    ./install-fabric.sh --fabric-version $EXPECTED_FABRIC_VERSION $DOWNLOAD_ARGS > /dev/null 2>&1
-    rm install-fabric.sh
-    log_info "Fabric components downloaded successfully."
-else
-    log_info "Fabric binaries and Docker images (v$EXPECTED_FABRIC_VERSION) already exist. Skipping download."
-fi
+log_info "Creating dedicated TLS identity for Chaincode service..."
+# Register a new identity for the chaincode service itself
+fabric-ca-client register --caname ca-registrar --id.name chaincode --id.secret cc_pw --id.type client --tls.certfiles "$(pwd)/fabric-ca/registrar/tls-cert.pem" --home "$(pwd)/${CRYPTO_DIR}/peerOrganizations/registrar.capstone.com"
+# Enroll to get its TLS certificate
+fabric-ca-client enroll -u https://chaincode:cc_pw@localhost:7054 --caname ca-registrar -M "$(pwd)/${CRYPTO_DIR}/chaincode-tls" --enrollment.profile tls --csr.hosts "registrar-chaincode,faculty-chaincode,department-chaincode,localhost" --tls.certfiles "$(pwd)/fabric-ca/registrar/tls-cert.pem" --home "$(pwd)/${CRYPTO_DIR}/peerOrganizations/registrar.capstone.com"
 
-[ ! -f "./bin/cryptogen" ] && log_error "cryptogen binary still not found after download attempt."
-[ ! -f "./bin/configtxgen" ] && log_error "configtxgen binary still not found after download attempt."
-[ ! -f "./configtx.yaml" ] && log_error "configtx.yaml not found"
+# Normalize the filenames for the chaincode container's environment variables
+mkdir -p "$(pwd)/${CRYPTO_DIR}/chaincode-tls/keystore"
+mv "$(pwd)/${CRYPTO_DIR}/chaincode-tls/keystore/"* "$(pwd)/${CRYPTO_DIR}/chaincode-tls/keystore/server.key"
+mkdir -p "$(pwd)/${CRYPTO_DIR}/chaincode-tls/signcerts"
+mv "$(pwd)/${CRYPTO_DIR}/chaincode-tls/signcerts/"* "$(pwd)/${CRYPTO_DIR}/chaincode-tls/signcerts/server.crt"
 
-log_info "All binaries and files OK"
-
-# ============================================================
-# PHASE 4: CRYPTO MATERIAL & GENESIS
-# ============================================================
-log_info "Phase 4: Crypto material and genesis block..."
-
-if [ ! -d "./crypto-config" ] || [ ! -f "./channel-artifacts/genesis.block" ]; then
-    log_info "Generating crypto material..."
-    rm -rf ./crypto-config
-    
-    # Clean up persistent Fabric CA databases so they don't remember old users
-    rm -rf ./fabric-ca/*/msp ./fabric-ca/*/*.db ./fabric-ca/*/*.pem ./fabric-ca/*/Issuer* 2>/dev/null || true
-    
-    ./bin/cryptogen generate --config=./crypto-config.yaml --output="crypto-config" || log_error "Cryptogen failed"
-    
-    log_info "Generating genesis block using UniversityGenesis profile..."
-    # Note: Removed 2>/dev/null so you can see actual errors if it fails
-    ./bin/configtxgen -profile UniversityGenesis -channelID system-channel -outputBlock ./channel-artifacts/genesis.block || log_error "Genesis block generation failed"
-else
-    log_info "Crypto material and genesis block already exist"
-fi
-
-# Ensure private keys are named 'priv_sk' so C# and Node can reliably find them
-log_info "Normalizing private key filenames..."
-find ./crypto-config -type f -name "*_sk" -execdir cp -n {} priv_sk \; 2>/dev/null || true
-
-# ============================================================
-# PHASE 5: CHANNEL TRANSACTION
-# ============================================================
-log_info "Phase 5: Channel transaction..."
-if [ ! -f "./channel-artifacts/${CHANNEL_NAME}.tx" ]; then
-    log_info "Generating channel transaction..."
-    ./bin/configtxgen -profile RegistrarChannel -outputCreateChannelTx ./channel-artifacts/${CHANNEL_NAME}.tx -channelID $CHANNEL_NAME 2>/dev/null || log_error "Channel tx generation failed"
-else
-    log_info "Channel transaction already exists"
-fi
-
-# ============================================================
-# PHASE 6: DOCKER CONTAINERS & WALLET DB
-# ============================================================
-log_info "Phase 6: Starting Docker containers..."
-
-if docker compose ps | grep -q "orderer"; then
-    log_info "Containers already running"
-else
-    log_info "Pulling Docker images (this may take a while)..."
-    docker compose pull || log_warn "Some images failed to pull, will try again during up..."
-    docker compose up -d || log_error "docker compose up failed"
-    
-    log_info "Waiting for containers to be ready..."
-    wait_for_service localhost 7050 "Orderer Service" 30
-    wait_for_service localhost 7051 "Registrar Peer" 30
-    sleep 10
-fi
-
-# Restore CouchDB Wallet Creation outside of docker-compose
-log_info "Starting standalone CouchDB for wallets..."
-if docker ps -a --format '{{.Names}}' | grep -Eq "^couchdb-wallet\$"; then
-    docker start couchdb-wallet >/dev/null
-    log_info "CouchDB for wallets (existing) started."
-else
-    # Added --network registrar-net so internal containers can communicate if ever needed
-    docker run -d --name couchdb-wallet \
-        --network registrar-net \
-        -p 5989:5984 \
-        -v couchdb_wallet_data:/opt/couchdb/data \
-        -e COUCHDB_USER=${LOCAL_COUCH_USER} \
-        -e COUCHDB_PASSWORD=${LOCAL_COUCH_PASS} \
-        -e COUCHDB_SINGLE_NODE=true \
-        -e COUCHDB_INI_CLUSTER_N=1 \
-        -e COUCHDB_INI_COUCHDB_SINGLE_NODE=true \
-        couchdb:3.2.2 >/dev/null
-    
-    log_info "New CouchDB container for wallets created and started on port 5989."
-fi
-
-# Wait for Wallet DB
-wait_for_service localhost 5989 "CouchDB Wallet" 120
-
-# ============================================================
-# PHASE 7: CREATE CHANNEL & JOIN PEERS
-# ============================================================
-log_info "Phase 7: Channel creation and peer joining..."
-
-if ! docker exec cli peer channel list 2>/dev/null | grep -q "$CHANNEL_NAME"; then
-    log_info "Creating channel $CHANNEL_NAME..."
-    docker exec cli peer channel create \
-        -c $CHANNEL_NAME \
-        -f ./channel-artifacts/$CHANNEL_NAME.tx \
-        --outputBlock ./channel-artifacts/$CHANNEL_NAME.block \
-        -o orderer.capstone.com:7050 \
-        --tls \
-        --cafile /etc/hyperledger/fabric/crypto-config/ordererOrganizations/capstone.com/orderers/orderer.capstone.com/tls/ca.crt || log_error "Channel creation failed"
-    log_info "Channel created"
-    
-    log_info "Giving peers extra time to finish CouchDB initialization..."
-    sleep 10
-    
-    join_with_retry() {
-        local ORG=$1
-        local MSP=$2
-        local DOMAIN=$3
-        local MAX_RETRIES=6
-        local ATTEMPT=1
-        
-        while [ $ATTEMPT -le $MAX_RETRIES ]; do
-            log_info "Joining $ORG peer to channel (Attempt $ATTEMPT/$MAX_RETRIES)..."
-            
-            set +e
-            JOIN_OUT=$(docker exec \
-                -e CORE_PEER_LOCALMSPID=$MSP \
-                -e CORE_PEER_ADDRESS=peer0.$DOMAIN:7051 \
-                -e CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/crypto-config/peerOrganizations/$DOMAIN/users/Admin@$DOMAIN/msp \
-                -e CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/crypto-config/peerOrganizations/$DOMAIN/peers/peer0.$DOMAIN/tls/ca.crt \
-                cli peer channel join -b ./channel-artifacts/$CHANNEL_NAME.block 2>&1)
-            local EXIT_CODE=$?
-            set -e 
-            
-            if [ $EXIT_CODE -eq 0 ] || echo "$JOIN_OUT" | grep -q "already exists"; then
-                log_info "$ORG peer joined successfully!"
-                return 0
-            else
-                log_warn "$ORG peer not ready yet. Retrying in 5 seconds..."
-                sleep 5
-                ATTEMPT=$((ATTEMPT+1))
-            fi
-        done
-        log_error "Failed to join $ORG peer to channel after multiple attempts. Last output: $JOIN_OUT"
-    }
-
-    join_with_retry "Registrar" "RegistrarMSP" "registrar.capstone.com"
-    join_with_retry "Faculty" "FacultyMSP" "faculty.capstone.com"
-    join_with_retry "Department" "DepartmentMSP" "department.capstone.com"
-        
-    log_info "All peers joined successfully"
-else
-    log_info "Channel and peers already configured"
-fi
-
-sleep 5
-
-# ============================================================
-# PHASE 8: CHAINCODE PACKAGING
-# ============================================================
-log_info "Phase 8: Packaging chaincode..."
-
-rm -f registrar.tar.gz code.tar.gz metadata.json connection.json
-
-# TLS-enabled connection.json with embedded certificate
-CC_TLS_CERT=$(cat ./crypto-config/peerOrganizations/registrar.capstone.com/tlsca/tlsca.registrar.capstone.com-cert.pem | awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}')
-
-cat > connection.json <<EOF
+log_info "Creating bundled TLS CA cert for Chaincode service to trust all peers..."
+# Create a bundle of all organization's TLS CAs for the chaincode to trust
+mkdir -p "$(pwd)/${CRYPTO_DIR}/chaincode-tls/ca-bundle"
 {
-  "address": "registrar-chaincode:9999",
-  "dial_timeout": "10s",
-  "tls_required": true,
-  "client_auth_required": false,
-  "root_cert": "${CC_TLS_CERT}"
-}
+    cat "$(pwd)/${CRYPTO_DIR}/peerOrganizations/registrar.capstone.com/tlsca/tlsca.registrar.capstone.com-cert.pem"
+    echo ""
+    cat "$(pwd)/${CRYPTO_DIR}/peerOrganizations/faculty.capstone.com/tlsca/tlsca.faculty.capstone.com-cert.pem"
+    echo ""
+    cat "$(pwd)/${CRYPTO_DIR}/peerOrganizations/department.capstone.com/tlsca/tlsca.department.capstone.com-cert.pem"
+    echo ""
+} > "$(pwd)/${CRYPTO_DIR}/chaincode-tls/ca-bundle/ca-bundle.pem"
+
+log_info "Identities enrolled. Normalizing private keys..."
+find "$CRYPTO_DIR" -type f -name "*_sk" -execdir cp -n {} priv_sk \; 2>/dev/null || true
+# ============================================================
+# PHASE 2.5: CREATE EXTERNAL BUILDER SCRIPTS
+# ============================================================
+log_info "Phase 2.5: Generating CCaaS External Builder scripts..."
+mkdir -p ./builders/ccaas/bin
+
+cat << 'EOF' | tr -d '\r' > ./builders/ccaas/bin/detect
+#!/bin/sh
+set -eu
+exit 0
 EOF
 
-tar cfz code.tar.gz connection.json
-echo '{"path":"","type":"ccaas","label":"'${CC_NAME}'_1.0"}' > metadata.json
-tar cfz registrar.tar.gz metadata.json code.tar.gz
+cat << 'EOF' | tr -d '\r' > ./builders/ccaas/bin/build
+#!/bin/sh
+set -eu
+tar xfz "$1/code.tar.gz" -C "$3"
+exit 0
+EOF
 
-log_info "Chaincode package created (TLS enabled)"
+cat << 'EOF' | tr -d '\r' > ./builders/ccaas/bin/release
+#!/bin/sh
+set -eu
+mkdir -p "$2/chaincode/server"
+cp "$1/connection.json" "$2/chaincode/server/connection.json"
+exit 0
+EOF
 
+chmod -R +x ./builders/ccaas/bin
 # ============================================================
-# PHASE 9: CHAINCODE INSTALL
+# PHASE 3: FRONTEND BUILD & ARTIFACTS
 # ============================================================
-log_info "Phase 9: Installing chaincode..."
+log_info "Phase 3: Building frontend application..."
+(cd ../frontend && \
+ rm -rf build && npm install && npm install react-router-dom @microsoft/signalr && \
+ npm install -D tailwindcss@3 postcss autoprefixer && \
+ npx tailwindcss init -p && \
+ echo "module.exports = { content: ['./src/**/*.{js,jsx,ts,tsx}'], theme: { extend: {} }, plugins: [] };" > tailwind.config.js && \
+ if [ -f src/index.css ] && ! grep -q "@tailwind" src/index.css; then echo -e "@tailwind base;\n@tailwind components;\n@tailwind utilities;\n$(cat src/index.css)" > src/index.css; \
+ elif [ ! -f src/index.css ]; then echo -e "@tailwind base;\n@tailwind components;\n@tailwind utilities;\n" > src/index.css; fi && \
+ DISABLE_ESLINT_PLUGIN=true npm run build)
 
-install_chaincode() {
-    PEER_ADDRESS=$1
-    log_info "Installing on $PEER_ADDRESS..."
-    docker exec -e CORE_PEER_ADDRESS=$PEER_ADDRESS cli peer lifecycle chaincode install registrar.tar.gz 2>&1 | grep -q "Chaincode code package identifier" && log_info "Install successful on $PEER_ADDRESS" || log_warn "Chaincode install on $PEER_ADDRESS failed (might be installed already)"
-}
-
-install_chaincode "peer0.registrar.capstone.com:7051"
-install_chaincode "peer0.faculty.capstone.com:7051"
-install_chaincode "peer0.department.capstone.com:7051"
-
-sleep 5
-
-# ============================================================
-# PHASE 10: GET PACKAGE ID & DETERMINE SEQUENCE
-# ============================================================
-log_info "Phase 10: Getting package ID..."
-
-# Fixed Syntax Error Here (Missing parenthesis at end)
-CC_PACKAGE_ID=$(docker exec \
-    -e CORE_PEER_LOCALMSPID=RegistrarMSP \
-    -e CORE_PEER_ADDRESS=peer0.registrar.capstone.com:7051 \
-    -e CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/crypto-config/peerOrganizations/registrar.capstone.com/users/Admin@registrar.capstone.com/msp \
-    -e CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/crypto-config/peerOrganizations/registrar.capstone.com/peers/peer0.registrar.capstone.com/tls/ca.crt \
-    -e CORE_PEER_TLS_ENABLED=true \
-    cli peer lifecycle chaincode queryinstalled 2>&1 | grep "Package ID: ${CC_NAME}" | tail -n 1 | awk '{print $3}' | sed 's/,$//')
-
-if [ -z "$CC_PACKAGE_ID" ]; then
-    log_error "Could not get chaincode package ID. Queryinstalled failed or chaincode not installed."
+if ! grep -q "orderer3.capstone.com" config/configtx.yaml; then
+    log_error "Your configtx.yaml is missing the 3-node Raft cluster! Please update it to include orderer, orderer2, and orderer3."
 fi
 
-log_info "Package ID: $CC_PACKAGE_ID"
+log_info "Generating Channel Artifacts..."
+export FABRIC_CFG_PATH="$(pwd)/config"
+configtxgen -profile UniversityGenesis -channelID system-channel -outputBlock "./${ARTIFACTS_DIR}/orderer.genesis.block"
 
-# Determine Sequence
-CURRENT_SEQUENCE=$(docker exec \
-    -e CORE_PEER_LOCALMSPID=RegistrarMSP \
-    -e CORE_PEER_ADDRESS=peer0.registrar.capstone.com:7051 \
-    -e CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/crypto-config/peerOrganizations/registrar.capstone.com/users/Admin@registrar.capstone.com/msp \
-    -e CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/crypto-config/peerOrganizations/registrar.capstone.com/peers/peer0.registrar.capstone.com/tls/ca.crt \
-    -e CORE_PEER_TLS_ENABLED=true \
-    cli peer lifecycle chaincode querycommitted -C $CHANNEL_NAME -O json 2>/dev/null | jq -r '.chaincode_definitions[] | select(.name == "'$CC_NAME'") | .sequence' 2>/dev/null || echo "")
+configtxgen -profile RegistrarChannel -outputBlock "./${ARTIFACTS_DIR}/${CHANNEL_NAME}.block" -channelID $CHANNEL_NAME
 
-COMMITTED_PACKAGE_ID=$(docker exec \
-    -e CORE_PEER_LOCALMSPID=RegistrarMSP \
-    -e CORE_PEER_ADDRESS=peer0.registrar.capstone.com:7051 \
-    -e CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/crypto-config/peerOrganizations/registrar.capstone.com/users/Admin@registrar.capstone.com/msp \
-    -e CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/crypto-config/peerOrganizations/registrar.capstone.com/peers/peer0.registrar.capstone.com/tls/ca.crt \
-    -e CORE_PEER_TLS_ENABLED=true \
-    cli peer lifecycle chaincode querycommitted -C $CHANNEL_NAME -O json 2>/dev/null | jq -r '.chaincode_definitions[] | select(.name == "'$CC_NAME'") | .package_id' 2>/dev/null || echo "")
+log_info "Shutting down local Certificate Authorities..."
+docker compose -f docker-compose-main.yaml -f docker-compose-annex.yaml -f docker-compose-pubad.yaml down -v --remove-orphans 2>/dev/null || true
 
-SKIP_COMMIT=false
-if [ "$CC_PACKAGE_ID" == "$COMMITTED_PACKAGE_ID" ] && [ -n "$CC_PACKAGE_ID" ]; then
-    log_info "Chaincode package is already committed at sequence $CURRENT_SEQUENCE. Skipping upgrade."
-    SKIP_COMMIT=true
-    CC_SEQUENCE=$CURRENT_SEQUENCE
-elif [[ -z "$CURRENT_SEQUENCE" || "$CURRENT_SEQUENCE" == "null" ]]; then
-    CC_SEQUENCE=1
-    log_info "No existing chaincode definition found. Setting sequence to 1."
-else
-    CC_SEQUENCE=$((CURRENT_SEQUENCE + 1))
-    log_info "Existing chaincode found at sequence $CURRENT_SEQUENCE. Upgrading to sequence $CC_SEQUENCE."
-fi
-
-sleep 3
-
-# ============================================================
-# PHASE 11: APPROVE CHAINCODE
-# ============================================================
-log_info "Phase 11: Approving chaincode (sequence $CC_SEQUENCE)..."
-
-if [ "$SKIP_COMMIT" = false ]; then
-    approve_cc() {
-        ORG=$1
-        PEER=$2
-        PEER_ORG=$3
-        log_info "Approving for $ORG..."
-        docker exec \
-            -e CORE_PEER_LOCALMSPID=${ORG^}MSP \
-            -e CORE_PEER_ADDRESS=$PEER:7051 \
-            -e CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/crypto-config/peerOrganizations/$PEER_ORG/users/Admin@$PEER_ORG/msp \
-            -e CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/crypto-config/peerOrganizations/$PEER_ORG/peers/$PEER/tls/ca.crt \
-            -e CORE_PEER_TLS_ENABLED=true \
-            cli peer lifecycle chaincode approveformyorg \
-            --channelID $CHANNEL_NAME \
-            --name $CC_NAME \
-            --version $CC_VERSION \
-            --package-id $CC_PACKAGE_ID \
-            --sequence $CC_SEQUENCE \
-            -o orderer.capstone.com:7050 \
-            --ordererTLSHostnameOverride orderer.capstone.com \
-            --tls \
-            --cafile /etc/hyperledger/fabric/crypto-config/ordererOrganizations/capstone.com/orderers/orderer.capstone.com/tls/ca.crt
-    }
-
-    approve_cc "registrar" "peer0.registrar.capstone.com" "registrar.capstone.com"
-    sleep 3
-    approve_cc "faculty" "peer0.faculty.capstone.com" "faculty.capstone.com"
-    sleep 3
-    approve_cc "department" "peer0.department.capstone.com" "department.capstone.com"
-
-    sleep 5
-else
-    log_info "Skipping approval phase (chaincode already committed)."
-fi
-
-# ============================================================
-# PHASE 12: COMMIT CHAINCODE
-# ============================================================
-log_info "Phase 12: Committing chaincode (sequence $CC_SEQUENCE)..."
-
-if [ "$SKIP_COMMIT" = false ]; then
-    docker exec \
-        -e CORE_PEER_LOCALMSPID=RegistrarMSP \
-        -e CORE_PEER_ADDRESS=peer0.registrar.capstone.com:7051 \
-        -e CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/crypto-config/peerOrganizations/registrar.capstone.com/users/Admin@registrar.capstone.com/msp \
-        -e CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/crypto-config/peerOrganizations/registrar.capstone.com/peers/peer0.registrar.capstone.com/tls/ca.crt \
-        -e CORE_PEER_TLS_ENABLED=true \
-        cli peer lifecycle chaincode commit \
-        --channelID $CHANNEL_NAME \
-        --name $CC_NAME \
-        --version $CC_VERSION \
-        --sequence $CC_SEQUENCE \
-        -o orderer.capstone.com:7050 \
-        --ordererTLSHostnameOverride orderer.capstone.com \
-        --tls \
-        --cafile /etc/hyperledger/fabric/crypto-config/ordererOrganizations/capstone.com/orderers/orderer.capstone.com/tls/ca.crt \
-        --peerAddresses peer0.registrar.capstone.com:7051 \
-        --tlsRootCertFiles /etc/hyperledger/fabric/crypto-config/peerOrganizations/registrar.capstone.com/peers/peer0.registrar.capstone.com/tls/ca.crt \
-        --peerAddresses peer0.faculty.capstone.com:7051 \
-        --tlsRootCertFiles /etc/hyperledger/fabric/crypto-config/peerOrganizations/faculty.capstone.com/peers/peer0.faculty.capstone.com/tls/ca.crt \
-        --peerAddresses peer0.department.capstone.com:7051 \
-        --tlsRootCertFiles /etc/hyperledger/fabric/crypto-config/peerOrganizations/department.capstone.com/peers/peer0.department.capstone.com/tls/ca.crt 2>&1 | tee -a commit.log || log_error "Chaincode commit failed"
-    sleep 5
-    log_info "Chaincode committed successfully"
-else
-    log_info "Skipping commit phase (chaincode already committed)."
-fi
-
-# ============================================================
-# PHASE 13: UPDATE .ENV AND RESTART CHAINCODE
-# ============================================================
-log_info "Phase 13: Updating environment variables and restarting chaincode..."
-
-if grep -q "^CHAINCODE_ID=" .env; then
-    sed -i.bak "s#^CHAINCODE_ID=.*#CHAINCODE_ID=$CC_PACKAGE_ID#" .env
-else
-    echo "CHAINCODE_ID=$CC_PACKAGE_ID" >> .env
-fi
-log_info "CHAINCODE_ID updated to: $CC_PACKAGE_ID"
-
-log_info "Restarting registrar-chaincode container to pick up new ID..."
-export CHAINCODE_ID=$CC_PACKAGE_ID
-docker compose stop registrar-chaincode 2>/dev/null || true
-docker compose rm -f registrar-chaincode 2>/dev/null || true
-sleep 2
-docker compose up -d --no-deps registrar-chaincode || log_error "Failed to restart chaincode container"
-
-sleep 5
-
-# ============================================================
-# PHASE 14: START APPLICATION SERVICES AND FRONTEND
-# ============================================================
-log_info "Phase 14: Starting application services..."
-
-# Build React Frontend
-if [ -d "../frontend" ]; then
-    log_info "Building React Frontend..."
-    if ! ( 
-        cd ../frontend || exit 1
-        npm run build > frontend_build.log 2>&1
-    ); then
-        log_warn "React Frontend build failed. Check frontend/frontend_build.log"
-    fi
-    log_info "React Frontend built successfully."
-else
-    log_warn "Frontend directory not found at ../frontend. Skipping React build."
-fi
-
-log_info "Waiting for PostgreSQL port to open..."
-wait_for_service localhost 5432 "PostgreSQL Port" 60
-
-log_info "Waiting for PostgreSQL to finish initialization and recovery..."
-# Actively poll pg_isready to handle variable startup times (like crash recovery)
-DB_READY=false
-for i in {1..60}; do
-    if docker exec postgres pg_isready -U BLOCKGO -d ActivityLogs >/dev/null 2>&1; then
-        DB_READY=true
-        break
-    fi
-    sleep 2
-done
-
-if [ "$DB_READY" = true ]; then
-    # PostgreSQL docker runs a temporary server to create the database, shuts down, 
-    # and then starts the final server. We add a buffer to safely bypass this restart.
-    log_info "PostgreSQL port is open. Waiting 15s for stability..."
-    sleep 15
-    for i in {1..15}; do
-        if docker exec postgres pg_isready -U BLOCKGO -d ActivityLogs >/dev/null 2>&1; then
-            break
-        fi
-        sleep 2
-    done
-    log_info "PostgreSQL is stable and ready!"
-else
-    log_error "PostgreSQL is stuck starting up or in crash recovery."
-fi
-
-# 3. Start C# Backend
-if [ -d "../client-app" ]; then
-    if nc -z localhost 5000 > /dev/null 2>&1; then
-        log_info "C# Backend is already running on port 5000. Stopping old instance..."
-        fuser -k 5000/tcp 2>/dev/null || true
-        sleep 2
-    fi
-    
-    log_info "Starting C# Backend (client-app)..."
-    (
-        cd ../client-app || exit 1
-        if [ -f ../network/.env ]; then
-            while IFS='=' read -r key value || [ -n "$key" ]; do
-                if [[ -n "$key" && "$key" != \#* ]]; then
-                    value=$(echo "$value" | tr -d '\r')
-                    [[ "$value" == \"*\" ]] && value="${value:1:-1}"
-                    [[ "$value" == \'*\' ]] && value="${value:1:-1}"
-                    export "$key"="$value"
-                fi
-            done < ../network/.env
-        fi
-        nohup dotnet run > backend.log 2>&1 &
-        echo $! > /tmp/client_app_pid.tmp
-    )
-    if [ -f /tmp/client_app_pid.tmp ]; then
-        CLIENT_APP_PID=$(cat /tmp/client_app_pid.tmp)
-        rm -f /tmp/client_app_pid.tmp
-        PIDS+=($CLIENT_APP_PID)
-    fi
-    wait_for_service localhost 5000 "C# Backend" 60
-else
-    log_warn "C# Backend directory not found at ../client-app. Skipping."
-fi
-
-# 4. Start Node.js Middleware
-if [ -d "../middleware" ]; then
-    if nc -z localhost 4000 > /dev/null 2>&1; then
-        log_info "Node.js Middleware is already running on port 4000. Stopping old instance..."
-        fuser -k 4000/tcp 2>/dev/null || true
-        sleep 2
-    fi
-
-    log_info "Starting Node.js Middleware..."
-    (
-        cd ../middleware || exit 1
-        log_info "Enrolling CA Admins into CouchDB Wallet..."
-        node enrollAllAdmins.js || log_warn "Admin enrollment had issues."
-        nohup npm start > middleware.log 2>&1 &
-        echo $! > /tmp/middleware_pid.tmp
-    )
-    if [ -f /tmp/middleware_pid.tmp ]; then
-        MIDDLEWARE_PID=$(cat /tmp/middleware_pid.tmp)
-        rm -f /tmp/middleware_pid.tmp
-        PIDS+=($MIDDLEWARE_PID)
-    fi
-    wait_for_service localhost 4000 "Node.js Middleware" 60
-else
-    log_warn "Middleware directory not found at ../middleware. Skipping."
-fi
-
-# ============================================================
-# PHASE 15: BOOTSTRAP INITIAL REGISTRAR
-# ============================================================
-log_info "Phase 15: Bootstrapping initial registrar..."
-BOOTSTRAP_URL="http://127.0.0.1:4000/api/bootstrap"
-MAX_BOOTSTRAP_RETRIES=10
-BOOTSTRAP_ATTEMPT=1
-BOOTSTRAP_SUCCESS=false
-
-while [ $BOOTSTRAP_ATTEMPT -le $MAX_BOOTSTRAP_RETRIES ]; do
-    BOOTSTRAP_RESP=$(curl -s -w "\n%{http_code}" $BOOTSTRAP_URL)
-    HTTP_CODE=$(echo "$BOOTSTRAP_RESP" | tail -n1)
-    BODY=$(echo "$BOOTSTRAP_RESP" | sed '$d')
-    
-    if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 201 ] || [ "$HTTP_CODE" -eq 204 ]; then 
-        log_info "Registrar bootstrapped successfully!"
-        BOOTSTRAP_SUCCESS=true
-        break
-    elif [ "$HTTP_CODE" -eq 409 ]; then 
-        log_info "Registrar appears to be already bootstrapped (received HTTP 409 Conflict)."
-        BOOTSTRAP_SUCCESS=true
-        break
-    else
-        log_warn "Bootstrap failed (HTTP $HTTP_CODE). Response: $BODY | Retrying in 5 seconds... ($BOOTSTRAP_ATTEMPT/$MAX_BOOTSTRAP_RETRIES)"
-        sleep 5
-    fi
-    BOOTSTRAP_ATTEMPT=$((BOOTSTRAP_ATTEMPT+1))
-done
-
-if [ "$BOOTSTRAP_SUCCESS" = false ]; then 
-    log_error "Failed to bootstrap the initial registrar after multiple attempts."
-fi
-
-# ============================================================
-# FINAL SUMMARY
-# ============================================================
-echo ""
-echo "=========================================================="
-echo -e " ${BLUE}BLOCKGO NETWORK DEPLOYMENT COMPLETE${NC}"
-echo "=========================================================="
-echo ""
-log_info "Channel: $CHANNEL_NAME"
-log_info "Chaincode: $CC_NAME v$CC_VERSION (sequence $CC_SEQUENCE)"
-log_info "Security: TLS ENABLED with embedded certificates"
-echo ""
-echo "Application is now running."
-echo "Access the web application at: http://localhost:8080"
-echo ""
-echo "Initial Registrar Credentials:"
-echo "  Email: registrar@plv.edu.ph"
-echo "  Password: admin123"
-echo ""
-echo "================================================="
-echo " SERVICES ARE RUNNING IN THE BACKGROUND"
-echo " Press Ctrl+C to stop all services and exit."
-echo "================================================="
-
-# Keep the script running to prevent the EXIT trap from killing the processes prematurely
-while true; do
-    sleep 86400
-done
+log_info "============================================================"
+log_info "CLOUD CRYPTO PREPARATION COMPLETE!"
+log_info "All certificates and Genesis blocks have been safely generated."
+log_info "You can now run: ./k8s/deploy-k8s.sh apply"
+log_info "============================================================"

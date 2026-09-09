@@ -1,0 +1,11 @@
+student_no,full_name,email,date_of_birth,department,section,grade,course,semester,school_year
+mock-student1,Juan Dela Cruz,mock-student1@plv.edu.ph,2005-05-15,Bachelor of Science in Psychology,1,95,Bachelor of Science in Psychology,2nd Semester,2024
+mock-student2,Maria Santos,mock-student2@plv.edu.ph,2004-06-20,Bachelor of Science in Civil Engineering,1,95,Bachelor of Science in Civil Engineering,2nd Semester,2024
+mock-student3,Pedro Reyes,mock-student3@plv.edu.ph,2005-03-10,Bachelor of Science in Information Technology,1,95,Bachelor of Science in Information Technology,2nd Semester,2024
+mock-student4,Ana Lopez,mock-student4@plv.edu.ph,2003-11-25,Bachelor of Science in Computer Science,1,95,Bachelor of Science in Computer Science,2nd Semester,2024
+mock-student5,Jose Garcia,mock-student5@plv.edu.ph,2004-08-05,Bachelor of Science in Computer Science,1,95,Bachelor of Science in Computer Science,2nd Semester,2024
+mock-student6,Luz Mendoza,mock-student6@plv.edu.ph,2005-01-12,Bachelor of Science in Psychology,1,95,Bachelor of Science in Psychology,2nd Semester,2024
+mock-student7,Carlo Torres,mock-student7@plv.edu.ph,2003-07-30,Bachelor of Science in Civil Engineering,1,95,Bachelor of Science in Civil Engineering,2nd Semester,2024
+mock-student8,Sofia Ramos,mock-student8@plv.edu.ph,2004-04-18,Bachelor of Science in Information Technology,1,95,Bachelor of Science in Information Technology,2nd Semester,2024
+mock-student9,Miguel Lim,mock-student9@plv.edu.ph,2005-12-22,Bachelor of Science in Computer Science,1,95,Bachelor of Science in Computer Science,2nd Semester,2024
+mock-student10,Juan Dela Cruz,mock-student10@plv.edu.ph,2005-05-15,Bachelor of Science in Psychology,1,95,Bachelor of Science in Psychology,2nd Semester,2024

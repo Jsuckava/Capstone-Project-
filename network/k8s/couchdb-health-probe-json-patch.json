@@ -1,0 +1,34 @@
+[
+  {
+    "op": "replace",
+    "path": "/spec/template/spec/containers/0/startupProbe",
+    "value": {
+      "httpGet": { "path": "/_up", "port": 5984 },
+      "periodSeconds": 5,
+      "timeoutSeconds": 2,
+      "failureThreshold": 60
+    }
+  },
+  {
+    "op": "replace",
+    "path": "/spec/template/spec/containers/0/livenessProbe",
+    "value": {
+      "httpGet": { "path": "/_up", "port": 5984 },
+      "initialDelaySeconds": 30,
+      "periodSeconds": 10,
+      "timeoutSeconds": 3,
+      "failureThreshold": 3
+    }
+  },
+  {
+    "op": "replace",
+    "path": "/spec/template/spec/containers/0/readinessProbe",
+    "value": {
+      "httpGet": { "path": "/_up", "port": 5984 },
+      "initialDelaySeconds": 5,
+      "periodSeconds": 5,
+      "timeoutSeconds": 3,
+      "failureThreshold": 3
+    }
+  }
+]

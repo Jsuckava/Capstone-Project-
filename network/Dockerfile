@@ -51,7 +51,7 @@ RUN curl -L "https://github.com/docker/compose/releases/latest/download/docker-c
 COPY . /app
 
 # Expose ports
-EXPOSE 8080 5000 4000 7051 9051 11051 5989 9999
+EXPOSE 8080 5000 4000 7051 9051 11051 5990 9999
 
 # Set entrypoint
 ENTRYPOINT ["/bin/bash"]

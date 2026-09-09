@@ -1,0 +1,104 @@
+---
+# PostgreSQL Replica (PubAd Campus)
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-replica-pubad
+  namespace: plv-pubad-campus
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+  selector:
+    app: postgres-replica-pubad
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-replica-pubad
+  namespace: plv-pubad-campus
+spec:
+  serviceName: postgres-replica-pubad
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-replica-pubad
+  template:
+    metadata:
+      labels:
+        app: postgres-replica-pubad
+    spec:
+      serviceAccountName: fabric-sa
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_C__"
+      initContainers:
+      - name: volume-permissions
+        image: busybox
+        command: ["sh", "-c", "mkdir -p /bitnami/postgresql && chown -R 1001:1001 /bitnami/postgresql && chmod -R u+rwX,g+rwX /bitnami/postgresql"]
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /bitnami/postgresql
+      containers:
+      - name: postgres
+        image: bitnami/postgresql:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRESQL_REPLICATION_MODE
+          value: slave
+        - name: POSTGRESQL_MASTER_HOST
+          value: postgres.plv-main-campus.svc.cluster.local
+        - name: POSTGRESQL_MASTER_PORT_NUMBER
+          value: "5432"
+        - name: POSTGRESQL_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_USER
+        - name: POSTGRESQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_PASS
+        - name: POSTGRESQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_DB
+        - name: POSTGRESQL_REPLICATION_USER
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_REPL_USER
+        - name: POSTGRESQL_REPLICATION_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_REPL_PASS
+        - name: POSTGRESQL_MASTER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_PASS
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /bitnami/postgresql
+        startupProbe: &postgresPubadProbe
+          tcpSocket: {port: 5432}
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe: *postgresPubadProbe
+        readinessProbe: *postgresPubadProbe
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-storage
+    spec:
+      storageClassName: fabric-storage
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 100Gi

@@ -1,0 +1,18 @@
+2026-04-25 19:41:30.059 +08:00 [INF] Application starting up...
+2026-04-25 19:41:36.408 +08:00 [INF] HSTS enabled (HTTPS Redirection disabled for Nginx)
+2026-04-25 19:41:37.436 +08:00 [INF] Application configured successfully
+2026-04-25 19:41:37.438 +08:00 [INF] Listening on 
+2026-04-25 19:41:38.869 +08:00 [INF] Now listening on: http://0.0.0.0:5000
+2026-04-25 19:41:38.873 +08:00 [INF] Application started. Press Ctrl+C to shut down.
+2026-04-25 19:41:38.874 +08:00 [INF] Hosting environment: Production
+2026-04-25 19:41:38.875 +08:00 [INF] Content root path: C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app
+2026-04-25 19:56:49.172 +08:00 [INF] Application is shutting down...
+2026-04-25 11:57:03.764 +00:00 [INF] Application starting up...
+2026-04-25 11:57:04.662 +00:00 [INF] HSTS enabled (HTTPS Redirection disabled for Nginx)
+2026-04-25 11:57:05.690 +00:00 [INF] Application configured successfully
+2026-04-25 11:57:05.691 +00:00 [INF] Listening on 
+2026-04-25 11:57:05.704 +00:00 [WRN] Overriding HTTP_PORTS '8080' and HTTPS_PORTS ''. Binding to values defined by URLS instead 'http://0.0.0.0:5000'.
+2026-04-25 11:57:05.754 +00:00 [INF] Now listening on: http://0.0.0.0:5000
+2026-04-25 11:57:05.755 +00:00 [INF] Application started. Press Ctrl+C to shut down.
+2026-04-25 11:57:05.755 +00:00 [INF] Hosting environment: Production
+2026-04-25 11:57:05.755 +00:00 [INF] Content root path: /app

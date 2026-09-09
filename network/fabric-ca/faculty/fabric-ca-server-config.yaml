@@ -66,7 +66,7 @@ crlsizelimit: 512000
 #############################################################################
 tls:
   # Enable TLS (default: false)
-  enabled: true
+  enabled: false
   # TLS for the server's listening port
   certfile:
   keyfile:
@@ -129,7 +129,7 @@ registry:
   # Contains identity information which is used when LDAP is disabled
   identities:
      - name: admin
-       pass: adminpw
+       pass: admin123
        type: client
        affiliation: ""
        attrs:
@@ -319,6 +319,7 @@ csr:
         O: Hyperledger
         OU: Fabric
    hosts:
+     - fabric-ca-faculty.plv-annex-campus.svc.cluster.local
      - ca.faculty.capstone.com
      - localhost
    ca:

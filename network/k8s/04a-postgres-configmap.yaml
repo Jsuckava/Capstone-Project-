@@ -1,0 +1,71 @@
+# Numbered PostgreSQL migrations run as a deployment gate. The ConfigMap is
+# generated from ../migrations by deploy-k8s.sh so this Job has no duplicated
+# SQL and upgrades both new and existing persistent database volumes.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-schema-migrations
+  namespace: plv-main-campus
+  labels:
+    app: postgres-schema-migrations
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app: postgres-schema-migrations
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: migrate
+        image: bitnami/postgresql:latest
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 5m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        env:
+        - name: PGHOST
+          value: postgres.plv-main-campus.svc.cluster.local
+        - name: PGPORT
+          value: "5432"
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_USER
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_PASS
+        - name: PGDATABASE
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_DB
+        command: ["/bin/bash", "-ec"]
+        args:
+        - |
+          shopt -s nullglob
+          migrations=(/migrations/[0-9][0-9][0-9]_*.sql)
+          if (( ${#migrations[@]} == 0 )); then
+            echo "No numbered database migrations were mounted." >&2
+            exit 1
+          fi
+          for migration in "${migrations[@]}"; do
+            echo "Applying $(basename "$migration")"
+            psql --set ON_ERROR_STOP=1 --file "$migration"
+          done
+        volumeMounts:
+        - name: migrations
+          mountPath: /migrations
+          readOnly: true
+      volumes:
+      - name: migrations
+        configMap:
+          name: postgres-runtime-migrations
