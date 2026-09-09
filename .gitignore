@@ -24,6 +24,8 @@ temp/
 .cache/
 *.cache
 *.cache.json
+/tests/
+/test-results/
 
 # =========================
 # GLOBAL DEPENDENCIES & BUILD
