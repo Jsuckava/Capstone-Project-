@@ -1,6 +1,3 @@
-# Numbered PostgreSQL migrations run as a deployment gate. The ConfigMap is
-# generated from ../migrations by deploy-k8s.sh so this Job has no duplicated
-# SQL and upgrades both new and existing persistent database volumes.
 apiVersion: batch/v1
 kind: Job
 metadata:
