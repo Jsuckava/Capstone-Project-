@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { fetchAllGrades, finalizeGrade, returnGrade, fetchApprovedStudents, assignStudent, fetchApprovedAdmins, assignDepartmentAdmin, revokeDepartmentAdmin, fetchApprovedFaculties, assignFaculty, dropStudent, revokeFaculty, getDecryptedIpfsUrl, fetchStagedGrades, finalizeStagedGrades, getSystemSetting, registrarBulkEnrollStudents, registrarBulkUpdateStudents, registrarAddTemporaryStudent, registrarBulkUploadFaculty, registrarBulkUploadChairperson, resetEncodingSeason } from '../../services/api';
+import { fetchAllGrades, finalizeGrade, fetchPendingRequests, approveRegistrationRequest, denyRegistrationRequest, fetchApprovedStudents, assignStudent, fetchApprovedAdmins, assignDepartmentAdmin, revokeDepartmentAdmin, fetchApprovedFaculties, assignFaculty, dropStudent, revokeFaculty, openDecryptedIpfsFile, getSystemSetting, resetEncodingSeason } from '../../services/api';
 import RegistrarHeader from './RegistrarHeader';
 import RegistrarSidebar from './RegistrarSidebar';
 import RegistrarDashboard from './RegistrarDashboard';
@@ -10,59 +10,13 @@ import PdfReportViewer from '../shared/PdfReportViewer';
 import Modal from '../../services/Modal';
 import RegistrarStudentSectioning from './RegistrarStudentSectioning';
 import RegistrarSectionsCreated from './RegistrarSectionsCreated';
-import { downloadTemplateButtonClass } from '../shared/downloadButtonStyles';
-import { buildCsvContent, downloadCsvFile } from '../../utils/studentSectioningHelpers';
-import { useRecoveredState } from '../../utils/sessionRecovery';
-import { clearAllSharedClientState } from '../../utils/sharedClientState';
-
-const HoverableID = ({ fullId, isAuthorized }) => {
-    const [isRevealed, setIsRevealed] = useState(false);
-    const displayValue = fullId || 'Unknown';
-    const isShort = displayValue.length <= 12;
-    const maxWidthClass = (isRevealed && isAuthorized) || isShort ? 'max-w-[350px]' : 'max-w-[90px]';
-    return (
-        <span 
-            onMouseEnter={() => setIsRevealed(true)}
-            onMouseLeave={() => setIsRevealed(false)}
-            onClick={() => setIsRevealed(!isRevealed)}
-            className={`inline-block truncate align-bottom transition-[max-width] duration-300 ease-in-out ${isAuthorized ? 'cursor-pointer' : 'cursor-default'} ${maxWidthClass}`}
-            title={displayValue}
-        >
-            {displayValue}
-        </span>
-    );
-};
-
-const buildLedgerHash = (input) => {
-    const source = String(input || 'PLV-BLOCKGO');
-    const parts = [];
-
-    for (let round = 0; round < 8; round += 1) {
-        let hash = 2166136261 ^ round;
-        const roundSource = `${source}|${round}`;
-
-        for (let i = 0; i < roundSource.length; i += 1) {
-            hash ^= roundSource.charCodeAt(i);
-            hash = Math.imul(hash, 16777619);
-        }
-
-        parts.push((hash >>> 0).toString(16).padStart(8, '0'));
-    }
-
-    return parts.join('');
-};
-
-const isFinalizedLedgerStatus = (status) => {
-    const normalized = String(status || '').trim().toLowerCase();
-    return normalized.includes('finalized') || normalized.includes('ledger') || normalized.includes('blockchain');
-};
-
-const formatLedgerTimestamp = (value) => {
-    if (!value) return 'Pending timestamp';
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return String(value);
-    return parsed.toLocaleString();
-};
+import { isDepartmentApprovedGradeStatus } from '../../utils/gradeStatus';
+import StaffAccountCreation from './StaffAccountCreation';
+import CurriculumManagement from './CurriculumManagement';
+import { programs } from '../../data/registrarData';
+import RegistrarSupportTickets from './RegistrarSupportTickets';
+import StudentEnrollmentManagement from './StudentEnrollmentManagement';
+import PasswordManagement from './PasswordManagement';
 
 const RegistrarGradesView = ({
     loggedInEmail = '',
@@ -70,20 +24,25 @@ const RegistrarGradesView = ({
     chatUnreadCount = 0,
     latestChatNotice = null,
     onOpenChat,
+    onLogout,
 }) => {
-    const systemAdminTabs = ['grades', 'assigning', 'bulkEnroll', 'revokeAccounts'];
-    const systemAdminMenuItems = [
+    const managementMenuItems = [
         { id: 'grades', label: 'Grades Ledger' },
         { id: 'assigning', label: 'Assigning' },
-        { id: 'bulkEnroll', label: 'Register Users' },
+        { id: 'bulkEnroll', label: 'Student Enrollment' },
+        { id: 'createAccounts', label: 'Create Staff Accounts' },
+        { id: 'curriculum', label: 'Curriculum Management' },
+        { id: 'tickets', label: 'Report System Error' },
+        { id: 'passwordResets', label: 'Password Management' },
         { id: 'revokeAccounts', label: 'Account Revocation' },
     ];
     const [grades, setGrades] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [errorMsg, setErrorMsg] = useState(null); 
-    const [mainTab, setMainTab] = useRecoveredState('registrar:mainTab', 'dashboard');
-    const [assignmentTab, setAssignmentTab] = useRecoveredState('registrar:assignmentTab', 'students');
+    const [mainTab, setMainTab] = useState('dashboard'); 
+    const [assignmentTab, setAssignmentTab] = useState('students');
     
+    const [pendingRequests, setPendingRequests] = useState([]);
+    const [requestSearchTerm, setRequestSearchTerm] = useState('');
+
     const [approvedStudents, setApprovedStudents] = useState([]);
     const [studentAssignments, setStudentAssignments] = useState({});
     const [approvedAdmins, setApprovedAdmins] = useState([]);
@@ -94,64 +53,25 @@ const RegistrarGradesView = ({
     const [stagedGrades, setStagedGrades] = useState([]);
     const [stagedLoading, setStagedLoading] = useState(false);
     const [activeSemester, setActiveSemester] = useState('2nd Semester');
-    const [bulkEnrollLoading, setBulkEnrollLoading] = useState(false);
-    const [bulkEnrollResult, setBulkEnrollResult] = useState(null);
-    const [temporaryStudentLoading, setTemporaryStudentLoading] = useState(false);
-    const [temporaryStudentForm, setTemporaryStudentForm] = useRecoveredState('registrar:temporaryStudentForm', {
-        studentNo: '',
-        firstName: '',
-        middleName: '',
-        lastName: '',
-        email: '',
-        department: '',
-        section: '',
-        birthday: '',
-        sex: '',
-    });
-    const [facultyBulkUploadLoading, setFacultyBulkUploadLoading] = useState(false);
-    const [facultyBulkUploadResult, setFacultyBulkUploadResult] = useState(null);
-    const [chairpersonBulkUploadLoading, setChairpersonBulkUploadLoading] = useState(false);
-    const [chairpersonBulkUploadResult, setChairpersonBulkUploadResult] = useState(null);
 
-    const [filterDept, setFilterDept] = useRecoveredState('registrar:filterDept', 'All');
-    const [filterYear, setFilterYear] = useRecoveredState('registrar:filterYear', 'All');
-    const [filterSection, setFilterSection] = useRecoveredState('registrar:filterSection', 'All');
+    const [filterDept, setFilterDept] = useState('All');
+    const [filterYear, setFilterYear] = useState('All');
+    const [filterSection, setFilterSection] = useState('All');
 
-    const departments = [
-    "Bachelor of Early Childhood Education",
-    "Bachelor of Secondary Education Major in English",
-    "Bachelor of Secondary Education Major in Filipino",
-    "Bachelor of Secondary Education Major in Mathematics",
-    "Bachelor of Secondary Education Major in Science",
-    "Bachelor of Secondary Education Major in Social Studies",
-    "Bachelor of Science in Civil Engineering",
-    "Bachelor of Science in Electrical Engineering",
-    "Bachelor of Science in Information Technology",
-    "Bachelor of Arts in Communication",
-    "Bachelor of Science in Psychology",
-    "Bachelor of Science in Social Work",
-    "Bachelor of Public Administration",
-    "Bachelor of Science in Accountancy",
-    "Bachelor of Science in Business Administration Major in Financial Management",
-    "Bachelor of Science in Business Administration Major in Human Resource Management",
-    "Bachelor of Science in Business Administration Major in Marketing Management",
-    ];
-    const [sectioningDepartment, setSectioningDepartment] = useRecoveredState('registrar:sectioningDepartment', departments[0]);
+    const departments = programs;
+    const [sectioningDepartment, setSectioningDepartment] = useState(departments[0]);
 
     const [ipfsModalOpen, setIpfsModalOpen] = useState(false);
     const [ipfsCid, setIpfsCid] = useState("");
     const [vaultPassword, setVaultPassword] = useState("");
     const [showVaultPassword, setShowVaultPassword] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: "", message: "", onConfirm: null, isDestructive: false });
-    const [registrarRejectModal, setRegistrarRejectModal] = useState({ isOpen: false, section: null });
-    const [registrarRejectNote, setRegistrarRejectNote] = useState('');
-    const [registrarRejectLoading, setRegistrarRejectLoading] = useState(false);
-    const [chairpersonSearchTerm, setChairpersonSearchTerm] = useRecoveredState('registrar:chairpersonSearchTerm', '');
-    const [facultySearchTerm, setFacultySearchTerm] = useRecoveredState('registrar:facultySearchTerm', '');
-    const [showChairpersonAccounts, setShowChairpersonAccounts] = useRecoveredState('registrar:showChairpersonAccounts', false);
-    const [showFacultyDepartments, setShowFacultyDepartments] = useRecoveredState('registrar:showFacultyDepartments', false);
-    const [selectedFacultyDepartment, setSelectedFacultyDepartment] = useRecoveredState('registrar:selectedFacultyDepartment', '');
-    const [selectedFacultyReview, setSelectedFacultyReview] = useRecoveredState('registrar:selectedFacultyReview', '');
+    const [chairpersonSearchTerm, setChairpersonSearchTerm] = useState('');
+    const [facultySearchTerm, setFacultySearchTerm] = useState('');
+    const [showChairpersonAccounts, setShowChairpersonAccounts] = useState(false);
+    const [showFacultyDepartments, setShowFacultyDepartments] = useState(false);
+    const [selectedFacultyDepartment, setSelectedFacultyDepartment] = useState('');
+    const [selectedFacultyReview, setSelectedFacultyReview] = useState('');
     const [openedFacultySections, setOpenedFacultySections] = useState({});
 
     const revocationPreviewSections = [
@@ -318,15 +238,13 @@ const RegistrarGradesView = ({
         return () => window.removeEventListener('blockgo:system-setting-changed', handleSystemSettingChanged);
     }, []);
 
-    const loadGrades = useCallback(async (isBackground = false) => {
-        if (!isBackground) setLoading(true);
+    const loadGrades = useCallback(async () => {
         try {
             const response = await fetchAllGrades(loggedInEmail);
             setGrades(Array.isArray(response) ? response : (response.data || []));
         } catch (error) {
-            if (!isBackground) setErrorMsg(`Could not fetch data: ${error.message}`);
+            console.error(`Could not fetch data: ${error.message}`);
         }
-        if (!isBackground) setLoading(false);
     }, [loggedInEmail]);
 
     const loadStagedGrades = useCallback(async () => {
@@ -334,7 +252,9 @@ const RegistrarGradesView = ({
         try {
             const response = await fetchAllGrades(loggedInEmail);
             const allData = Array.isArray(response) ? response : (response.data || []);
-            const approvedGrades = allData.filter(g => g.status === 'DepartmentApproved' || g.status === 'Approved');
+            const approvedGrades = allData.filter(g =>
+                isDepartmentApprovedGradeStatus(g.status || g.Status || g.normalized_status)
+            );
             const formattedStaged = approvedGrades.map(g => ({
                 stagingId: g.id,
                 studentHash: g.student_hash || g.studentId,
@@ -349,6 +269,13 @@ const RegistrarGradesView = ({
         } catch (error) { console.error('Error loading staged grades:', error); }
         setStagedLoading(false);
     }, [loggedInEmail]);
+
+    const loadRequests = useCallback(async () => {
+        try {
+            const response = await fetchPendingRequests();
+            if (response.status === 'Success') setPendingRequests([...(response.studentRequests || []), ...(response.staffRequests || [])]);
+        } catch (error) { console.error('Error loading requests:', error); }
+    }, []);
 
     const loadApprovedStudents = useCallback(async () => {
         try {
@@ -374,42 +301,60 @@ const RegistrarGradesView = ({
     const handleResetEncodingSeason = useCallback(async () => {
         try {
             await resetEncodingSeason();
-            await clearAllSharedClientState();
-
+            const resetEncodingPeriod = JSON.stringify({
+                semester: '2nd Semester',
+                startDate: '',
+                endDate: '',
+                term: 'midterm',
+            });
+            localStorage.removeItem('registrarAssignments');
+            localStorage.setItem('encodingPeriod', resetEncodingPeriod);
+            localStorage.setItem('facultyLoadResetAt', new Date().toISOString());
+            window.dispatchEvent(
+                new CustomEvent('blockgo:system-setting-changed', {
+                    detail: {
+                        key: 'encoding_period',
+                        value: resetEncodingPeriod,
+                    },
+                })
+            );
             window.dispatchEvent(
                 new CustomEvent('blockgo:faculty-load-reset', {
                     detail: { clearedAt: new Date().toISOString() },
                 })
             );
             await loadApprovedFaculties();
-            await loadApprovedStudents();
-            await loadGrades(true);
+            await loadGrades();
         } catch (error) {
             alert(error.message || 'Failed to reset encoding season.');
             throw error;
         }
-    }, [loadApprovedFaculties, loadApprovedStudents, loadGrades]);
+    }, [loadApprovedFaculties, loadGrades]);
 
     useEffect(() => { loadGrades(); }, [loadGrades]);
 
     useEffect(() => {
+        if (mainTab === 'Requests') {
+            loadRequests();
+        }
         if (mainTab === 'finalization') {
             loadStagedGrades();
         }
-    }, [mainTab, loadStagedGrades]);
+    }, [mainTab, loadRequests, loadStagedGrades]);
 
     useEffect(() => {
         const handleAcademicDataChanged = () => {
-            loadGrades(true);
+            loadGrades();
             loadApprovedStudents();
             loadApprovedAdmins();
             loadApprovedFaculties();
+            if (mainTab === 'Requests') loadRequests();
             if (mainTab === 'finalization') loadStagedGrades();
         };
 
         window.addEventListener('blockgo:academic-data-changed', handleAcademicDataChanged);
         return () => window.removeEventListener('blockgo:academic-data-changed', handleAcademicDataChanged);
-    }, [mainTab, loadGrades, loadStagedGrades, loadApprovedStudents, loadApprovedAdmins, loadApprovedFaculties]);
+    }, [mainTab, loadGrades, loadRequests, loadStagedGrades, loadApprovedStudents, loadApprovedAdmins, loadApprovedFaculties]);
 
     useEffect(() => {
         if (mainTab === 'assigning') {
@@ -420,6 +365,11 @@ const RegistrarGradesView = ({
         }
         if (mainTab === 'grades') loadApprovedFaculties();
         if (mainTab === 'revokeAccounts') {
+            loadApprovedAdmins();
+            loadApprovedFaculties();
+        }
+        if (mainTab === 'passwordResets') {
+            loadApprovedStudents();
             loadApprovedAdmins();
             loadApprovedFaculties();
         }
@@ -456,21 +406,43 @@ const RegistrarGradesView = ({
         } catch (error) { alert(`Failed to assign: ${error.message}`); }
     };
 
-    const handleFinalize = async (recordId) => {
-        try {
-            await finalizeGrade(recordId, loggedInEmail);
-            alert(`Record ${recordId} Successfully Finalized!`);
-            loadGrades(); 
-        } catch (error) { alert(`Failed to finalize record: ${error.message}`); }
-    };
+    const groupedStagedGrades = useMemo(() => {
+        const groups = {};
+        stagedGrades.forEach(g => {
+            const key = `${g.course}-${g.yearLevel}-${g.section}-${g.subjectCode}`;
+            if (!groups[key]) {
+                groups[key] = {
+                    course: g.course,
+                    yearLevel: g.yearLevel,
+                    section: g.section,
+                    subjectCode: g.subjectCode,
+                    records: []
+                };
+            }
+            groups[key].records.push(g);
+        });
+        
+        return Object.values(groups).sort((a, b) => 
+            String(a.course).localeCompare(String(b.course)) || 
+            String(a.yearLevel).localeCompare(String(b.yearLevel)) || 
+            String(a.section).localeCompare(String(b.section)) ||
+            String(a.subjectCode).localeCompare(String(b.subjectCode))
+        );
+    }, [stagedGrades]);
 
-    const handleFinalizeStaged = async (stagingId) => {
+    const handleFinalizeBatch = async (records) => {
+        if (!window.confirm(`Are you sure you want to commit all ${records.length} grades in this section to the blockchain ledger?`)) return;
+        
         try {
-            await finalizeGrade(stagingId, loggedInEmail);
-            alert("Grade officially committed to the ledger!");
+            for (const g of records) {
+                await finalizeGrade(g.stagingId, loggedInEmail);
+            }
+            alert("Section grades officially committed to the ledger!");
             loadStagedGrades();
-            loadGrades(true);
-        } catch (error) { alert(`Finalization failed: ${error.message}`); }
+            loadGrades();
+        } catch (err) {
+            alert(`Finalization failed: ${err.message}`);
+        }
     };
 
     const handleViewIpfs = (cid) => {
@@ -480,14 +452,52 @@ const RegistrarGradesView = ({
         setIpfsModalOpen(true);
     };
 
-    const submitIpfsPassword = () => {
+    const submitIpfsPassword = async () => {
         if (vaultPassword) {
-            const url = getDecryptedIpfsUrl(ipfsCid, vaultPassword);
-            window.open(url, "_blank");
-            setIpfsModalOpen(false);
+            const viewerWindow = window.open('', "_blank");
+            try {
+                await openDecryptedIpfsFile(ipfsCid, vaultPassword, viewerWindow);
+                setIpfsModalOpen(false);
+            } catch (error) {
+                if (viewerWindow) viewerWindow.close();
+                alert(error.message);
+            }
         } else {
             alert("Vault Password is required");
         }
+    };
+
+    const handleApproveRequest = async (id, type) => {
+        setConfirmModal({
+            isOpen: true,
+            title: "Approve Request",
+            message: `Are you sure you want to approve this ${type} registration request?`,
+            onConfirm: async () => {
+                try {
+                    await approveRegistrationRequest(id, type);
+                    alert("Request approved successfully!");
+                    loadRequests(); 
+                } catch (error) { alert(`Failed to approve: ${error.message}`); }
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            }
+        });
+    };
+
+    const handleDenyRequest = async (id) => {
+        setConfirmModal({
+            isOpen: true,
+            title: "Deny Request",
+            message: "Are you sure you want to deny this request?",
+            isDestructive: true,
+            onConfirm: async () => {
+                try {
+                    await denyRegistrationRequest(id);
+                    alert("Request denied and removed.");
+                    loadRequests(); 
+                } catch (error) { alert(`Failed to deny: ${error.message}`); }
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            }
+        });
     };
 
     const handleDropStudent = async (id, name) => {
@@ -548,6 +558,12 @@ const RegistrarGradesView = ({
         });
     };
 
+    const sortedAndFilteredRequests = useMemo(() => {
+        let sortableItems = [...pendingRequests];
+        const searchTerm = requestSearchTerm.toLowerCase();
+        return sortableItems.filter(req => Object.values(req).some(val => String(val).toLowerCase().includes(searchTerm)));
+    }, [pendingRequests, requestSearchTerm]);
+
     const filteredGrades = grades.filter(grade => {
         if (!loggedInEmail) return false;
         const matchesDept = filterDept === 'All' || (grade.course || "").includes(filterDept) || (grade.subject_code || "").includes(filterDept);
@@ -569,15 +585,17 @@ const RegistrarGradesView = ({
         return { finalAverage: rawGrade };
     }, []);
 
+    const formatGradePayload = useCallback((rawGrade) => {
+        const payload = parseGradePayload(rawGrade);
+        const values = [
+            payload.midterm ? `Midterm: ${payload.midterm}` : null,
+            payload.finals ? `Finals: ${payload.finals}` : null,
+            payload.finalAverage ? `Equivalent: ${payload.finalAverage}` : null,
+        ].filter(Boolean);
+        return values.length > 0 ? values.join(' · ') : 'Not recorded';
+    }, [parseGradePayload]);
+
     const formatStudentStanding = useCallback((standing) => {
-        const normalizedStanding = String(standing || '').trim().toLowerCase();
-        if (normalizedStanding.startsWith('irreg:')) {
-            const status = normalizedStanding.split(':')[1]?.toUpperCase() || 'INC';
-            return `irreg:${status}`;
-        }
-        if (normalizedStanding === 'inc') {
-            return 'Incomplete (INC)';
-        }
         switch (standing) {
             case 'dropped':
                 return 'Dropped (D)';
@@ -587,291 +605,10 @@ const RegistrarGradesView = ({
                 return 'Withdrawn (W)';
             case 'incomplete':
                 return 'Incomplete (INC)';
-            case 'inactive':
-                return 'Inactive';
             default:
                 return 'Active';
         }
     }, []);
-
-    const isNonActiveStanding = useCallback((standing) => {
-        const normalizedStanding = String(standing || '').trim().toLowerCase();
-        return normalizedStanding.startsWith('irreg:') ||
-            ['dropped', 'unofficially_dropped', 'unknown_reason', 'withdrawn', 'incomplete', 'inc', 'inactive'].includes(normalizedStanding);
-    }, []);
-
-    const getGradeEquivalent = useCallback((grade) => {
-        const numericGrade = Number(grade);
-        if (Number.isNaN(numericGrade)) return '';
-        if (numericGrade >= 98.5) return '1.00';
-        if (numericGrade >= 94) return '1.25';
-        if (numericGrade >= 91) return '1.50';
-        if (numericGrade >= 88) return '1.75';
-        if (numericGrade >= 85) return '2.00';
-        if (numericGrade >= 82) return '2.25';
-        if (numericGrade >= 79) return '2.50';
-        if (numericGrade >= 75) return '3.00';
-        return '5.00';
-    }, []);
-
-    const formatStagedGradeDisplay = useCallback((rawGrade) => {
-        const payload = parseGradePayload(rawGrade);
-        const parts = [];
-        const numericMidterm = Number(payload.midterm);
-        const numericFinals = Number(payload.finals);
-        const hasMidterm = payload.midterm !== undefined && payload.midterm !== null && payload.midterm !== '';
-        const hasFinals = payload.finals !== undefined && payload.finals !== null && payload.finals !== '';
-
-        if (hasMidterm) {
-            parts.push(`Midterm: ${payload.midterm}`);
-        }
-
-        if (hasFinals) {
-            parts.push(`Finals: ${payload.finals}`);
-        }
-
-        let resolvedAverage = payload.finalAverage;
-        if ((resolvedAverage === undefined || resolvedAverage === null || resolvedAverage === '') && hasMidterm && hasFinals) {
-            if (!Number.isNaN(numericMidterm) && !Number.isNaN(numericFinals)) {
-                resolvedAverage = ((numericMidterm + numericFinals) / 2).toFixed(2);
-            }
-        }
-
-        if (resolvedAverage !== undefined && resolvedAverage !== null && resolvedAverage !== '') {
-            parts.push(`Average: ${resolvedAverage}`);
-            const equivalent = getGradeEquivalent(resolvedAverage);
-            if (equivalent) {
-                parts.push(`Equivalent: ${equivalent}`);
-            }
-        }
-
-        if (payload.standing && payload.standing !== 'active') {
-            parts.push(formatStudentStanding(payload.standing));
-        }
-
-        return parts.length ? parts.join(' | ') : String(rawGrade || '-');
-    }, [formatStudentStanding, getGradeEquivalent, parseGradePayload]);
-
-    const parseReviewTimestamp = useCallback((value) => {
-        if (!value) return 0;
-        const parsed = new Date(value).getTime();
-        return Number.isFinite(parsed) ? parsed : 0;
-    }, []);
-
-    const normalizeRegistrarReviewStatus = useCallback((status) => {
-        const normalized = String(status || '').trim().toLowerCase();
-        if (!normalized) return 'draft';
-        if (normalized.includes('registrarrejected') || normalized.includes('registrar_rejected')) return 'registrar_rejected';
-        if (normalized.includes('finalized')) return 'finalized';
-        if (normalized.includes('departmentapproved') || normalized.includes('forwarded') || normalized.includes('approved')) return 'forwarded';
-        if (normalized.includes('returned')) return 'returned';
-        if (normalized.includes('submitted') || normalized.includes('issued')) return 'submitted';
-        return 'draft';
-    }, []);
-
-    const getRegistrarReviewSummary = useCallback((records) => {
-        const meaningfulRecords = records
-            .map((record, index) => ({
-                record,
-                index,
-                timestamp: parseReviewTimestamp(record.date || record.Date),
-                normalizedStatus: normalizeRegistrarReviewStatus(record.status || record.Status),
-            }))
-            .filter(({ normalizedStatus }) => normalizedStatus !== 'draft');
-
-        const latestRecordEntry = meaningfulRecords.reduce((current, next) => {
-            if (!current) return next;
-            if (next.timestamp !== current.timestamp) {
-                return next.timestamp > current.timestamp ? next : current;
-            }
-
-            return next.index > current.index ? next : current;
-        }, null);
-
-        const status = latestRecordEntry?.normalizedStatus || 'draft';
-        const note =
-            status === 'returned' || status === 'registrar_rejected'
-                ? latestRecordEntry?.record?.note || latestRecordEntry?.record?.Note || ''
-                : '';
-
-        if (status === 'registrar_rejected') {
-            return {
-                status,
-                note,
-                label: 'Registrar Rejected',
-                toneClass: 'bg-rose-100 text-rose-700',
-            };
-        }
-
-        if (status === 'forwarded') {
-            return {
-                status,
-                note,
-                label: 'Submitted to Registrar',
-                toneClass: 'bg-violet-100 text-violet-700',
-            };
-        }
-
-        if (status === 'returned') {
-            return {
-                status,
-                note,
-                label: 'Returned to Faculty',
-                toneClass: 'bg-red-100 text-red-700',
-            };
-        }
-
-        if (status === 'submitted') {
-            return {
-                status,
-                note,
-                label: 'Submitted to Chairperson',
-                toneClass: 'bg-blue-100 text-blue-700',
-            };
-        }
-
-        if (status === 'finalized') {
-            return {
-                status,
-                note,
-                label: 'Finalized to Ledger',
-                toneClass: 'bg-emerald-100 text-emerald-700',
-            };
-        }
-
-        return {
-            status: 'draft',
-            note: '',
-            label: 'Draft',
-            toneClass: 'bg-slate-100 text-slate-700',
-        };
-    }, [normalizeRegistrarReviewStatus, parseReviewTimestamp]);
-
-    const getSectionEncodingSummary = useCallback((records) => {
-        const relevantRecords = records.filter((record) => {
-            const standing = String(record.standing || 'active').trim().toLowerCase();
-            return !isNonActiveStanding(standing);
-        });
-
-        const missingFinalsCount = relevantRecords.filter((record) => {
-            const finalsValue = record.finals;
-            const finalsNumber = Number(finalsValue);
-            return (
-                finalsValue === undefined ||
-                finalsValue === null ||
-                finalsValue === '' ||
-                Number.isNaN(finalsNumber) ||
-                finalsNumber <= 0
-            );
-        }).length;
-
-        if (relevantRecords.length === 0) {
-            return {
-                label: 'No Active Finals Needed',
-                toneClass: 'bg-slate-100 text-slate-700',
-                helperText: 'All listed students are under exempt standing.',
-            };
-        }
-
-        if (missingFinalsCount > 0) {
-            return {
-                label: 'Finals Missing',
-                toneClass: 'bg-amber-100 text-amber-800',
-                helperText: `${missingFinalsCount} student${missingFinalsCount === 1 ? '' : 's'} still missing finals grade.`,
-            };
-        }
-
-        return {
-            label: 'Grades Complete',
-            toneClass: 'bg-emerald-100 text-emerald-700',
-            helperText: 'All active students have finals grades encoded.',
-        };
-    }, [isNonActiveStanding]);
-
-    const groupedStagedGrades = useMemo(() => {
-        const canRecordBeFinalized = (record) => {
-            const payload = parseGradePayload(record.grade);
-            const standing = String(payload.standing || payload.remarks || 'active').trim().toLowerCase();
-            const finalsValue = payload.finals;
-            const finalsNumber = Number(finalsValue);
-            const hasFinalsGrade =
-                finalsValue !== undefined &&
-                finalsValue !== null &&
-                finalsValue !== '' &&
-                !Number.isNaN(finalsNumber) &&
-                finalsNumber > 0;
-
-            if (isNonActiveStanding(standing)) {
-                return true;
-            }
-
-            return hasFinalsGrade;
-        };
-
-        const groups = {};
-        stagedGrades.forEach(g => {
-            const key = `${g.course}-${g.yearLevel}-${g.section}-${g.subjectCode}`;
-            if (!groups[key]) {
-                groups[key] = {
-                    course: g.course,
-                    yearLevel: g.yearLevel,
-                    section: g.section,
-                    subjectCode: g.subjectCode,
-                    records: []
-                };
-            }
-            groups[key].records.push(g);
-        });
-
-        Object.values(groups).forEach((group) => {
-            group.canFinalize = group.records.every(canRecordBeFinalized);
-        });
-        
-        return Object.values(groups).sort((a, b) => 
-            String(a.course).localeCompare(String(b.course)) || 
-            String(a.yearLevel).localeCompare(String(b.yearLevel)) || 
-            String(a.section).localeCompare(String(b.section)) ||
-            String(a.subjectCode).localeCompare(String(b.subjectCode))
-        );
-    }, [isNonActiveStanding, parseGradePayload, stagedGrades]);
-
-    const handleFinalizeBatch = async (records) => {
-        const hasIncompleteFinals = records.some((record) => {
-            const payload = parseGradePayload(record.grade);
-            const standing = String(payload.standing || payload.remarks || 'active').trim().toLowerCase();
-            const finalsValue = payload.finals;
-            const finalsNumber = Number(finalsValue);
-            const hasFinalsGrade =
-                finalsValue !== undefined &&
-                finalsValue !== null &&
-                finalsValue !== '' &&
-                !Number.isNaN(finalsNumber) &&
-                finalsNumber > 0;
-
-            if (isNonActiveStanding(standing)) {
-                return false;
-            }
-
-            return !hasFinalsGrade;
-        });
-
-        if (hasIncompleteFinals) {
-            alert("Finalize to ledger is only available after finals grades are completed for this section.");
-            return;
-        }
-        if (!window.confirm(`Are you sure you want to commit all ${records.length} grades in this section to the blockchain ledger?`)) return;
-        
-        try {
-            for (const g of records) {
-                await finalizeGrade(g.stagingId, loggedInEmail);
-            }
-            alert("Section grades officially committed to the ledger!");
-            loadStagedGrades();
-            loadGrades(true);
-        } catch (err) {
-            alert(`Finalization failed: ${err.message}`);
-        }
-    };
 
     const facultyNameLookup = useMemo(
         () =>
@@ -898,7 +635,7 @@ const RegistrarGradesView = ({
                     payload,
                     standing,
                     standingLabel: formatStudentStanding(standing),
-                    hasPriorityStatus: isNonActiveStanding(standing),
+                    hasPriorityStatus: ['dropped', 'unofficially_dropped', 'withdrawn', 'incomplete'].includes(standing),
                     facultyEmail,
                     facultyName,
                     sectionName,
@@ -907,81 +644,11 @@ const RegistrarGradesView = ({
                     midterm: payload.midterm || '',
                     finals: payload.finals || '',
                     finalAverage: payload.finalAverage || payload.final || payload.grade || '',
-                    gradeEquivalent: getGradeEquivalent(payload.finalAverage || payload.final || payload.grade || ''),
                     flagged: !!payload.flagged,
                 };
             }),
-        [filteredGrades, parseGradePayload, facultyNameLookup, formatStudentStanding, getGradeEquivalent, isNonActiveStanding]
+        [filteredGrades, parseGradePayload, facultyNameLookup, formatStudentStanding]
     );
-
-    const ledgerBlocks = useMemo(() => {
-        const genesisHash = buildLedgerHash(`PLV-BLOCKGO|GENESIS|registrar-channel|${activeSemester}`);
-        const committedRecords = filteredGrades
-            .filter((grade) => isFinalizedLedgerStatus(grade.status || grade.Status))
-            .slice()
-            .sort((left, right) => {
-                const leftTime = parseReviewTimestamp(left.date || left.Date || left.updatedAt || left.createdAt);
-                const rightTime = parseReviewTimestamp(right.date || right.Date || right.updatedAt || right.createdAt);
-                if (leftTime !== rightTime) return leftTime - rightTime;
-                return String(left.id || '').localeCompare(String(right.id || ''));
-            });
-
-        let previousHash = genesisHash;
-        const gradeBlocks = committedRecords.map((grade, index) => {
-            const payload = parseGradePayload(grade.grade);
-            const blockSeed = JSON.stringify({
-                index: index + 1,
-                previousHash,
-                id: grade.id,
-                student: grade.student_hash || grade.student_no || grade.studentNo,
-                subject: grade.subject_code || grade.subjectCode,
-                grade: payload,
-                status: grade.status || grade.Status,
-                timestamp: grade.date || grade.Date || grade.updatedAt || grade.createdAt || ''
-            });
-            const blockHash = buildLedgerHash(blockSeed);
-            const block = {
-                index: index + 1,
-                type: 'grade',
-                title: 'Finalized Grade Block',
-                recordId: grade.id || `ledger-record-${index + 1}`,
-                student: grade.student_no || grade.studentNo || grade.student_hash || 'Hashed student',
-                studentName: grade.student_name || grade.studentName || 'Protected student record',
-                subject: grade.subject_code || grade.subjectCode || 'N/A',
-                section: grade.section || 'N/A',
-                course: grade.course || 'N/A',
-                status: grade.status || grade.Status || 'Finalized',
-                timestamp: grade.date || grade.Date || grade.updatedAt || grade.createdAt,
-                previousHash,
-                blockHash,
-                ipfsCid: grade.ipfs_cid || grade.IpfsCID || grade.ipfsCid || '',
-                gradeSummary: formatStagedGradeDisplay(grade.grade)
-            };
-            previousHash = blockHash;
-            return block;
-        });
-
-        return [
-            {
-                index: 0,
-                type: 'genesis',
-                title: 'Genesis Block',
-                recordId: 'PLV-BLOCKGO-GENESIS',
-                student: 'System',
-                studentName: 'Academic ledger initialized',
-                subject: 'Network Root',
-                section: 'Registrar Channel',
-                course: 'PLV BLOCKGO',
-                status: 'Immutable Root',
-                timestamp: 'Created at network boot',
-                previousHash: '0'.repeat(64),
-                blockHash: genesisHash,
-                ipfsCid: '',
-                gradeSummary: 'Anchor block for all future finalized grade blocks.'
-            },
-            ...gradeBlocks
-        ];
-    }, [activeSemester, filteredGrades, formatStagedGradeDisplay, parseGradePayload, parseReviewTimestamp]);
 
     const facultyMonitoringList = useMemo(() => {
         const grouped = facultyMonitoringRecords.reduce((acc, record) => {
@@ -1005,20 +672,14 @@ const RegistrarGradesView = ({
                     faculty.records.reduce((acc, record) => {
                         const sectionKey = `${record.sectionName}|||${record.course || ''}`;
                         if (!acc[sectionKey]) {
-                            const encodingSummary = getSectionEncodingSummary([record]);
-                            const reviewSummary = getRegistrarReviewSummary([record]);
                             acc[sectionKey] = {
                                 sectionKey,
                                 sectionName: record.sectionName,
                                 department: record.course || 'N/A',
                                 records: [],
-                                encodingSummary,
-                                reviewSummary,
                             };
                         }
                         acc[sectionKey].records.push(record);
-                        acc[sectionKey].encodingSummary = getSectionEncodingSummary(acc[sectionKey].records);
-                        acc[sectionKey].reviewSummary = getRegistrarReviewSummary(acc[sectionKey].records);
                         return acc;
                     }, {})
                 ).sort((left, right) => {
@@ -1042,7 +703,7 @@ const RegistrarGradesView = ({
                 right.priorityCount - left.priorityCount ||
                 left.facultyName.localeCompare(right.facultyName)
             );
-    }, [facultyMonitoringRecords, getRegistrarReviewSummary, getSectionEncodingSummary]);
+    }, [facultyMonitoringRecords]);
 
     const selectedFacultyMonitoringData = useMemo(() => {
         if (!selectedFacultyReview) return facultyMonitoringList[0] || null;
@@ -1065,44 +726,6 @@ const RegistrarGradesView = ({
             ...prev,
             [sectionKey]: !prev[sectionKey],
         }));
-    };
-
-    const openRegistrarRejectModal = (section) => {
-        setRegistrarRejectNote(section?.reviewSummary?.note || '');
-        setRegistrarRejectModal({ isOpen: true, section });
-    };
-
-    const closeRegistrarRejectModal = () => {
-        if (registrarRejectLoading) return;
-        setRegistrarRejectModal({ isOpen: false, section: null });
-        setRegistrarRejectNote('');
-    };
-
-    const handleRegistrarRejectSection = async () => {
-        const selectedSection = registrarRejectModal.section;
-        const trimmedNote = registrarRejectNote.trim();
-
-        if (!selectedSection) return;
-        if (!trimmedNote) {
-            alert('A rejection note is required before rejecting grades.');
-            return;
-        }
-
-        setRegistrarRejectLoading(true);
-        try {
-            for (const record of selectedSection.records) {
-                await returnGrade(record.id, trimmedNote, loggedInEmail);
-            }
-            alert('Section grades rejected back to faculty successfully.');
-            setRegistrarRejectLoading(false);
-            setRegistrarRejectModal({ isOpen: false, section: null });
-            setRegistrarRejectNote('');
-            loadGrades(true);
-        } catch (error) {
-            alert(`Failed to reject section grades: ${error.message}`);
-        } finally {
-            setRegistrarRejectLoading(false);
-        }
     };
 
     const handleDownloadLedgerPDF = () => {
@@ -1236,236 +859,36 @@ const RegistrarGradesView = ({
         }
     };
 
-    const handleDownloadBulkEnrollmentTemplate = () => {
-        const rows = [
-            ['student_id', 'first_name', 'last_name', 'middle_name', 'sex', 'email', 'number', 'address', 'birthday'],
-            ['26-0001', 'Juan', 'Dela Cruz', 'Andres', 'Male', '26-0001@plv.edu.ph', '09123456789', 'Valenzuela City', '05/15/2005'],
-            ['26-0002', 'Maria', 'Santos', 'Lopez', 'Female', '26-0002@plv.edu.ph', '09987654321', 'Valenzuela City', '08/20/2005'],
-        ];
-
-        downloadCsvFile(
-            buildCsvContent(rows),
-            'bulk-enroll-template.csv'
-        );
-    };
-
-    const handleStudentCsvAction = (mode) => {
-        if (bulkEnrollLoading) return;
-
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel';
-
-        input.onchange = async (event) => {
-            const file = event.target.files?.[0];
-            if (!file) return;
-
-            setBulkEnrollLoading(true);
-            setBulkEnrollResult(null);
-
-            try {
-                const result = mode === 'update'
-                    ? await registrarBulkUpdateStudents(file)
-                    : await registrarBulkEnrollStudents(file);
-                setBulkEnrollResult(result);
-                alert(result.message || 'Bulk enrollment completed.');
-            } catch (error) {
-                const message = error.message || 'Bulk enrollment failed.';
-                setBulkEnrollResult({ status: 'Error', message, failed: 1, successful: 0 });
-                alert(message);
-            } finally {
-                setBulkEnrollLoading(false);
-            }
-        };
-
-        input.click();
-    };
-
-    const handleBulkEnroll = () => handleStudentCsvAction('enroll');
-    const handleBulkUpdateInfo = () => handleStudentCsvAction('update');
-
-    const updateTemporaryStudentField = (field, value) => {
-        setTemporaryStudentForm((current) => ({ ...current, [field]: value }));
-    };
-
-    const handleAddTemporaryStudent = async (event) => {
-        event.preventDefault();
-        if (temporaryStudentLoading) return;
-
-        try {
-            setTemporaryStudentLoading(true);
-            const result = await registrarAddTemporaryStudent({
-                ...temporaryStudentForm,
-                department: temporaryStudentForm.department || departments[0],
-            });
-            alert(result.message || 'Temporary irregular student added.');
-            setTemporaryStudentForm({
-                studentNo: '',
-                firstName: '',
-                middleName: '',
-                lastName: '',
-                email: '',
-                department: '',
-                section: '',
-                birthday: '',
-                sex: '',
-            });
-            await loadApprovedStudents();
-        } catch (error) {
-            alert(error.message || 'Failed to add temporary student.');
-        } finally {
-            setTemporaryStudentLoading(false);
-        }
-    };
-
-    const handleDownloadFacultyUploadTemplate = () => {
-        const rows = [
-            ['email', 'first_name', 'last_name', 'department', 'birthday'],
-            ['ana.cruz@plv.edu.ph', 'Ana', 'Cruz', 'Bachelor of Science in Information Technology', '03/14/1990'],
-            ['marco.reyes@plv.edu.ph', 'Marco', 'Reyes', 'Bachelor of Science in Civil Engineering', '11/02/1988'],
-        ];
-
-        downloadCsvFile(
-            buildCsvContent(rows),
-            'bulk-faculty-template.csv'
-        );
-    };
-
-    const handleFacultyCsvAction = (mode) => {
-        if (facultyBulkUploadLoading) return;
-
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel';
-
-        input.onchange = async (event) => {
-            const file = event.target.files?.[0];
-            if (!file) return;
-
-            setFacultyBulkUploadLoading(true);
-            setFacultyBulkUploadResult(null);
-
-            try {
-                const result = await registrarBulkUploadFaculty(file, mode);
-                setFacultyBulkUploadResult(result);
-                alert(result.message || 'Faculty upload completed.');
-                loadApprovedFaculties();
-            } catch (error) {
-                const message = error.message || 'Faculty upload failed.';
-                setFacultyBulkUploadResult({ status: 'Error', message, failed: 1, successful: 0 });
-                alert(message);
-            } finally {
-                setFacultyBulkUploadLoading(false);
-            }
-        };
-
-        input.click();
-    };
-
-    const handleBulkFacultyUpload = () => handleFacultyCsvAction('enroll');
-    const handleBulkFacultyUpdateInfo = () => handleFacultyCsvAction('update');
-
-    const handleDownloadChairpersonUploadTemplate = () => {
-        const rows = [
-            ['email', 'first_name', 'last_name', 'department', 'birthday'],
-            ['chair.it@plv.edu.ph', 'Carla', 'Reyes', 'Bachelor of Science in Information Technology', '04/20/1987'],
-            ['chair.ce@plv.edu.ph', 'Miguel', 'Santos', 'Bachelor of Science in Civil Engineering', '09/11/1983'],
-        ];
-
-        downloadCsvFile(
-            buildCsvContent(rows),
-            'bulk-chairperson-template.csv'
-        );
-    };
-
-    const handleChairpersonCsvAction = (mode) => {
-        if (chairpersonBulkUploadLoading) return;
-
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel';
-
-        input.onchange = async (event) => {
-            const file = event.target.files?.[0];
-            if (!file) return;
-
-            setChairpersonBulkUploadLoading(true);
-            setChairpersonBulkUploadResult(null);
-
-            try {
-                const result = await registrarBulkUploadChairperson(file, mode);
-                setChairpersonBulkUploadResult(result);
-                alert(result.message || 'Chairperson upload completed.');
-                loadApprovedAdmins();
-            } catch (error) {
-                const message = error.message || 'Chairperson upload failed.';
-                setChairpersonBulkUploadResult({ status: 'Error', message, failed: 1, successful: 0 });
-                alert(message);
-            } finally {
-                setChairpersonBulkUploadLoading(false);
-            }
-        };
-
-        input.click();
-    };
-
-    const handleBulkChairpersonUpload = () => handleChairpersonCsvAction('enroll');
-    const handleBulkChairpersonUpdateInfo = () => handleChairpersonCsvAction('update');
-
-    const isSystemAdministrationView = systemAdminTabs.includes(mainTab);
-
     return (
         <div className="flex h-screen w-full flex-col bg-slate-50 font-sans fixed inset-0 z-[100] overflow-auto">
-            <RegistrarHeader registrarData={{ name: loggedInName, semester: activeSemester }} onLogout={() => { localStorage.removeItem('token'); window.location.reload(); }} />
-            <div className="flex flex-1 flex-col gap-6 overflow-hidden p-4 md:flex-row md:p-6">
+            <RegistrarHeader registrarData={{ name: loggedInName, semester: activeSemester }} onLogout={onLogout} />
+            <div className="flex flex-col md:flex-row flex-1 overflow-hidden p-4 md:p-6 gap-6">
                 <RegistrarSidebar
                     activeTab={mainTab}
                     setActiveTab={setMainTab}
                     chatUnreadCount={chatUnreadCount}
                     latestChatNotice={latestChatNotice}
                     onOpenChat={onOpenChat}
+                    managementDefaultTab="grades"
+                    managementMenuItems={managementMenuItems}
                 />
-                {isSystemAdministrationView && (
-                    <aside className="w-full max-w-none self-start rounded-2xl border border-slate-200 bg-slate-100 p-4 shadow-sm md:max-w-[220px] lg:sticky lg:top-6">
-                        <div className="mb-4 border-b border-slate-200 pb-3">
-                            <h2 className="text-lg font-bold text-[#003366]">System Management</h2>
-                        </div>
-
-                        <nav className="flex gap-2 overflow-x-auto pb-1 md:flex-col md:overflow-visible md:pb-0">
-                            {systemAdminMenuItems.map((item) => {
-                                const isActive = mainTab === item.id;
-
-                                return (
-                                    <button
-                                        key={item.id}
-                                        type="button"
-                                        onClick={() => setMainTab(item.id)}
-                                        className={`min-w-[170px] rounded-xl border-b-2 px-4 py-3 text-left text-sm font-medium transition md:w-full md:min-w-0 ${
-                                            isActive
-                                                ? 'border-yellow-400 bg-[#003366] text-yellow-400 shadow-sm'
-                                                : 'border-transparent text-slate-700 hover:bg-slate-100'
-                                        }`}
-                                    >
-                                        {item.label}
-                                    </button>
-                                );
-                            })}
-                        </nav>
-                    </aside>
-                )}
-                <main className="min-w-0 flex-1 overflow-y-auto md:pr-2">
+                <main className="flex-1 overflow-y-auto pb-24 pr-2">
                     {mainTab === 'dashboard' && <RegistrarDashboard grades={grades} />}
                     {mainTab === 'encoding' && <EncodingPeriod onResetEncodingSeason={handleResetEncodingSeason} />}
                     {mainTab === 'studentlist' && <StudentListImport />}
                     {mainTab === 'sectioning' && (
-                        <div className="space-y-4">
-                            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <label className="block max-w-xl">
-                                    <span className="mb-2 block text-sm font-medium text-slate-700">Department</span>
+                        <div className="space-y-3">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-900">Department Sections</h2>
+                                
+                            </div>
+                            <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm lg:grid-cols-[1fr_250px] lg:items-end">
+                                <label className="block">
+                                    <span className="mb-1 block text-[11px] font-semibold text-slate-600">Department</span>
                                     <select
                                         value={sectioningDepartment}
                                         onChange={(event) => setSectioningDepartment(event.target.value)}
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#003366]"
+                                        className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-xs outline-none focus:border-[#003366]"
                                     >
                                         {departments.map((department) => (
                                             <option key={department} value={department}>
@@ -1474,192 +897,27 @@ const RegistrarGradesView = ({
                                         ))}
                                     </select>
                                 </label>
+                                
                             </div>
                             <RegistrarStudentSectioning chairpersonDepartment={sectioningDepartment} />
                         </div>
                     )}
                     {mainTab === 'bulkEnroll' && (
-                        <div className="space-y-4">
-                            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <div className="flex flex-col gap-4">
-                                    <div className="max-w-2xl">
-                                        <h3 className="text-xl font-bold text-[#003366]">Register User</h3>
-                                        <p className="mt-1 text-sm text-slate-500">
-                                            Required columns: student ID, first name, last name, middle name, sex, email, number, address, and birthday. Student ID must use `xx-xxxx`, and birthday must use `MM/DD/YYYY`.
-                                        </p>
-                                    </div>
-                                </div>
-                                {bulkEnrollResult ? (
-                                    <div className={`mt-4 rounded-xl border p-4 text-sm ${bulkEnrollResult.status === 'Error' || bulkEnrollResult.failed > 0 ? 'border-yellow-300 bg-yellow-50 text-yellow-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
-                                        <p className="font-semibold">{bulkEnrollResult.status}</p>
-                                        <p>{bulkEnrollResult.message}</p>
-                                        {typeof bulkEnrollResult.successful !== 'undefined' ? (
-                                            <p className="mt-1">Successful: {bulkEnrollResult.successful} | Failed: {bulkEnrollResult.failed || 0}</p>
-                                        ) : null}
-                                        {Array.isArray(bulkEnrollResult.errors) && bulkEnrollResult.errors.length > 0 ? (
-                                            <div className="mt-3 rounded-lg border border-yellow-200 bg-white/70 p-3">
-                                                <p className="font-semibold text-slate-800">Row Issues</p>
-                                                <ul className="mt-2 space-y-1 text-slate-700">
-                                                    {bulkEnrollResult.errors.slice(0, 10).map((errorItem, index) => (
-                                                        <li key={`${errorItem.row || 'row'}-${index}`}>
-                                                            Row {errorItem.row || '?'} ({errorItem.identifier || 'Unknown'}): {errorItem.reason}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                ) : null}
-                                <div className="mt-5 flex flex-wrap gap-3 border-t border-slate-200 pt-4">
-                                    <button
-                                        type="button"
-                                        onClick={handleDownloadBulkEnrollmentTemplate}
-                                        className={downloadTemplateButtonClass}
-                                    >
-                                        Download Template
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleBulkEnroll}
-                                        disabled={bulkEnrollLoading}
-                                        className="inline-flex items-center justify-center rounded-xl bg-[#003366] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#00264d]"
-                                    >
-                                        {bulkEnrollLoading ? 'Uploading...' : 'Upload Students'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleBulkUpdateInfo}
-                                        disabled={bulkEnrollLoading}
-                                        className="inline-flex items-center justify-center rounded-xl border border-[#003366] bg-white px-5 py-3 text-sm font-semibold text-[#003366] transition hover:bg-slate-50"
-                                    >
-                                        {bulkEnrollLoading ? 'Uploading...' : 'Update Student Info'}
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <div className="flex flex-col gap-4">
-                                    <div className="max-w-3xl">
-                                        <h3 className="text-xl font-bold text-[#003366]">Register Faculty</h3>
-                                        <p className="mt-1 text-sm text-slate-500">
-                                            Required columns: email, first name, last name, department, and birthday. No faculty ID number is required. Birthday must use `MM/DD/YYYY` and becomes the faculty member&apos;s default password for first login.
-                                        </p>
-                                        <p className="mt-1 text-xs text-slate-500">
-                                            For updates, email is required. You can update name, birthday, and department. When department changes, the faculty member&apos;s department assignments move to the new department automatically.
-                                        </p>
-                                    </div>
-                                </div>
-                                {facultyBulkUploadResult ? (
-                                    <div className={`mt-4 rounded-xl border p-4 text-sm ${facultyBulkUploadResult.status === 'Error' || facultyBulkUploadResult.failed > 0 ? 'border-yellow-300 bg-yellow-50 text-yellow-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
-                                        <p className="font-semibold">{facultyBulkUploadResult.status}</p>
-                                        <p>{facultyBulkUploadResult.message}</p>
-                                        {typeof facultyBulkUploadResult.successful !== 'undefined' ? (
-                                            <p className="mt-1">Successful: {facultyBulkUploadResult.successful} | Failed: {facultyBulkUploadResult.failed || 0}</p>
-                                        ) : null}
-                                        {Array.isArray(facultyBulkUploadResult.errors) && facultyBulkUploadResult.errors.length > 0 ? (
-                                            <div className="mt-3 rounded-lg border border-yellow-200 bg-white/70 p-3">
-                                                <p className="font-semibold text-slate-800">Row Issues</p>
-                                                <ul className="mt-2 space-y-1 text-slate-700">
-                                                    {facultyBulkUploadResult.errors.slice(0, 10).map((errorItem, index) => (
-                                                        <li key={`${errorItem.row || 'row'}-${index}`}>
-                                                            Row {errorItem.row || '?'} ({errorItem.identifier || 'Unknown'}): {errorItem.reason}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                ) : null}
-                                <div className="mt-5 flex flex-wrap gap-3 border-t border-slate-200 pt-4">
-                                    <button
-                                        type="button"
-                                        onClick={handleDownloadFacultyUploadTemplate}
-                                        className={downloadTemplateButtonClass}
-                                    >
-                                        Download Template
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleBulkFacultyUpload}
-                                        disabled={facultyBulkUploadLoading}
-                                        className="inline-flex items-center justify-center rounded-xl bg-[#003366] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#00264d]"
-                                    >
-                                        {facultyBulkUploadLoading ? 'Uploading...' : 'Upload Faculty'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleBulkFacultyUpdateInfo}
-                                        disabled={facultyBulkUploadLoading}
-                                        className="inline-flex items-center justify-center rounded-xl border border-[#003366] bg-white px-5 py-3 text-sm font-semibold text-[#003366] transition hover:bg-slate-50"
-                                    >
-                                        {facultyBulkUploadLoading ? 'Uploading...' : 'Update Faculty Info'}
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <div className="flex flex-col gap-4">
-                                    <div className="max-w-3xl">
-                                        <h3 className="text-xl font-bold text-[#003366]">Register Chairperson</h3>
-                                        <p className="mt-1 text-sm text-slate-500">
-                                            Required columns: email, first name, last name, department, and birthday. Missing required fields will be rejected. Birthday must use `MM/DD/YYYY` and becomes the chairperson&apos;s default password for first login.
-                                        </p>
-                                        <p className="mt-1 text-xs text-slate-500">
-                                            For updates, email is required. You can update name, birthday, and department. Uploaded chairperson accounts are created as department chairperson users automatically.
-                                        </p>
-                                    </div>
-                                </div>
-                                {chairpersonBulkUploadResult ? (
-                                    <div className={`mt-4 rounded-xl border p-4 text-sm ${chairpersonBulkUploadResult.status === 'Error' || chairpersonBulkUploadResult.failed > 0 ? 'border-yellow-300 bg-yellow-50 text-yellow-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
-                                        <p className="font-semibold">{chairpersonBulkUploadResult.status}</p>
-                                        <p>{chairpersonBulkUploadResult.message}</p>
-                                        {typeof chairpersonBulkUploadResult.successful !== 'undefined' ? (
-                                            <p className="mt-1">Successful: {chairpersonBulkUploadResult.successful} | Failed: {chairpersonBulkUploadResult.failed || 0}</p>
-                                        ) : null}
-                                        {Array.isArray(chairpersonBulkUploadResult.errors) && chairpersonBulkUploadResult.errors.length > 0 ? (
-                                            <div className="mt-3 rounded-lg border border-yellow-200 bg-white/70 p-3">
-                                                <p className="font-semibold text-slate-800">Row Issues</p>
-                                                <ul className="mt-2 space-y-1 text-slate-700">
-                                                    {chairpersonBulkUploadResult.errors.slice(0, 10).map((errorItem, index) => (
-                                                        <li key={`${errorItem.row || 'row'}-${index}`}>
-                                                            Row {errorItem.row || '?'} ({errorItem.identifier || 'Unknown'}): {errorItem.reason}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                ) : null}
-                                <div className="mt-5 flex flex-wrap gap-3 border-t border-slate-200 pt-4">
-                                    <button
-                                        type="button"
-                                        onClick={handleDownloadChairpersonUploadTemplate}
-                                        className={downloadTemplateButtonClass}
-                                    >
-                                        Download Template
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleBulkChairpersonUpload}
-                                        disabled={chairpersonBulkUploadLoading}
-                                        className="inline-flex items-center justify-center rounded-xl bg-[#003366] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#00264d]"
-                                    >
-                                        {chairpersonBulkUploadLoading ? 'Uploading...' : 'Upload Chairperson'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleBulkChairpersonUpdateInfo}
-                                        disabled={chairpersonBulkUploadLoading}
-                                        className="inline-flex items-center justify-center rounded-xl border border-[#003366] bg-white px-5 py-3 text-sm font-semibold text-[#003366] transition hover:bg-slate-50"
-                                    >
-                                        {chairpersonBulkUploadLoading ? 'Uploading...' : 'Update Chairperson Info'}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                        <StudentEnrollmentManagement programs={departments} />
                     )}
+                    {mainTab === 'createAccounts' && <StaffAccountCreation />}
+                    {mainTab === 'curriculum' && <CurriculumManagement />}
+                    {mainTab === 'tickets' && <RegistrarSupportTickets />}
+                    {mainTab === 'passwordResets' && <PasswordManagement
+                        students={approvedStudents}
+                        faculties={approvedFaculties}
+                        departmentAdmins={approvedAdmins}
+                        onRefresh={() => Promise.all([loadApprovedStudents(), loadApprovedAdmins(), loadApprovedFaculties()])}
+                    />}
                     {mainTab === 'sectionsCreated' && <RegistrarSectionsCreated />}
                     {mainTab === 'reports' && (
                         <div className="flex flex-col gap-8">
-                            <SystemLogs />
+                            <SystemLogs grades={grades} />
                             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                                 <h3 className="mb-6 text-xl font-bold text-[#003366]">System Compliance Report Preview</h3>
                                 <PdfReportViewer title="PLV System Activity & Compliance" />
@@ -1675,6 +933,14 @@ const RegistrarGradesView = ({
                                             <option value="All">All Departments</option>
                                             {departments.map(d => <option key={d} value={d}>{d}</option>)}
                                         </select>
+                                        <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold outline-none focus:border-[#003366]">
+                                            <option value="All">All Year Level</option>
+                                            <option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option>
+                                        </select>
+                                        <select value={filterSection} onChange={(e) => setFilterSection(e.target.value)} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold outline-none focus:border-[#003366]">
+                                            <option value="All">All Sections</option>
+                                            {[...Array(15)].map((_, i) => <option key={i+1} value={String(i+1)}>{i+1}</option>)}
+                                        </select>
                                     </div>
                                     <div className="flex gap-3">
                                         <button onClick={handleDownloadLedgerPDF} className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-emerald-700">Export PDF</button>
@@ -1682,98 +948,11 @@ const RegistrarGradesView = ({
                                     </div>
                                 </div>
                             </div>
-                            <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
-                                    <div>
-                                        <h3 className="text-xl font-bold text-[#003366]">PLV Grades Ledger Chain</h3>
-                                        <p className="mt-1 text-sm text-slate-500">
-                                            Block 0 anchors the ledger. Finalized grade records are appended as linked blocks.
-                                        </p>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2 text-xs font-bold uppercase">
-                                        <span className="rounded-full bg-[#003366] px-3 py-2 text-white">
-                                            Blocks: {ledgerBlocks.length}
-                                        </span>
-                                        <span className="rounded-full bg-emerald-100 px-3 py-2 text-emerald-700">
-                                            Grade Blocks: {Math.max(ledgerBlocks.length - 1, 0)}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="mt-5 space-y-4">
-                                    {ledgerBlocks.map((block, index) => (
-                                        <div
-                                            key={`${block.type}-${block.index}-${block.recordId}`}
-                                            className={`rounded-2xl border p-4 ${
-                                                block.type === 'genesis'
-                                                    ? 'border-[#003366] bg-[#003366]/5'
-                                                    : 'border-slate-200 bg-slate-50'
-                                            }`}
-                                        >
-                                            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                                                <div>
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <span className={`rounded-full px-3 py-1 text-xs font-black uppercase ${
-                                                            block.type === 'genesis'
-                                                                ? 'bg-[#003366] text-yellow-300'
-                                                                : 'bg-emerald-100 text-emerald-700'
-                                                        }`}>
-                                                            Block #{block.index}
-                                                        </span>
-                                                        <h4 className="text-lg font-bold text-slate-900">{block.title}</h4>
-                                                    </div>
-                                                    <p className="mt-2 text-sm text-slate-600">
-                                                        {block.course} / {block.section} / {block.subject}
-                                                    </p>
-                                                    <p className="mt-1 text-sm font-semibold text-slate-800">
-                                                        {block.studentName} ({block.student})
-                                                    </p>
-                                                </div>
-                                                <div className="text-left lg:text-right">
-                                                    <p className="text-xs font-bold uppercase text-slate-500">Status</p>
-                                                    <p className="mt-1 text-sm font-black text-[#003366]">{block.status}</p>
-                                                    <p className="mt-1 text-xs text-slate-500">{formatLedgerTimestamp(block.timestamp)}</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="mt-4 grid gap-3 text-xs md:grid-cols-2">
-                                                <div className="rounded-xl border border-slate-200 bg-white p-3">
-                                                    <p className="font-bold uppercase text-slate-500">Previous Hash</p>
-                                                    <p className="mt-2 break-all font-mono text-slate-700">{block.previousHash}</p>
-                                                </div>
-                                                <div className="rounded-xl border border-slate-200 bg-white p-3">
-                                                    <p className="font-bold uppercase text-slate-500">Block Hash</p>
-                                                    <p className="mt-2 break-all font-mono text-slate-900">{block.blockHash}</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm md:flex-row md:items-center md:justify-between">
-                                                <div>
-                                                    <p className="font-semibold text-slate-700">Record: {block.recordId}</p>
-                                                    <p className="mt-1 text-slate-500">{block.gradeSummary}</p>
-                                                </div>
-                                                {block.ipfsCid ? (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleViewIpfs(block.ipfsCid)}
-                                                        className="rounded-xl border border-[#003366] px-4 py-2 text-sm font-bold text-[#003366] transition hover:bg-[#003366] hover:text-white"
-                                                    >
-                                                        View IPFS File
-                                                    </button>
-                                                ) : null}
-                                            </div>
-
-                                            {index < ledgerBlocks.length - 1 ? (
-                                                <div className="mx-auto mt-4 h-6 w-px bg-slate-300" />
-                                            ) : null}
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-                            <div className="grid gap-6 xl:grid-cols-[250px_minmax(0,1fr)]">
-                                <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:max-w-[280px]">
+                            <div className="grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
+                                <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                                     <div className="border-b border-slate-200 px-5 py-4">
-                                        <h3 className="text-lg font-bold text-[#003366]">Faculty Submission Review</h3>
+                                        <h3 className="text-lg font-bold text-[#003366]">Faculty Encoding Monitoring</h3>
+                                        
                                     </div>
                                     <div className="max-h-[720px] overflow-y-auto p-4">
                                         {facultyMonitoringList.length === 0 ? (
@@ -1804,6 +983,12 @@ const RegistrarGradesView = ({
                                                             </span>
                                                         ) : null}
                                                     </div>
+                                                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-600">
+                                                        <span className="rounded-full bg-white px-3 py-1">Sections: {faculty.totalSections}</span>
+                                                        <span className="rounded-full bg-white px-3 py-1">Records: {faculty.totalRecords}</span>
+                                                        <span className="rounded-full bg-white px-3 py-1">Special Status: {faculty.priorityCount}</span>
+                                                        <span className="rounded-full bg-white px-3 py-1">Flagged: {faculty.flaggedCount}</span>
+                                                    </div>
                                                 </button>
                                             );
                                         })}
@@ -1822,9 +1007,15 @@ const RegistrarGradesView = ({
                                                     <h3 className="text-xl font-bold text-[#003366]">{selectedFacultyMonitoringData.facultyName}</h3>
                                                     <p className="text-sm text-slate-500">{selectedFacultyMonitoringData.facultyEmail}</p>
                                                 </div>
+                                                <div className="flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
+                                                    <span className="rounded-full bg-slate-100 px-3 py-2">Sections: {selectedFacultyMonitoringData.totalSections}</span>
+                                                    <span className="rounded-full bg-slate-100 px-3 py-2">Records: {selectedFacultyMonitoringData.totalRecords}</span>
+                                                    <span className="rounded-full bg-red-50 px-3 py-2 text-red-700">D / UD / W / INC: {selectedFacultyMonitoringData.priorityCount}</span>
+                                                    <span className="rounded-full bg-amber-50 px-3 py-2 text-amber-700">Flagged: {selectedFacultyMonitoringData.flaggedCount}</span>
+                                                </div>
                                                 <div className="flex flex-wrap gap-2 mt-2 lg:mt-0">
                                                     <button onClick={() => handleExportFacultySummaryPDF(selectedFacultyMonitoringData)} className="rounded-xl border border-[#003366] bg-white px-4 py-2 text-sm font-bold text-[#003366] transition hover:bg-[#003366] hover:text-white">
-                                                        Export for Signing
+                                                        Export Summary for Signing
                                                     </button>
                                                 </div>
                                             </div>
@@ -1839,43 +1030,11 @@ const RegistrarGradesView = ({
                                                                 <div>
                                                                     <p className="text-base font-bold text-slate-900">{section.sectionName}</p>
                                                                     <p className="text-sm text-slate-500">{section.department}</p>
-                                                                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                                                                        <span className={`rounded-full px-3 py-1 text-[11px] font-bold ${section.encodingSummary.toneClass}`}>
-                                                                            {section.encodingSummary.label}
-                                                                        </span>
-                                                                        <span className={`rounded-full px-3 py-1 text-[11px] font-bold ${section.reviewSummary.toneClass}`}>
-                                                                            {section.reviewSummary.label}
-                                                                        </span>
-                                                                        <span className="text-xs text-slate-500">
-                                                                            {section.encodingSummary.helperText}
-                                                                        </span>
-                                                                    </div>
-                                                                    {section.reviewSummary.note ? (
-                                                                        <div className={`mt-3 rounded-xl border px-3 py-2 text-xs ${
-                                                                            section.reviewSummary.status === 'registrar_rejected'
-                                                                                ? 'border-rose-200 bg-rose-50 text-rose-700'
-                                                                                : 'border-slate-200 bg-white text-slate-600'
-                                                                        }`}>
-                                                                            <span className="font-semibold">
-                                                                                {section.reviewSummary.status === 'registrar_rejected' ? 'Registrar Note:' : 'Review Note:'}
-                                                                            </span>{' '}
-                                                                            {section.reviewSummary.note}
-                                                                        </div>
-                                                                    ) : null}
                                                                 </div>
                                                                 <div className="flex flex-wrap items-center gap-2">
                                                                     <span className="rounded-full bg-white px-3 py-2 text-[11px] font-semibold text-slate-600">Encoded Grades: {section.records.length}</span>
                                                                     {sectionPriorityCount > 0 ? (
                                                                         <span className="rounded-full bg-red-100 px-3 py-2 text-[11px] font-semibold text-red-700">Special Status: {sectionPriorityCount}</span>
-                                                                    ) : null}
-                                                                    {section.reviewSummary.status === 'forwarded' ? (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => openRegistrarRejectModal(section)}
-                                                                            className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 transition hover:bg-rose-100"
-                                                                        >
-                                                                            Reject to Faculty
-                                                                        </button>
                                                                     ) : null}
                                                                     <button
                                                                         type="button"
@@ -1899,8 +1058,8 @@ const RegistrarGradesView = ({
                                                                                 <th className="p-4">Finals</th>
                                                                                 <th className="p-4">Final Rating</th>
                                                                                 <th className="p-4">Student Status</th>
-                                                                                <th className="p-4">Grade Equivalent</th>
                                                                                 <th className="p-4">Record Status</th>
+                                                                                <th className="p-4">Flags</th>
                                                                                 <th className="p-4">Actions</th>
                                                                             </tr>
                                                                         </thead>
@@ -1926,20 +1085,22 @@ const RegistrarGradesView = ({
                                                                                                 {record.standingLabel}
                                                                                             </span>
                                                                                         </td>
-                                                                                        <td className="p-4 font-semibold text-slate-700">{record.gradeEquivalent || '--'}</td>
                                                                                         <td className="p-4">
                                                                                             <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase text-slate-700">
                                                                                                 {record.status || 'N/A'}
                                                                                             </span>
                                                                                         </td>
                                                                                         <td className="p-4">
-                                                                                            {(record.ipfs_cid || record.IpfsCID) ? (
-                                                                                                <button onClick={() => handleViewIpfs(record.ipfs_cid || record.IpfsCID)} className="font-bold text-blue-600 hover:underline">
-                                                                                                    View File
-                                                                                                </button>
+                                                                                            {record.flagged ? (
+                                                                                                <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-bold uppercase text-amber-700">Flagged</span>
                                                                                             ) : (
-                                                                                                <span className="text-xs text-slate-400">No File</span>
+                                                                                                <span className="text-xs text-slate-400">--</span>
                                                                                             )}
+                                                                                        </td>
+                                                                                        <td className="p-4">
+                                                                                            <div className="flex flex-col items-start gap-2">
+                                                                                                {(record.ipfs_cid || record.IpfsCID) ? <button onClick={() => handleViewIpfs(record.ipfs_cid || record.IpfsCID)} className="font-bold text-blue-600 hover:underline">View File</button> : <span className="text-xs text-slate-400">No File</span>}
+                                                                                            </div>
                                                                                         </td>
                                                                                     </tr>
                                                                                 ))}
@@ -1977,20 +1138,19 @@ const RegistrarGradesView = ({
                                                         <h4 className="font-bold text-[#003366] text-lg">
                                                             {group.course} — {group.yearLevel} / {group.section}
                                                         </h4>
+                                                        <p className="text-sm font-semibold text-slate-500 mt-1">
+                                                            Subject: <span className="text-blue-600">{group.subjectCode}</span> 
+                                                            <span className="mx-2">•</span> 
+                                                            {group.records.length} pending grade(s)
+                                                        </p>
                                                     </div>
                                                     <button 
                                                         onClick={() => handleFinalizeBatch(group.records)}
-                                                        disabled={!group.canFinalize}
-                                                        className="mt-3 md:mt-0 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-700 shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
+                                                        className="mt-3 md:mt-0 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-700 shadow-sm"
                                                     >
                                                         Finalize All to Ledger
                                                     </button>
                                                 </div>
-                                                {!group.canFinalize ? (
-                                                    <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-800">
-                                                        Finals grades must be completed before this section can be finalized to the ledger.
-                                                    </div>
-                                                ) : null}
                                                 <div className="overflow-x-auto">
                                                     <table className="w-full text-left text-sm">
                                                         <thead>
@@ -2004,9 +1164,7 @@ const RegistrarGradesView = ({
                                                             {group.records.map((sg) => (
                                                                 <tr key={sg.stagingId} className="border-b border-slate-50 hover:bg-slate-50">
                                                                     <td className="p-4 font-mono text-[11px] text-slate-600">{sg.studentHash}</td>
-                                                                    <td className="p-4 text-center text-sm font-semibold text-blue-700">
-                                                                        {formatStagedGradeDisplay(sg.grade)}
-                                                                    </td>
+                                                                    <td className="p-4 font-bold text-blue-700 text-center text-sm">{formatGradePayload(sg.grade)}</td>
                                                                     <td className="p-4 text-center">
                                                                         <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-bold uppercase text-emerald-700">
                                                                             {sg.status}
@@ -2022,6 +1180,35 @@ const RegistrarGradesView = ({
                                     )}
                                 </div>
                             )}
+                        </div>
+                    )}
+                    {mainTab === 'Requests' && (
+                        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                            <div className="border-b border-slate-200 p-4">
+                                <input type="text" placeholder="Search..." value={requestSearchTerm} onChange={e => setRequestSearchTerm(e.target.value)} className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none" />
+                            </div>
+                            <div className="overflow-x-auto"><table className="w-full min-w-[800px] text-left text-sm">
+                                <thead>
+                                    <tr className="bg-[#003366] text-white">
+                                        <th className="p-4">Role</th><th className="p-4">Name</th><th className="p-4">Student No.</th><th className="p-4">Email</th><th className="p-4">Department</th><th className="p-4">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sortedAndFilteredRequests.map((req) => (
+                                        <tr key={req.requestid} className="border-b border-slate-100 hover:bg-slate-50">
+                                            <td className="p-4 font-bold capitalize text-slate-800">{req.role}</td>
+                                            <td className="p-4">{req.fullname}</td>
+                                            <td className="p-4">{req.studentno || 'N/A'}</td>
+                                            <td className="p-4 text-slate-500">{req.email}</td>
+                                            <td className="p-4">{req.department}</td>
+                                            <td className="p-4">
+                                                <button onClick={() => handleDenyRequest(req.requestid)} className="mr-2 rounded-lg bg-red-500 px-3 py-1 text-xs font-bold text-white hover:bg-red-600">Deny</button>
+                                                <button onClick={() => handleApproveRequest(req.requestid, req.role)} className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-700">Approve</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table></div>
                         </div>
                     )}
                     {mainTab === 'assigning' && (
@@ -2040,9 +1227,7 @@ const RegistrarGradesView = ({
                                             }`}
                                         >
                                             <p className="mt-2 text-base font-bold">{tab.label}</p>
-                                            <p className={`mt-1 text-sm leading-5 ${assignmentTab === tab.id ? 'text-slate-100' : 'text-slate-500'}`}>
-                                                {tab.description}
-                                            </p>
+                                            
                                         </button>
                                     ))}
                                 </div>
@@ -2066,16 +1251,7 @@ const RegistrarGradesView = ({
                                                             <p className="text-base font-bold text-slate-800">{student.fullname}</p>
                                                             <p className="text-sm text-slate-500">Student No. {student.studentno}</p>
                                                         </div>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${student.assignmentStatus === 'Unassigned' ? 'bg-yellow-100 text-yellow-800' : student.studentStatus === 'irregular' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
-                                                                {student.studentStatus === 'irregular' ? 'Irregular' : student.assignmentStatus}
-                                                            </span>
-                                                            {student.isTemporary ? (
-                                                                <span className="inline-block rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">
-                                                                    Temporary
-                                                                </span>
-                                                            ) : null}
-                                                        </div>
+                                                        <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${student.assignmentStatus === 'Unassigned' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>{student.assignmentStatus}</span>
                                                     </div>
 
                                                     <div className="grid flex-1 gap-3 lg:max-w-3xl lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_auto]">
@@ -2238,7 +1414,7 @@ const RegistrarGradesView = ({
                                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                         <div>
                                             <h4 className="text-base font-bold text-[#003366]">Chairperson</h4>
-                                            <p className="mt-1 text-sm text-slate-500">View chairperson accounts in alphabetical order by course or program.</p>
+                                            
                                         </div>
                                         <button
                                             type="button"
@@ -2291,7 +1467,7 @@ const RegistrarGradesView = ({
                                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                         <div>
                                             <h4 className="text-base font-bold text-[#003366]">Faculty</h4>
-                                            <p className="mt-1 text-sm text-slate-500">Open the department list first, then pick a department to view faculty accounts in alphabetical order.</p>
+                                            
                                         </div>
                                         <button
                                             type="button"
@@ -2404,48 +1580,7 @@ const RegistrarGradesView = ({
                         <button onClick={submitIpfsPassword} className="rounded-xl bg-[#003366] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#00264d]">Decrypt & View</button>
                     </div>
                 </div>
-            </Modal>
-            <Modal isOpen={registrarRejectModal.isOpen} onClose={closeRegistrarRejectModal} title="Reject Section Grades">
-                <div className="flex flex-col gap-4">
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                        A rejection note is required before sending these grades back to faculty.
-                    </div>
-                    <div>
-                        <p className="text-sm font-semibold text-slate-800">
-                            {registrarRejectModal.section?.sectionName || 'Selected Section'}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                            {registrarRejectModal.section?.facultyName || ''} {registrarRejectModal.section?.department ? `• ${registrarRejectModal.section.department}` : ''}
-                        </p>
-                    </div>
-                    <label className="block">
-                        <span className="mb-2 block text-sm font-semibold text-slate-700">Registrar Note</span>
-                        <textarea
-                            value={registrarRejectNote}
-                            onChange={(event) => setRegistrarRejectNote(event.target.value)}
-                            rows={5}
-                            placeholder="Enter the correction request or rejection reason here..."
-                            className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#003366]"
-                        />
-                    </label>
-                    <div className="flex justify-end gap-3 mt-2">
-                        <button
-                            onClick={closeRegistrarRejectModal}
-                            disabled={registrarRejectLoading}
-                            className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleRegistrarRejectSection}
-                            disabled={registrarRejectLoading}
-                            className="rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            {registrarRejectLoading ? 'Rejecting...' : 'Reject to Faculty'}
-                        </button>
-                    </div>
-                </div>
-            </Modal>
+            </Modal>            
             <Modal isOpen={confirmModal.isOpen} onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })} title={confirmModal.title}>
                 <div className="flex flex-col gap-4">
                     <p className="text-sm text-slate-600">{confirmModal.message}</p>

@@ -73,6 +73,12 @@ export const startNginxFailoverMonitor = ({
     return () => {};
   }
 
+  // A standalone localhost frontend has no middleware/Nginx health endpoint.
+  // Do not let infrastructure authentication or failover block local portal access.
+  if (process.env.NODE_ENV === 'development') {
+    return () => {};
+  }
+
   let stopped = false;
   let running = false;
   let failureCount = 0;

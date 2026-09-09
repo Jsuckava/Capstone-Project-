@@ -6,9 +6,9 @@ export const getPLVPoint = (midterm, finals) => {
   if (avg >= 94) return 1.25;
   if (avg >= 91) return 1.5;
   if (avg >= 88) return 1.75;
-  if (avg >= 85) return 2.0;
-  if (avg >= 82) return 2.25;
-  if (avg >= 79) return 2.5;
+  if (avg >= 84) return 2.0;
+  if (avg >= 81) return 2.25;
+  if (avg >= 78) return 2.5;
   if (avg >= 75) return 3.0;
   return 5.0;
 };

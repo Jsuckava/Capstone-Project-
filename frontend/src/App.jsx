@@ -6,39 +6,13 @@ import RegistrarPortal from "./pages/RegistrarPortal";
 import ChairpersonPortal from "./pages/ChairpersonPortal";
 import { CHAIRPERSON_REVIEW_KEY } from "./utils/chairpersonHelpers";
 import { getPublishedGradesForStudent } from "./utils/publishedGradesHelpers";
-import { clearSessionRecovery, useSessionRecovery } from "./utils/sessionRecovery";
-import { clearAllSharedClientState, pullSharedClientState } from "./utils/sharedClientState";
-
-import { resetEncodingSeason } from "./services/api";
 
 function App() {
-  useSessionRecovery();
   const [userRole, setUserRole] = useState(localStorage.getItem("userRole"));
 
-  useEffect(() => {
-    if (!userRole) return;
-    
-    // Initial pull of shared state from server
-    pullSharedClientState().catch(err => console.warn("Initial shared state pull failed:", err));
-
-    // Periodic pull every 30s as a fallback for real-time updates
-    const timer = setInterval(() => {
-      pullSharedClientState().catch(err => console.warn("Periodic shared state pull failed:", err));
-    }, 30000);
-
-    return () => clearInterval(timer);
-  }, [userRole]);
-
   const [allGrades, setAllGrades] = useState(() => {
-    try {
-      const saved = localStorage.getItem("blockgo-allGrades");
-      const parsed = saved ? JSON.parse(saved) : {};
-      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-        ? parsed
-        : {};
-    } catch {
-      return {};
-    }
+    const saved = localStorage.getItem("blockgo-allGrades");
+    return saved ? JSON.parse(saved) : {};
   });
 
   useEffect(() => {
@@ -62,26 +36,15 @@ function App() {
   };
 
   const handleLogout = () => {
-    clearSessionRecovery();
     localStorage.removeItem("userRole");
     setUserRole(null);
   };
 
-  const handleResetEncodingSeason = async () => {
-    try {
-      await resetEncodingSeason();
-      await clearAllSharedClientState();
-      
-      localStorage.removeItem("blockgo-allGrades");
-      localStorage.removeItem("encodingPeriod");
-      setAllGrades({});
-    } catch (error) {
-      console.error("Failed to reset encoding season:", error);
-      await clearAllSharedClientState();
-      localStorage.removeItem("blockgo-allGrades");
-      localStorage.removeItem("encodingPeriod");
-      setAllGrades({});
-    }
+  const handleResetEncodingSeason = () => {
+    localStorage.removeItem("blockgo-allGrades");
+    localStorage.removeItem(CHAIRPERSON_REVIEW_KEY);
+    localStorage.removeItem("registrarAssignments");
+    setAllGrades({});
   };
 
   const studentData = {

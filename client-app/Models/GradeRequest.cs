@@ -22,6 +22,18 @@ namespace BlockGo.Models
         [JsonPropertyName("subject_name")]
         public string SubjectName { get; set; } = string.Empty;
 
+        [JsonPropertyName("professor_name")]
+        public string ProfessorName { get; set; } = string.Empty;
+
+        [JsonPropertyName("program")]
+        public string Program { get; set; } = string.Empty;
+
+        [JsonPropertyName("term")]
+        public string Term { get; set; } = string.Empty;
+
+        [JsonPropertyName("units")]
+        public decimal Units { get; set; }
+
         [JsonPropertyName("section")]
         public string Section { get; set; } = string.Empty;
 

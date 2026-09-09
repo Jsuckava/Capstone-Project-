@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ipfs-pin-reconciler-script
+  namespace: plv-fabric
+data:
+  reconcile.mjs: |-
+    const nodes = [
+      { name: "main", api: "http://ipfs-api.plv-fabric.svc.cluster.local:5001" },
+      { name: "annex", api: "http://ipfs-annex-api.plv-annex-campus.svc.cluster.local:5001" },
+      { name: "pubad", api: "http://ipfs-pubad-api.plv-pubad-campus.svc.cluster.local:5001" }
+    ];
+
+    async function post(node, command, timeout = 120_000) {
+      const response = await fetch(`${node.api}/api/v0/${command}`, {
+        method: "POST",
+        signal: AbortSignal.timeout(timeout)
+      });
+      const body = await response.text();
+      if (!response.ok) throw new Error(`${node.name}: ${response.status} ${body}`);
+      return body ? JSON.parse(body) : {};
+    }
+
+    const available = [];
+    const allPins = new Set();
+    for (const node of nodes) {
+      try {
+        const pins = await post(node, "pin/ls?type=recursive", 15_000);
+        available.push(node);
+        Object.keys(pins.Keys ?? {}).forEach((cid) => allPins.add(cid));
+      } catch (error) {
+        console.warn(`Skipping unavailable ${node.name}: ${error.message}`);
+      }
+    }
+
+    if (available.length === 0) throw new Error("No campus IPFS node is available");
+
+    let copied = 0;
+    for (const cid of allPins) {
+      for (const node of available) {
+        try {
+          await post(node, `pin/ls?arg=${encodeURIComponent(cid)}&type=recursive`, 15_000);
+        } catch {
+          await post(node, `pin/add?arg=${encodeURIComponent(cid)}&recursive=true`);
+          copied += 1;
+          console.log(`copied ${cid} to ${node.name}`);
+        }
+      }
+    }
+
+    console.log(`Reconciled ${allPins.size} recursive CIDs across ${available.length} available nodes; created ${copied} pins.`);
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ipfs-pin-reconciler
+  namespace: plv-fabric
+  labels:
+    app: ipfs-pin-reconciler
+spec:
+  schedule: "*/1 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            app: ipfs-pin-reconciler
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: reconciler
+            image: node:20-alpine
+            imagePullPolicy: IfNotPresent
+            command: ["node", "/scripts/reconcile.mjs"]
+            resources:
+              requests:
+                cpu: 5m
+                memory: 16Mi
+              limits:
+                memory: 96Mi
+            volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          volumes:
+          - name: scripts
+            configMap:
+              name: ipfs-pin-reconciler-script

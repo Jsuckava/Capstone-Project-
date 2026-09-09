@@ -4,27 +4,34 @@
   "main": "middleware.js",
   "scripts": {
     "start": "node middleware.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start:gateway": "node src/services/api-gateway.js",
+    "start:auth": "node src/services/auth-service.js",
+    "start:identity": "node src/services/fabric-identity-service.js",
+    "start:ledger": "node src/services/ledger-service.js",
+    "start:upload": "node src/services/grade-upload-service.js",
+    "start:settings": "node src/services/settings-service.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
+  "engines": {
+    "node": "20.x",
+    "npm": ">=10"
+  },
   "dependencies": {
-    "axios": "^1.13.5",
+    "@grpc/grpc-js": "^1.14.4",
+    "axios": "^1.20.0",
     "bcrypt": "^6.0.0",
-    "crypto": "^1.0.1",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.1",
-    "fabric-ca-client": "^2.2.20",
-    "fabric-network": "^2.2.20",
     "form-data": "^4.0.5",
     "js-yaml": "^4.1.1",
     "jsonwebtoken": "^9.0.3",
-    "middleware": "file:",
     "multer": "^2.1.1",
-    "nodemailer": "^8.0.4",
+    "nodemailer": "^10.0.1",
     "pg": "^8.20.0"
   }
 }

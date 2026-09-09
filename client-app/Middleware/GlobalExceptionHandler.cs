@@ -21,13 +21,23 @@ namespace Client_app.Middleware
             Exception exception,
             CancellationToken cancellationToken)
         {
-            _logger.LogError(exception, "An unhandled exception occurred: {Message}", exception.Message);
-            
+            var (statusCode, publicMessage, logAsError) = exception switch
+            {
+                UnauthorizedAccessException => (StatusCodes.Status403Forbidden, exception.Message, false),
+                KeyNotFoundException => (StatusCodes.Status404NotFound, exception.Message, false),
+                ArgumentException => (StatusCodes.Status400BadRequest, exception.Message, false),
+                InvalidOperationException => (StatusCodes.Status409Conflict, exception.Message, false),
+                _ => (StatusCodes.Status500InternalServerError, "An internal server error has occurred.", true)
+            };
+
+            if (logAsError) _logger.LogError(exception, "An unhandled exception occurred: {Message}", exception.Message);
+            else _logger.LogWarning("Request rejected with {StatusCode}: {Message}", statusCode, exception.Message);
+
             var traceId = httpContext.TraceIdentifier;
-            httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            httpContext.Response.StatusCode = statusCode;
             await httpContext.Response.WriteAsJsonAsync(new { 
                 status = "Error", 
-                message = "An internal server error has occurred.",
+                message = publicMessage,
                 traceId = traceId
             }, cancellationToken);
             return true;

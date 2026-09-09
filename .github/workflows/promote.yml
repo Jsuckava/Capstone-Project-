@@ -1,0 +1,506 @@
+name: Promote Passed Branch
+
+on:
+  workflow_call:
+    inputs:
+      source_branch:
+        description: Branch whose successfully tested commit will be promoted
+        required: true
+        type: string
+
+      target_branch:
+        description: Protected branch that receives the promotion pull request
+        required: true
+        type: string
+
+      tested_sha:
+        description: Exact commit SHA that successfully passed CI
+        required: true
+        type: string
+
+    secrets:
+      PROMOTION_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+
+  promote:
+    name: Promote ${{ inputs.source_branch }} → ${{ inputs.target_branch }}
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      GH_TOKEN: ${{ secrets.PROMOTION_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      SOURCE: ${{ inputs.source_branch }}
+      TARGET: ${{ inputs.target_branch }}
+      TESTED_SHA: ${{ inputs.tested_sha }}
+
+    steps:
+
+      - name: Validate permitted promotion path
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=========================================="
+          echo "PROMOTION REQUEST"
+          echo "=========================================="
+          echo "Source:      $SOURCE"
+          echo "Target:      $TARGET"
+          echo "Tested SHA:  $TESTED_SHA"
+          echo
+
+          case "${SOURCE}:${TARGET}" in
+
+            "Develop-and-Integration:feature/api-endpoints-Testing")
+              echo "✓ Valid promotion path"
+              echo "Develop-and-Integration → feature/api-endpoints-Testing"
+              ;;
+
+            "feature/api-endpoints-Testing:Staging-and-Testing")
+              echo "✓ Valid promotion path"
+              echo "feature/api-endpoints-Testing → Staging-and-Testing"
+              ;;
+
+            "Staging-and-Testing:main")
+              echo "✓ Valid promotion path"
+              echo "Staging-and-Testing → main"
+              ;;
+
+            *)
+              echo "::error::Promotion path is NOT permitted."
+              echo "::error::$SOURCE → $TARGET"
+              echo
+              echo "Allowed promotion paths:"
+              echo "1. Develop-and-Integration → feature/api-endpoints-Testing"
+              echo "2. feature/api-endpoints-Testing → Staging-and-Testing"
+              echo "3. Staging-and-Testing → main"
+              exit 1
+              ;;
+
+          esac
+
+      - name: Validate tested commit SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$TESTED_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::Invalid tested SHA:"
+            echo "::error::$TESTED_SHA"
+            exit 1
+          fi
+
+          echo "✓ Tested SHA format is valid."
+
+      - name: Validate GitHub CLI and PROMOTION_TOKEN
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::PROMOTION_TOKEN is empty or unavailable."
+            exit 1
+          fi
+
+          if ! command -v gh >/dev/null 2>&1; then
+            echo "GitHub CLI not detected. Installing..."
+
+            sudo apt-get update -y
+            sudo apt-get install -y gh
+          fi
+
+          echo "GitHub CLI:"
+          gh --version
+
+          echo
+          echo "Checking repository access..."
+
+          gh api \
+            "repos/${GH_REPO}" \
+            --silent
+
+          echo "✓ PROMOTION_TOKEN can access $GH_REPO"
+
+      - name: Verify source branch has not changed
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Checking current source branch head..."
+
+          CURRENT_SOURCE_SHA="$(
+            gh api \
+              "repos/${GH_REPO}/git/ref/heads/${SOURCE}" \
+              --jq '.object.sha'
+          )"
+
+          if [ -z "$CURRENT_SOURCE_SHA" ]; then
+            echo "::error::Unable to determine source branch SHA."
+            exit 1
+          fi
+
+          echo "CI-tested SHA:     $TESTED_SHA"
+          echo "Current branch SHA: $CURRENT_SOURCE_SHA"
+
+          if [ "$CURRENT_SOURCE_SHA" != "$TESTED_SHA" ]; then
+            echo
+            echo "::error::PROMOTION BLOCKED"
+            echo
+            echo "::error::The source branch changed after this CI run started."
+            echo "::error::Tested SHA:  $TESTED_SHA"
+            echo "::error::Current SHA: $CURRENT_SOURCE_SHA"
+            echo
+            echo "The newer commit must complete CI before promotion."
+
+            exit 1
+          fi
+
+          echo
+          echo "✓ Source branch still points to the tested commit."
+
+      - name: Find existing promotion PR
+        id: find-pr
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Looking for existing promotion PR:"
+          echo "$SOURCE → $TARGET"
+
+          NUMBER="$(
+            gh pr list \
+              --repo "$GH_REPO" \
+              --head "$SOURCE" \
+              --base "$TARGET" \
+              --state open \
+              --json number \
+              --jq '.[0].number // empty'
+          )"
+
+          if [ -n "$NUMBER" ]; then
+            echo "✓ Existing promotion PR found: #$NUMBER"
+          else
+            echo "No existing promotion PR found."
+          fi
+
+          echo "pr_number=$NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Create promotion PR if needed
+        id: create-pr
+        shell: bash
+        env:
+          EXISTING_PR: ${{ steps.find-pr.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          NUMBER="$EXISTING_PR"
+
+          if [ -z "$NUMBER" ]; then
+
+            echo "Creating promotion pull request..."
+
+            PR_URL="$(
+              gh pr create \
+                --repo "$GH_REPO" \
+                --head "$SOURCE" \
+                --base "$TARGET" \
+                --title "Promote ${SOURCE} → ${TARGET}" \
+                --body "$(cat <<EOF
+          ## Automated Promotion
+
+          This promotion PR was created automatically after the previous CI/CD stage passed.
+
+          ### Promotion
+
+          **Source**
+          \`${SOURCE}\`
+
+          **Target**
+          \`${TARGET}\`
+
+          **Verified CI Commit**
+          \`${TESTED_SHA}\`
+
+          ### Pipeline
+
+          \`\`\`
+          Develop-and-Integration
+                  ↓
+          feature/api-endpoints-Testing
+                  ↓
+          Staging-and-Testing
+                  ↓
+          main
+                  ↓
+          GCP / GKE Production
+          \`\`\`
+
+          This pull request must satisfy all required branch protection rules, CI checks, reviews, and repository rules before GitHub is allowed to merge it.
+
+          Automated by the BlockGo promotion workflow.
+          EOF
+          )"
+            )"
+
+            echo "Created PR:"
+            echo "$PR_URL"
+
+            NUMBER="$(
+              gh pr list \
+                --repo "$GH_REPO" \
+                --head "$SOURCE" \
+                --base "$TARGET" \
+                --state open \
+                --json number \
+                --jq '.[0].number // empty'
+            )"
+
+            if [ -z "$NUMBER" ]; then
+
+              echo "::error::PR was created but its number could not be resolved."
+
+              gh pr list \
+                --repo "$GH_REPO" \
+                --base "$TARGET" \
+                --state open \
+                --limit 10 \
+                --json number,title,headRefName,baseRefName \
+                || true
+
+              exit 1
+            fi
+
+            echo "✓ Promotion PR created: #$NUMBER"
+
+          else
+
+            echo "✓ Reusing existing promotion PR #$NUMBER"
+
+          fi
+
+          echo "pr_number=$NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Verify promotion PR is using tested commit
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.create-pr.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          echo "Verifying PR #$PR_NUMBER..."
+
+          PR_HEAD_SHA="$(
+            gh pr view "$PR_NUMBER" \
+              --repo "$GH_REPO" \
+              --json headRefOid \
+              --jq '.headRefOid'
+          )"
+
+          echo
+          echo "Expected tested SHA:"
+          echo "$TESTED_SHA"
+
+          echo
+          echo "Current PR head:"
+          echo "$PR_HEAD_SHA"
+
+          if [ "$PR_HEAD_SHA" != "$TESTED_SHA" ]; then
+
+            echo
+            echo "::error::PROMOTION BLOCKED"
+            echo
+            echo "::error::PR contains a commit that was not validated by this CI run."
+            echo
+            echo "::error::Tested SHA: $TESTED_SHA"
+            echo "::error::PR SHA:     $PR_HEAD_SHA"
+
+            exit 1
+          fi
+
+          echo
+          echo "✓ PR contains the exact CI-tested commit."
+
+      - name: Show promotion PR status
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.create-pr.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          echo "=========================================="
+          echo "PROMOTION PR"
+          echo "=========================================="
+
+          gh pr view "$PR_NUMBER" \
+            --repo "$GH_REPO" \
+            --json \
+          number,title,state,headRefName,baseRefName,mergeable,statusCheckRollup \
+            --jq '{
+              number,
+              title,
+              state,
+              source: .headRefName,
+              target: .baseRefName,
+              mergeable,
+              checks: [
+                .statusCheckRollup[]? |
+                {
+                  name: (.name // .context),
+                  status: (.conclusion // .state)
+                }
+              ]
+            }'
+
+      - name: Queue or merge promotion safely
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.create-pr.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          echo
+          echo "=========================================="
+          echo "PROMOTION FINALIZATION"
+          echo "=========================================="
+          echo "PR:     #$PR_NUMBER"
+          echo "Source: $SOURCE"
+          echo "Target: $TARGET"
+          echo "SHA:    $TESTED_SHA"
+          echo
+
+          # Re-read the PR immediately before attempting any merge action.
+          PR_HEAD_SHA="$(
+            gh pr view "$PR_NUMBER" \
+              --repo "$GH_REPO" \
+              --json headRefOid \
+              --jq '.headRefOid'
+          )"
+
+          if [ "$PR_HEAD_SHA" != "$TESTED_SHA" ]; then
+            echo "::error::Promotion blocked: PR head changed."
+            echo "::error::Expected: $TESTED_SHA"
+            echo "::error::Actual:   $PR_HEAD_SHA"
+            exit 1
+          fi
+
+          echo "✓ PR still contains the exact CI-tested commit."
+          echo
+
+          ALLOW_AUTO_MERGE="$(
+            gh api "repos/${GH_REPO}" \
+              --jq '.allow_auto_merge // false'
+          )"
+
+          echo "Repository allow_auto_merge: $ALLOW_AUTO_MERGE"
+          echo
+
+          # First use GitHub's normal gated auto-merge behavior.
+          #
+          # This also supports branches using a merge queue:
+          # gh will enqueue when the branch rules require it and the PR
+          # is ready, or enable auto-merge while requirements are pending.
+          if [ "$ALLOW_AUTO_MERGE" = "true" ]; then
+            echo "Attempting GitHub gated auto-merge / merge queue..."
+
+            if gh pr merge "$PR_NUMBER" \
+              --repo "$GH_REPO" \
+              --auto \
+              --merge \
+              --match-head-commit "$TESTED_SHA"; then
+
+              echo
+              echo "=========================================="
+              echo "PROMOTION QUEUED"
+              echo "=========================================="
+              echo
+              echo "PR #$PR_NUMBER"
+              echo "$SOURCE → $TARGET"
+              echo
+              echo "GitHub accepted gated auto-merge."
+              echo "Repository rules and required checks remain enforced."
+              exit 0
+            fi
+
+            echo
+            echo "::notice::GitHub did not accept enablePullRequestAutoMerge."
+            echo "::notice::Checking whether the PR is already immediately mergeable."
+            echo
+          else
+            echo "::notice::Repository API reports allow_auto_merge=false."
+            echo "::notice::Checking whether the PR is already immediately mergeable."
+            echo
+          fi
+
+          # GitHub may reject enablePullRequestAutoMerge when the PR has
+          # nothing left to wait for. In that case, inspect the live PR
+          # state before using a normal, non-admin merge.
+          #
+          # IMPORTANT:
+          # - This never uses --admin.
+          # - Branch protection/rulesets are NOT bypassed.
+          # - The exact tested head SHA is still required.
+          MERGEABLE="$(
+            gh pr view "$PR_NUMBER" \
+              --repo "$GH_REPO" \
+              --json mergeable \
+              --jq '.mergeable'
+          )"
+
+          MERGE_STATE="$(
+            gh pr view "$PR_NUMBER" \
+              --repo "$GH_REPO" \
+              --json mergeStateStatus \
+              --jq '.mergeStateStatus'
+          )"
+
+          echo "PR mergeable:        $MERGEABLE"
+          echo "PR mergeStateStatus: $MERGE_STATE"
+          echo
+
+          if [ "$MERGEABLE" = "MERGEABLE" ] && [ "$MERGE_STATE" = "CLEAN" ]; then
+            echo "The PR is already clean and immediately mergeable."
+            echo "Performing a normal protected merge..."
+            echo
+
+            gh pr merge "$PR_NUMBER" \
+              --repo "$GH_REPO" \
+              --merge \
+              --match-head-commit "$TESTED_SHA"
+
+            echo
+            echo "=========================================="
+            echo "PROMOTION MERGED"
+            echo "=========================================="
+            echo
+            echo "PR #$PR_NUMBER"
+            echo "$SOURCE → $TARGET"
+            echo
+            echo "Merged without --admin."
+            echo "Branch protection and repository rules were not bypassed."
+            exit 0
+          fi
+
+          echo "::error::Promotion could not be queued or merged safely."
+          echo
+          echo "The PR remains OPEN."
+          echo
+          echo "Current state:"
+          echo "- mergeable:        $MERGEABLE"
+          echo "- mergeStateStatus: $MERGE_STATE"
+          echo "- allow_auto_merge: $ALLOW_AUTO_MERGE"
+          echo
+          echo "Possible reasons:"
+          echo "- Required checks are still pending or failing"
+          echo "- Required review is still missing"
+          echo "- Merge conflicts exist"
+          echo "- A branch ruleset is blocking the merge"
+          echo "- The token lacks merge permission"
+          echo
+          echo "No admin bypass or force merge was attempted."
+          exit 1

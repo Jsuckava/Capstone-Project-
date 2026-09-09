@@ -1,4 +1,16 @@
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: orderer-1-pvc
+  namespace: plv-main-campus
+spec:
+  accessModes: [ "ReadWriteOnce" ]
+  storageClassName: fabric-storage
+  resources:
+    requests:
+      storage: 20Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,6 +18,11 @@ metadata:
   namespace: plv-main-campus
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: orderer-1
@@ -16,13 +33,18 @@ spec:
         org: orderer
     spec:
       serviceAccountName: orderer-sa
-      # FIXED: Map certificate hostnames to internal IPs
-      hostAliases:
-      - ip: "127.0.0.1"
-        hostnames: ["orderer.capstone.com"]
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_A__"
       containers:
       - name: orderer
         image: hyperledger/fabric-orderer:2.5.4
+        ports:
+        - containerPort: 7050
+          name: orderer
+        - containerPort: 7053
+          name: admin
+        - containerPort: 9443
+          name: operations
         env:
         - name: FABRIC_CFG_PATH
           value: /etc/hyperledger/fabric
@@ -30,6 +52,10 @@ spec:
           value: "0.0.0.0"
         - name: ORDERER_GENERAL_LISTENPORT
           value: "7050"
+        - name: ORDERER_METRICS_PROVIDER
+          value: prometheus
+        - name: ORDERER_OPERATIONS_LISTENADDRESS
+          value: 0.0.0.0:9443
         - name: ORDERER_GENERAL_LOCALMSPID
           value: OrdererMSP
         - name: ORDERER_GENERAL_LOCALMSPDIR
@@ -105,9 +131,31 @@ spec:
         - name: artifacts
           mountPath: /var/hyperledger/orderer/registrar-channel.block
           subPath: registrar-channel.block
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: operations
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 60
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: operations
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: operations
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
       volumes:
       - name: orderer-storage
-        emptyDir: {}
+        persistentVolumeClaim:
+          claimName: orderer-1-pvc
       - name: config
         configMap:
           name: fabric-common-config
@@ -131,3 +179,6 @@ spec:
     name: orderer
   - port: 7053
     name: admin
+  - port: 9443
+    targetPort: 9443
+    name: operations

@@ -9,8 +9,11 @@ Organizations:
       Admins: { Type: Signature, Rule: "OR('OrdererMSP.admin')" }
     OrdererEndpoints:
       - orderer-1.plv-main-campus.svc.cluster.local:7050
-      - orderer-2.plv-pubad-campus.svc.cluster.local:7050
+      - orderer-2.plv-main-campus.svc.cluster.local:7050
       - orderer-3.plv-annex-campus.svc.cluster.local:7050
+      - orderer-4.plv-annex-campus.svc.cluster.local:7050
+      - orderer-5.plv-pubad-campus.svc.cluster.local:7050
+      - orderer-6.plv-pubad-campus.svc.cluster.local:7050
 
   - &RegistrarOrg
     Name: RegistrarMSP
@@ -86,7 +89,7 @@ Orderer: &OrdererDefaults
               Port: 7050
               ClientTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer.capstone.com/tls/server.crt
               ServerTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer.capstone.com/tls/server.crt
-            - Host: orderer-2.plv-pubad-campus.svc.cluster.local
+            - Host: orderer-2.plv-main-campus.svc.cluster.local
               Port: 7050
               ClientTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer2.capstone.com/tls/server.crt
               ServerTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer2.capstone.com/tls/server.crt
@@ -94,10 +97,25 @@ Orderer: &OrdererDefaults
               Port: 7050
               ClientTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer3.capstone.com/tls/server.crt
               ServerTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer3.capstone.com/tls/server.crt
+            - Host: orderer-4.plv-annex-campus.svc.cluster.local
+              Port: 7050
+              ClientTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer4.capstone.com/tls/server.crt
+              ServerTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer4.capstone.com/tls/server.crt
+            - Host: orderer-5.plv-pubad-campus.svc.cluster.local
+              Port: 7050
+              ClientTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer5.capstone.com/tls/server.crt
+              ServerTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer5.capstone.com/tls/server.crt
+            - Host: orderer-6.plv-pubad-campus.svc.cluster.local
+              Port: 7050
+              ClientTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer6.capstone.com/tls/server.crt
+              ServerTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer6.capstone.com/tls/server.crt
     Addresses:
         - orderer-1.plv-main-campus.svc.cluster.local:7050
-        - orderer-2.plv-pubad-campus.svc.cluster.local:7050
+        - orderer-2.plv-main-campus.svc.cluster.local:7050
         - orderer-3.plv-annex-campus.svc.cluster.local:7050
+        - orderer-4.plv-annex-campus.svc.cluster.local:7050
+        - orderer-5.plv-pubad-campus.svc.cluster.local:7050
+        - orderer-6.plv-pubad-campus.svc.cluster.local:7050
     BatchTimeout: 2s
     BatchSize:
         MaxMessageCount: 10

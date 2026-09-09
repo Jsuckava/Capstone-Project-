@@ -14,25 +14,41 @@ const pythonProcess = spawn('python3', [
 
 let output = '';
 let errorOutput = '';
+let settled = false;
+
+const cleanupFile = (done = () => {}) => {
+    fs.unlink(filePath, (err) => {
+        if (err && err.code !== 'ENOENT') console.error('File cleanup error:', err);
+        done();
+    });
+};
 
 pythonProcess.stdout.on('data', (data) => output += data.toString());
 pythonProcess.stderr.on('data', (data) => errorOutput += data.toString());
 
+const uploadTimeout = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    pythonProcess.kill('SIGTERM');
+    parentPort.postMessage({ status: 'error', error: 'Batch upload timeout' });
+    cleanupFile(() => process.exit(1));
+}, 5 * 60 * 1000);
+
 pythonProcess.on('error', (err) => {
-    parentPort.postMessage({ status: 'error', error: err.message });
+    if (settled) return;
+    settled = true;
+    clearTimeout(uploadTimeout);
+    cleanupFile(() => parentPort.postMessage({ status: 'error', error: err.message }));
 });
 
 pythonProcess.on('close', (code) => {
-    fs.unlink(filePath, (err) => { if (err) console.error('File cleanup error:', err); });
+    if (settled) return;
+    settled = true;
+    clearTimeout(uploadTimeout);
+
     if (code === 0) {
-        parentPort.postMessage({ status: 'success', output });
+        cleanupFile(() => parentPort.postMessage({ status: 'success', output }));
     } else {
-        parentPort.postMessage({ status: 'error', error: 'Mapper process failed', exitCode: code, output, errorOutput });
+        cleanupFile(() => parentPort.postMessage({ status: 'error', error: 'Mapper process failed', exitCode: code, output, errorOutput }));
     }
 });
-
-setTimeout(() => {
-    pythonProcess.kill('SIGTERM');
-    parentPort.postMessage({ status: 'error', error: 'Batch upload timeout' });
-    process.exit(1);
-}, 5 * 60 * 1000);

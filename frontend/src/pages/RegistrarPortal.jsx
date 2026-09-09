@@ -12,12 +12,10 @@ import RegistrarStudentSectioning from "../components/registrar/RegistrarStudent
 import RegistrarSectionsCreated from "../components/registrar/RegistrarSectionsCreated";
 import { programs } from "../data/registrarData";
 import { getSystemSetting } from "../services/api";
-import { useRecoveredState } from "../utils/sessionRecovery";
 
 function RegistrarPortal({ onLogout, onResetEncodingSeason, allGrades = {} }) {
-  const [activeTab, setActiveTab] = useRecoveredState("pageRegistrar:activeTab", "dashboard");
-  const [sectioningDepartment, setSectioningDepartment] = useRecoveredState(
-    "pageRegistrar:sectioningDepartment",
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [sectioningDepartment, setSectioningDepartment] = useState(
     programs[0] || ""
   );
   const [sectioningVersion, setSectioningVersion] = useState(0);
@@ -81,26 +79,7 @@ function RegistrarPortal({ onLogout, onResetEncodingSeason, allGrades = {} }) {
     }
   };
 
-  const getSectionDescription = () => {
-    switch (activeTab) {
-      case "dashboard":
-        return "Overview of registrar activities and grade encoding progress.";
-      case "encoding":
-        return "Manage the opening and closing of the encoding period.";
-      case "sectioning":
-        return "Import student lists and create sections.";
-      case "sectionsCreated":
-        return "Review, edit, promote, and maintain registrar-created sections.";
-      case "monitoring":
-        return "Track faculty encoding progress and monitor submission status in real time.";
-      case "finalization":
-        return "Finalize submitted grades and upload them to student accounts.";
-      case "reports":
-        return "Generate and download PDF summaries for records and documentation.";
-      default:
-        return "Overview of registrar activities and grade encoding progress.";
-    }
-  };
+
 
   const renderContent = () => {
   if (activeTab === "dashboard") {
@@ -167,9 +146,7 @@ function RegistrarPortal({ onLogout, onResetEncodingSeason, allGrades = {} }) {
       <h3 className="text-xl font-semibold text-[#003366]">
         {getSectionTitle()}
       </h3>
-      <p className="mt-2 text-sm text-slate-500">
-        {getSectionDescription()}
-      </p>
+      
       <p className="mt-4 text-sm text-slate-400">
         This section will be added next.
       </p>
@@ -181,21 +158,20 @@ function RegistrarPortal({ onLogout, onResetEncodingSeason, allGrades = {} }) {
     <div className="min-h-screen bg-[#f3f4f6]">
       <RegistrarHeader registrarData={registrarData} onLogout={onLogout} />
 
-      <div className="px-4 py-6 sm:px-6">
+      <div className="px-6 py-6">
         <div className="flex flex-col gap-6 lg:flex-row">
           <RegistrarSidebar
             activeTab={activeTab}
             setActiveTab={setActiveTab}
+            managementDefaultTab="monitoring"
           />
 
-          <main className="min-w-0 flex-1 space-y-4">
+          <main className="flex-1 space-y-4">
             <div>
               <h2 className="text-2xl font-bold text-[#003366]">
                 {getSectionTitle()}
               </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                {getSectionDescription()}
-              </p>
+              
             </div>
 
             {renderContent()}

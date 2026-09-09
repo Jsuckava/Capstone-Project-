@@ -1,5 +1,0 @@
-2026-05-20 11:09:45.609 +00:00 [INF] Application starting up...
-2026-05-20 11:09:46.393 +00:00 [WRN] SignalR Redis backplane disabled because Redis connection string is not configured.
-2026-05-20 11:09:46.401 +00:00 [FTL]  Application terminated unexpectedly
-System.InvalidOperationException: JWT_SECRET environment variable is required.
-   at Program.<Main>$(String[] args) in /home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/Program.cs:line 144

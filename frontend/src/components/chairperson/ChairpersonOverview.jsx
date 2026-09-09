@@ -23,9 +23,9 @@ function ChairpersonOverview({ metrics }) {
       subtitle: "Sections sent back to faculty for correction",
     },
     {
-      title: "Forwarded Sections",
-      value: metrics.forwardedSections,
-      subtitle: "Sections already sent to the registrar",
+      title: "Approved Sections",
+      value: metrics.approvedSections,
+      subtitle: "Sections approved and ready to forward to registrar",
     },
   ];
 

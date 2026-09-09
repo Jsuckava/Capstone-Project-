@@ -42,8 +42,8 @@ const BulkUploadModal = ({
     const rows = sectionData.students
       .map((student, index) => {
         const rowNumber = index + 2;
-        const midtermFormula = `"=IF(E${rowNumber}="""",ROUND(((C${rowNumber}*20%)+(D${rowNumber}*10%)+(F${rowNumber}*60%))/90%,2),ROUND((C${rowNumber}*20%)+(D${rowNumber}*10%)+(E${rowNumber}*10%)+(F${rowNumber}*60%),2))"`;
-        const finalFormula = `"=IF(J${rowNumber}="""",ROUND(((H${rowNumber}*20%)+(I${rowNumber}*10%)+(K${rowNumber}*60%))/90%,2),ROUND((H${rowNumber}*20%)+(I${rowNumber}*10%)+(J${rowNumber}*10%)+(K${rowNumber}*60%),2))"`;
+        const midtermFormula = `"=ROUND((C${rowNumber}*20%)+(D${rowNumber}*10%)+(E${rowNumber}*10%)+(F${rowNumber}*60%),2)"`;
+        const finalFormula = `"=ROUND((H${rowNumber}*20%)+(I${rowNumber}*10%)+(J${rowNumber}*10%)+(K${rowNumber}*60%),2)"`;
         const finalRatingFormula = `"=ROUND(AVERAGE(G${rowNumber},L${rowNumber}),2)"`;
         const studentName =
           student.name ||
@@ -202,7 +202,7 @@ const BulkUploadModal = ({
 
                 <p>For pasted text: Student ID,{" "}{systemTerm === "midterm" ? "Midterm Grade" : "Final Grade"} (60-100)</p>
 
-                    <p className="mb-2">Separate pasted values with comma, space, or tab</p>
+                    
 
                     <p className="mb-1">
                     Example:{" "}

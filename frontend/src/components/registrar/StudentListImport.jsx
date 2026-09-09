@@ -29,9 +29,7 @@ export function StudentSubmissionLogs() {
           <h3 className="text-xl font-bold text-[#003366]">
             Submission Logs
           </h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Track which department files were already imported for sectioning.
-          </p>
+          
         </div>
 
         <button
@@ -333,7 +331,8 @@ function StudentListImport({ selectedProgram = "", onImportComplete }) {
           <p className="mt-1 text-sm text-slate-500">
             Please upload one Excel CSV file per department containing student IDs, 
             sex, last names, first names, and middle initials. 
-            These files should be saved in the Registrar Workspace for official sectioning.
+            This prepares the sectioning roster only. Create or re-enroll official
+            student accounts from Student Enrollment before syncing a section.
           </p>
         </div>
 
@@ -441,7 +440,7 @@ function StudentListImport({ selectedProgram = "", onImportComplete }) {
               onClick={handleImport}
               className="rounded-2xl bg-[#003366] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#00264d]"
             >
-              Import for Sectioning
+              Import Roster for Sectioning
             </button>
           </div>
         </div>

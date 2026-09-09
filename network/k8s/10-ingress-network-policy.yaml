@@ -21,14 +21,13 @@ spec:
         operator: In
         values:
           - middleware-api
-          - client-app
+          - dotnet-api-gateway
           - frontend
           - ipfs-node
   policyTypes:
   - Ingress
   ingress:
   - from:
-    - namespaceSelector: {}
     - ipBlock:
         cidr: 35.191.0.0/16
     - ipBlock:

@@ -11,6 +11,19 @@ spec:
     requests:
       storage: 50Gi
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: couchdb-single-node-config
+  namespace: plv-main-campus
+data:
+  10-single-node.ini: |-
+    [cluster]
+    n = 1
+
+    [couchdb]
+    single_node = true
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,11 +31,11 @@ metadata:
   namespace: plv-main-campus
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: peer-registrar
-  strategy:
-    type: Recreate
   template:
     metadata:
       labels:
@@ -30,9 +43,27 @@ spec:
         org: registrar
     spec:
       serviceAccountName: peer-sa
-      hostAliases:
-      - ip: "127.0.0.1"
-        hostnames: ["peer0.registrar.capstone.com", "registrar-chaincode"]
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_A__"
+      initContainers:
+      - name: wait-for-couchdb
+        image: busybox:1.36.1
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -ec
+        - |
+          echo "Waiting for couchdb-registrar:5984..."
+          until nc -w 2 couchdb-registrar 5984 </dev/null; do
+            sleep 2
+          done
+        resources:
+          requests:
+            cpu: 5m
+            memory: 8Mi
+          limits:
+            cpu: 50m
+            memory: 32Mi
       containers:
       - name: peer
         image: hyperledger/fabric-peer:2.5.4
@@ -43,6 +74,8 @@ spec:
           name: chaincode
         - containerPort: 7053
           name: events
+        - containerPort: 9443
+          name: operations
         env:
         - name: FABRIC_CFG_PATH
           value: /etc/hyperledger/fabric
@@ -86,6 +119,10 @@ spec:
             secretKeyRef:
               name: blockgo-secrets
               key: COUCHDB_PASS
+        - name: CORE_METRICS_PROVIDER
+          value: prometheus
+        - name: CORE_OPERATIONS_LISTENADDRESS
+          value: 0.0.0.0:9443
         volumeMounts:
         - name: peer-storage
           mountPath: /var/hyperledger/production
@@ -113,16 +150,27 @@ spec:
         - name: crypto
           mountPath: /var/hyperledger/tls/ca.crt
           subPath: ca.crt
+        startupProbe:
+          httpGet:
+            path: /metrics
+            port: operations
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 60
         livenessProbe:
-          tcpSocket:
-            port: 7051
+          httpGet:
+            path: /metrics
+            port: operations
           initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 3
         readinessProbe:
-          tcpSocket:
-            port: 7051
+          httpGet:
+            path: /metrics
+            port: operations
           initialDelaySeconds: 10
           periodSeconds: 5
+          timeoutSeconds: 3
       volumes:
       - name: peer-storage
         persistentVolumeClaim:
@@ -145,6 +193,9 @@ spec:
   ports:
   - port: 7051
     name: peer
+  - port: 9443
+    targetPort: 9443
+    name: operations
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -162,6 +213,22 @@ spec:
       labels:
         app: couchdb-registrar
     spec:
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_A__"
+      initContainers:
+      - name: prepare-couchdb-config
+        image: busybox:1.36.1
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -ec
+        - cp /config-source/10-single-node.ini /config-local/10-single-node.ini && chmod 0644 /config-local/10-single-node.ini
+        volumeMounts:
+        - name: couchdb-single-node-config
+          mountPath: /config-source
+          readOnly: true
+        - name: couchdb-local-config
+          mountPath: /config-local
       containers:
       - name: couchdb
         image: couchdb:3.2.2
@@ -179,35 +246,45 @@ spec:
             secretKeyRef:
               name: blockgo-secrets
               key: COUCHDB_PASS
-        - name: COUCHDB_SINGLE_NODE
-          value: "true"
         volumeMounts:
         - name: couchdb-storage
           mountPath: /opt/couchdb/data
+        - name: couchdb-local-config
+          mountPath: /opt/couchdb/etc/local.d
+        startupProbe:
+          httpGet:
+            path: /_up
+            port: 5984
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 60
         livenessProbe:
           httpGet:
             path: /_up
             port: 5984
-            scheme: HTTP
-            httpHeaders:
-            - name: Authorization
-              value: "Basic Y2Fwc3RvbmU6cGFzczEyMw=="
           initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /_up
             port: 5984
-            scheme: HTTP
-            httpHeaders:
-            - name: Authorization
-              value: "Basic Y2Fwc3RvbmU6cGFzczEyMw=="
           initialDelaySeconds: 5
           periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: couchdb-single-node-config
+        configMap:
+          name: couchdb-single-node-config
+      - name: couchdb-local-config
+        emptyDir: {}
   volumeClaimTemplates:
   - metadata:
       name: couchdb-storage
     spec:
+      storageClassName: fabric-storage
       accessModes: ["ReadWriteOnce"]
       resources:
         requests:
@@ -241,6 +318,22 @@ spec:
       labels:
         app: couchdb-wallet-registrar
     spec:
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_A__"
+      initContainers:
+      - name: prepare-couchdb-config
+        image: busybox:1.36.1
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -ec
+        - cp /config-source/10-single-node.ini /config-local/10-single-node.ini && chmod 0644 /config-local/10-single-node.ini
+        volumeMounts:
+        - name: couchdb-single-node-config
+          mountPath: /config-source
+          readOnly: true
+        - name: couchdb-local-config
+          mountPath: /config-local
       containers:
       - name: couchdb
         image: couchdb:3.2.2
@@ -258,11 +351,40 @@ spec:
             secretKeyRef:
               name: blockgo-secrets
               key: COUCHDB_PASS
-        - name: COUCHDB_SINGLE_NODE
-          value: "true"
         volumeMounts:
         - name: couchdb-wallet-storage
           mountPath: /opt/couchdb/data
+        - name: couchdb-local-config
+          mountPath: /opt/couchdb/etc/local.d
+        startupProbe:
+          httpGet:
+            path: /_up
+            port: 5984
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 60
+        livenessProbe:
+          httpGet:
+            path: /_up
+            port: 5984
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /_up
+            port: 5984
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: couchdb-single-node-config
+        configMap:
+          name: couchdb-single-node-config
+      - name: couchdb-local-config
+        emptyDir: {}
   volumeClaimTemplates:
   - metadata:
       name: couchdb-wallet-storage
@@ -281,5 +403,6 @@ spec:
   selector:
     app: couchdb-wallet-registrar
   ports:
-  - port: 5984
+  - port: 5985
+    targetPort: 5984
     name: couchdb

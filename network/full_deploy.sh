@@ -20,20 +20,8 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
-export PATH="$PATH:$SCRIPT_DIR/bin"
 
 declare -a PIDS
-
-ensure_fabric_binaries() {
-    local missing=()
-
-    command -v fabric-ca-client >/dev/null 2>&1 || missing+=("fabric-ca-client")
-    command -v configtxgen >/dev/null 2>&1 || missing+=("configtxgen")
-
-    if [ ${#missing[@]} -gt 0 ]; then
-        log_error "Missing Fabric binaries: ${missing[*]}. Run: cd \"$SCRIPT_DIR\" && ./install_binaries.sh"
-    fi
-}
 
 cleanup_processes() {
     echo ""
@@ -47,7 +35,7 @@ cleanup_processes() {
     fi
     pkill -9 -f nginx_failover_watchdog.sh 2>/dev/null || true
     docker compose -f docker-compose-main.yaml -f docker-compose-annex.yaml -f docker-compose-pubad.yaml down -v --remove-orphans 2>/dev/null || true
-    docker rm -f -v couchdb_wallet couchdb_wallet_faculty couchdb_wallet_department blockgo-middleware nginx-shield-main-failover nginx-shield-annex-failover nginx-shield-pubad-failover 2>/dev/null || true
+    docker rm -f -v couchdb_wallet couchdb_wallet_faculty couchdb_wallet_department blockgo-middleware blockgo-api-gateway blockgo-auth-service blockgo-fabric-identity-service blockgo-ledger-service blockgo-grade-upload-service blockgo-settings-service nginx-shield-main-failover nginx-shield-annex-failover nginx-shield-pubad-failover 2>/dev/null || true
     log_info "All processes stopped and volumes wiped."
 }
 
@@ -130,16 +118,14 @@ if [ -z "$JWT_SECRET" ] || [ -z "$INTERNAL_API_KEY" ] || [ -z "$POSTGRES_PASS" ]
     log_error "Critical environment variables (JWT_SECRET, INTERNAL_API_KEY, POSTGRES_PASS) are not set. Please define them in your .env file."
 fi
 
-ensure_fabric_binaries
-
 spawn_couchdb_wallet() {
     log_info "Spawning standalone CouchDB Wallet container on port 5990..."
     # Prune existing wallet to ensure a clean state
     docker rm -f -v couchdb_wallet 2>/dev/null || true
     docker run -d --name couchdb_wallet \
         --network registrar-net \
-        -e COUCHDB_USER="${COUCHDB_USER:-capstone}" \
-        -e COUCHDB_PASSWORD="${COUCHDB_PASS:-pass123}" \
+        -e COUCHDB_USER="${COUCHDB_USER:-PLVADMIN}" \
+        -e COUCHDB_PASSWORD="${COUCHDB_PASS:-PLVSYSTEM2026}" \
         -p 5990:5984 \
         couchdb:3.2.2
 }
@@ -158,7 +144,7 @@ fi
     pkill -9 -f nginx_failover_watchdog.sh 2>/dev/null || true
 
 docker compose -f docker-compose-main.yaml -f docker-compose-annex.yaml -f docker-compose-pubad.yaml down -v --remove-orphans 2>/dev/null || true
-docker rm -f -v couchdb_wallet couchdb_wallet_faculty couchdb_wallet_department blockgo-middleware nginx-shield-main-failover nginx-shield-annex-failover nginx-shield-pubad-failover 2>/dev/null || true
+docker rm -f -v couchdb_wallet couchdb_wallet_faculty couchdb_wallet_department blockgo-middleware blockgo-api-gateway blockgo-auth-service blockgo-fabric-identity-service blockgo-ledger-service blockgo-grade-upload-service blockgo-settings-service nginx-shield-main-failover nginx-shield-annex-failover nginx-shield-pubad-failover 2>/dev/null || true
 
 # Force remove root-owned files created by containers to prevent CA container crashes
 docker run --rm -v "$(pwd):/tmp/network" alpine sh -c "find /tmp/network/fabric-ca -type f ! -name '*.yaml' -delete && rm -rf /tmp/network/${CRYPTO_DIR} /tmp/network/${ARTIFACTS_DIR} /tmp/network/../middleware/wallet" 2>/dev/null || true
@@ -188,6 +174,15 @@ enroll_org_identities() {
     local ADMIN_PASS=${BOOTSTRAP_REGISTRAR_PASS:-adminpw}
     local ORG_DIR="$(pwd)/${CRYPTO_DIR}/peerOrganizations/${DOMAIN}"
     local TLS_CERT="$(pwd)/fabric-ca/${ORG}/tls-cert.pem" 
+    local K8S_PEER_SERVICE=""
+    local K8S_NAMESPACE=""
+
+    case "$ORG" in
+        registrar) K8S_PEER_SERVICE="peer-registrar"; K8S_NAMESPACE="plv-main-campus" ;;
+        faculty) K8S_PEER_SERVICE="peer-faculty"; K8S_NAMESPACE="plv-annex-campus" ;;
+        department) K8S_PEER_SERVICE="peer-department"; K8S_NAMESPACE="plv-pubad-campus" ;;
+        *) log_error "Unknown organization for Kubernetes TLS SANs: $ORG" ;;
+    esac
     
     log_info "Bootstrapping ${MSP_ID}..."
     mkdir -p "${ORG_DIR}/msp" "${ORG_DIR}/users/Admin@${DOMAIN}/msp" "${ORG_DIR}/peers/peer0.${DOMAIN}/msp" "${ORG_DIR}/peers/peer0.${DOMAIN}/tls" "${ORG_DIR}/peers/peer1.${DOMAIN}/msp" "${ORG_DIR}/peers/peer1.${DOMAIN}/tls"
@@ -198,14 +193,14 @@ enroll_org_identities() {
     fabric-ca-client register --caname ca-${ORG} --id.name peer0 --id.secret peer0pw --id.type peer --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
     fabric-ca-client enroll -u https://peer0:peer0pw@localhost:${PORT} --caname ca-${ORG} -M "${ORG_DIR}/peers/peer0.${DOMAIN}/msp" --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
 
-    fabric-ca-client enroll -u https://peer0:peer0pw@localhost:${PORT} --caname ca-${ORG} -M "${ORG_DIR}/peers/peer0.${DOMAIN}/tls" --enrollment.profile tls --csr.hosts "peer0.${DOMAIN},localhost" --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
+    fabric-ca-client enroll -u https://peer0:peer0pw@localhost:${PORT} --caname ca-${ORG} -M "${ORG_DIR}/peers/peer0.${DOMAIN}/tls" --enrollment.profile tls --csr.hosts "peer0.${DOMAIN},localhost,${K8S_PEER_SERVICE},${K8S_PEER_SERVICE}.${K8S_NAMESPACE}.svc.cluster.local" --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
 
     cp "${ORG_DIR}/peers/peer0.${DOMAIN}/tls/signcerts/"* "${ORG_DIR}/peers/peer0.${DOMAIN}/tls/server.crt"
     cp "${ORG_DIR}/peers/peer0.${DOMAIN}/tls/keystore/"* "${ORG_DIR}/peers/peer0.${DOMAIN}/tls/server.key"
     cp "${ORG_DIR}/msp/cacerts/localhost-${PORT}-ca-${ORG}.pem" "${ORG_DIR}/peers/peer0.${DOMAIN}/tls/ca.crt"
     fabric-ca-client register --caname ca-${ORG} --id.name peer1 --id.secret peer1pw --id.type peer --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
     fabric-ca-client enroll -u https://peer1:peer1pw@localhost:${PORT} --caname ca-${ORG} -M "${ORG_DIR}/peers/peer1.${DOMAIN}/msp" --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
-    fabric-ca-client enroll -u https://peer1:peer1pw@localhost:${PORT} --caname ca-${ORG} -M "${ORG_DIR}/peers/peer1.${DOMAIN}/tls" --enrollment.profile tls --csr.hosts "peer1.${DOMAIN},localhost" --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
+    fabric-ca-client enroll -u https://peer1:peer1pw@localhost:${PORT} --caname ca-${ORG} -M "${ORG_DIR}/peers/peer1.${DOMAIN}/tls" --enrollment.profile tls --csr.hosts "peer1.${DOMAIN},localhost,${K8S_PEER_SERVICE}-2,${K8S_PEER_SERVICE}-2.${K8S_NAMESPACE}.svc.cluster.local" --tls.certfiles "${TLS_CERT}" --home "${ORG_DIR}"
     cp "${ORG_DIR}/peers/peer1.${DOMAIN}/tls/signcerts/"* "${ORG_DIR}/peers/peer1.${DOMAIN}/tls/server.crt"
     cp "${ORG_DIR}/peers/peer1.${DOMAIN}/tls/keystore/"* "${ORG_DIR}/peers/peer1.${DOMAIN}/tls/server.key"
     # The peer's TLS CA cert is the root cert of the CA that issued its TLS cert.
@@ -250,7 +245,11 @@ enroll_orderer_identities() {
     local TLS_CERT="$(pwd)/fabric-ca/registrar/tls-cert.pem"
 
     log_info "Bootstrapping Orderer (capstone.com)..."
-    mkdir -p "${ORDERER_DIR}/msp" "${ORDERER_DIR}/orderers/orderer.${DOMAIN}/msp" "${ORDERER_DIR}/orderers/orderer.${DOMAIN}/tls" "${ORDERER_DIR}/orderers/orderer2.${DOMAIN}/msp" "${ORDERER_DIR}/orderers/orderer2.${DOMAIN}/tls" "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/msp" "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/tls"
+    mkdir -p "${ORDERER_DIR}/msp"
+    local orderer_name
+    for orderer_name in orderer orderer2 orderer3 orderer4 orderer5 orderer6; do
+        mkdir -p "${ORDERER_DIR}/orderers/${orderer_name}.${DOMAIN}/msp" "${ORDERER_DIR}/orderers/${orderer_name}.${DOMAIN}/tls"
+    done
 
     while [ ! -f "${TLS_CERT}" ]; do log_warn "Waiting for Orderer's CA TLS cert..."; sleep 2; done
 
@@ -294,6 +293,24 @@ enroll_orderer_identities() {
     mkdir -p "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/msp/admincerts"
     cp "${CRYPTO_DIR}/peerOrganizations/registrar.capstone.com/users/Admin@registrar.capstone.com/msp/signcerts/cert.pem" "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/msp/admincerts/cert.pem"
 
+    # Production orderers 4-6. The local configtx profile still uses only 1-3.
+    local orderer_number
+    local orderer_namespace
+    for orderer_number in 4 5 6; do
+        case "$orderer_number" in
+            4) orderer_namespace="plv-annex-campus" ;;
+            5|6) orderer_namespace="plv-pubad-campus" ;;
+        esac
+        fabric-ca-client register --caname ca-registrar --id.name "orderer${orderer_number}" --id.secret ordererpw --id.type orderer --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+        fabric-ca-client enroll -u "https://orderer${orderer_number}:ordererpw@localhost:${PORT}" --caname ca-registrar -M "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/msp" --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+        fabric-ca-client enroll -u "https://orderer${orderer_number}:ordererpw@localhost:${PORT}" --caname ca-registrar -M "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/tls" --enrollment.profile tls --csr.hosts "orderer${orderer_number}.capstone.com,localhost,orderer-${orderer_number},orderer-${orderer_number}.${orderer_namespace}.svc.cluster.local" --tls.certfiles "${TLS_CERT}" --home "${ORDERER_DIR}"
+        cp "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/tls/signcerts/"* "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/tls/server.crt"
+        cp "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/tls/keystore/"* "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/tls/server.key"
+        cp "${ORDERER_DIR}/msp/cacerts/localhost-7054-ca-registrar.pem" "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/tls/ca.crt"
+        mkdir -p "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/msp/admincerts"
+        cp "${CRYPTO_DIR}/peerOrganizations/registrar.capstone.com/users/Admin@registrar.capstone.com/msp/signcerts/cert.pem" "${ORDERER_DIR}/orderers/orderer${orderer_number}.${DOMAIN}/msp/admincerts/cert.pem"
+    done
+
     # Generate Orderer MSP config
     local CA_FILENAME="localhost-${PORT}-ca-registrar.pem"
 
@@ -321,6 +338,9 @@ EOF
     cp "${ORDERER_DIR}/msp/config.yaml" "${ORDERER_DIR}/orderers/orderer.${DOMAIN}/msp/config.yaml"
     cp "${ORDERER_DIR}/msp/config.yaml" "${ORDERER_DIR}/orderers/orderer2.${DOMAIN}/msp/config.yaml"
     cp "${ORDERER_DIR}/msp/config.yaml" "${ORDERER_DIR}/orderers/orderer3.${DOMAIN}/msp/config.yaml"
+    cp "${ORDERER_DIR}/msp/config.yaml" "${ORDERER_DIR}/orderers/orderer4.${DOMAIN}/msp/config.yaml"
+    cp "${ORDERER_DIR}/msp/config.yaml" "${ORDERER_DIR}/orderers/orderer5.${DOMAIN}/msp/config.yaml"
+    cp "${ORDERER_DIR}/msp/config.yaml" "${ORDERER_DIR}/orderers/orderer6.${DOMAIN}/msp/config.yaml"
 }
 
 # Run all enrollments

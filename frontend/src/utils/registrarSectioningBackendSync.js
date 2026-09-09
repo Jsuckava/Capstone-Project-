@@ -1,12 +1,10 @@
 import {
-  batchEnrollStudentsToSection,
+  assignStudentsToSection,
   createSection,
   fetchDepartmentSections,
 } from "../services/api";
 import {
   YEAR_LEVEL_PREFIXES,
-  buildCsvContent,
-  getStudentMiddleName,
 } from "./studentSectioningHelpers";
 
 const yearLevelNumberFrom = (value = "", sectionCode = "") => {
@@ -31,43 +29,9 @@ const sectionNumberFrom = (sectionCode = "") => {
 const normalizeSectionValue = (value = "") =>
   String(value || "").trim().replace(/\D/g, "");
 
-const buildFullName = (student = {}) =>
-  [
-    student.firstName,
-    getStudentMiddleName(student),
-    student.lastName,
-  ]
-    .filter(Boolean)
-    .join(" ") ||
-  student.fullname ||
-  student.name ||
-  `Student ${student.studentId || ""}`.trim();
-
-const buildEnrollmentFile = (students = [], sectionCode = "section") => {
-  const rows = students.map((student) => [
-    student.studentId || "",
-    student.email || student.studentEmail || student.studentId || "",
-    buildFullName(student),
-    student.firstName || "",
-    getStudentMiddleName(student),
-    student.lastName || "",
-    student.sex || "",
-    "",
-  ]);
-  const csv = buildCsvContent([
-    ["student_id", "email", "full_name", "first_name", "middle_name", "last_name", "sex", "dob"],
-    ...rows,
-  ]);
-
-  return new File([csv], `${sectionCode}-students.csv`, {
-    type: "text/csv;charset=utf-8;",
-  });
-};
-
 const findBackendSection = (sections = [], department = "", yearLevel = "", sectionNum = "") =>
   sections.find(
     (section) =>
-      String(section.department || "") === String(department || "") &&
       normalizeSectionValue(section.yearLevel) === normalizeSectionValue(yearLevel) &&
       normalizeSectionValue(section.sectionNum) === normalizeSectionValue(sectionNum)
   );
@@ -77,23 +41,17 @@ const getDepartmentSections = async (department) => {
   return response.data || response.sections || [];
 };
 
-const mapStudentsForSectionCreate = (students = []) =>
-  students.map((student) => ({
-    studentId: student.studentId || "",
-    sex: student.sex || "",
-    lastName: student.lastName || "",
-    firstName: student.firstName || "",
-    middleName: getStudentMiddleName(student),
-    email: student.email || student.studentEmail || student.studentId || "",
-    dob: student.dob || student.dateOfBirth || "",
-  }));
-
 export const syncSectioningBatchToBackend = async (batch = {}) => {
   const department = batch.program || "";
   const sectionPlans = batch.sectionPlans || [];
 
   if (!department || !sectionPlans.length) {
     return { sectionsSynced: 0, studentsSynced: 0 };
+  }
+
+  const schoolYear = batch.schoolYear || (/^\d{4}-\d{4}$/.test(batch.batchYear || '') ? batch.batchYear : '');
+  if (!schoolYear || !batch.semester) {
+    throw new Error('Select the enrollment school year and semester before saving sections.');
   }
 
   let backendSections = await getDepartmentSections(department);
@@ -104,14 +62,6 @@ export const syncSectioningBatchToBackend = async (batch = {}) => {
     const yearLevel = yearLevelNumberFrom(section.yearLevel, section.sectionCode);
     const sectionNum = sectionNumberFrom(section.sectionCode);
     if (!yearLevel || !sectionNum) continue;
-    const sectionStudents = (batch.students || []).filter(
-      (student) =>
-        student.sectionCode === section.sectionCode &&
-        normalizeSectionValue(
-          yearLevelNumberFrom(student.yearLevel || section.yearLevel, section.sectionCode)
-        ) === normalizeSectionValue(yearLevel)
-    );
-    let studentsSyncedWithCreate = false;
 
     let backendSection = findBackendSection(
       backendSections,
@@ -126,11 +76,8 @@ export const syncSectioningBatchToBackend = async (batch = {}) => {
           department,
           yearLevel,
           sectionNum,
-          students: mapStudentsForSectionCreate(sectionStudents),
         });
         sectionsSynced += 1;
-        studentsSynced += created.studentsSaved || 0;
-        studentsSyncedWithCreate = (created.studentsSaved || 0) > 0;
         backendSection = {
           id: created.id,
           department,
@@ -150,12 +97,28 @@ export const syncSectioningBatchToBackend = async (batch = {}) => {
       }
     }
 
-    if (!backendSection?.id || !sectionStudents.length) continue;
-    if (studentsSyncedWithCreate) continue;
+    const sectionStudents = (batch.students || []).filter(
+      (student) =>
+        student.sectionCode === section.sectionCode &&
+        normalizeSectionValue(
+          yearLevelNumberFrom(student.yearLevel || section.yearLevel, section.sectionCode)
+        ) === normalizeSectionValue(yearLevel)
+    );
 
-    const enrollmentFile = buildEnrollmentFile(sectionStudents, section.sectionCode);
-    await batchEnrollStudentsToSection(enrollmentFile, backendSection.id);
-    studentsSynced += sectionStudents.length;
+    if (!backendSection?.id || !sectionStudents.length) continue;
+
+    const studentIds = [...new Set(sectionStudents.map((student) => student.studentId))];
+    const expectedSectionIds = Object.fromEntries(sectionStudents
+      .filter((student) => student.academicSectionId && String(student.academicSectionId) !== String(backendSection.id))
+      .map((student) => [student.studentId, Number(student.academicSectionId)]));
+    const period = { schoolYear, semester: batch.semester };
+    if (Object.keys(expectedSectionIds).length) period.expectedSectionIds = expectedSectionIds;
+    const result = await assignStudentsToSection(backendSection.id, studentIds, period);
+    if (result.errors?.length || result.status !== 'Success' || result.assignedCount !== studentIds.length) {
+      throw new Error(result.errors?.join('; ') || result.message || 'Some students could not be assigned. Refresh the enrolled roster and retry.');
+    }
+    sectionStudents.forEach((student) => { student.academicSectionId = Number(backendSection.id); });
+    studentsSynced += result.assignedCount;
   }
 
   return { sectionsSynced, studentsSynced };

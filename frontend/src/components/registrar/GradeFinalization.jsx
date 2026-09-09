@@ -12,6 +12,7 @@ import {
   STUDENT_PUBLISHED_GRADES_KEY,
   upsertPublishedStudentGrades,
 } from "../../utils/publishedGradesHelpers";
+import { isChairpersonForwardedGradeStatus } from "../../utils/gradeStatus";
 
 const getStudentId = (student = {}) => student.studentId || student.id || "";
 
@@ -213,7 +214,7 @@ function GradeFinalization({ allGrades = {} }) {
     const sectionsByAssignment = new Map();
 
     Object.entries(reviewData)
-      .filter(([, review]) => ["approved", "forwarded"].includes(review.status))
+      .filter(([, review]) => isChairpersonForwardedGradeStatus(review.status))
       .forEach(([reviewKey, review]) => {
         const assignment =
           assignments.find(

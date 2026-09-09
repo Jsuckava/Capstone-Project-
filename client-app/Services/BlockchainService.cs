@@ -44,6 +44,50 @@ namespace BlockGo.Services
             return await response.Content.ReadAsStringAsync();
         }
 
+        public async Task<string> GetStudentTransactionsAsync(string studentUsername)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, $"{_middlewareBaseUrl}/api/student-transactions");
+            request.Headers.Add("x-user-identity", studentUsername);
+            var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger?.LogError("Middleware student transaction history error: {Error}", errorContent);
+                throw new Exception($"Middleware Error: {errorContent}");
+            }
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        public async Task<string> GetGradeHistoryAsync(string recordId, string invokerUsername)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, $"{_middlewareBaseUrl}/api/grade-history/{Uri.EscapeDataString(recordId)}");
+            request.Headers.Add("x-user-identity", invokerUsername);
+            var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new Exception($"Middleware Error: {errorContent}");
+            }
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        public async Task<string> RecordAuditEventAsync(BlockchainAuditEvent auditEvent, string invokerUsername)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{_middlewareBaseUrl}/api/fabric/audit-event")
+            {
+                Content = JsonContent.Create(auditEvent)
+            };
+            request.Headers.Add("x-user-identity", invokerUsername);
+            var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger?.LogError("Middleware audit event error: {Error}", errorContent);
+                throw new Exception($"Middleware Error: {errorContent}");
+            }
+            return await response.Content.ReadAsStringAsync();
+        }
+
         public async Task<string> GetGradeAsync(string recordId, string invokerUsername)
         {
             _logger?.LogInformation("Getting grade for record: {RecordId} as {User}", recordId, invokerUsername);

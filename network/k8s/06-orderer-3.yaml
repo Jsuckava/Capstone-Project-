@@ -1,5 +1,17 @@
 ---
 # Fabric Orderer 3 (Annex Campus)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: orderer-3-pvc
+  namespace: plv-annex-campus
+spec:
+  accessModes: [ "ReadWriteOnce" ]
+  storageClassName: fabric-storage
+  resources:
+    requests:
+      storage: 20Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,6 +19,11 @@ metadata:
   namespace: plv-annex-campus
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: orderer-3
@@ -17,6 +34,8 @@ spec:
         org: orderer
     spec:
       serviceAccountName: orderer-sa
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_C__"
       containers:
       - name: orderer
         image: hyperledger/fabric-orderer:2.5.4
@@ -26,6 +45,8 @@ spec:
           name: orderer
         - containerPort: 7051
           name: metrics
+        - containerPort: 9443
+          name: operations
         env:
         - name: FABRIC_CFG_PATH
           value: /etc/hyperledger/fabric
@@ -33,6 +54,10 @@ spec:
           value: "0.0.0.0"
         - name: ORDERER_GENERAL_LISTENPORT
           value: "7050"
+        - name: ORDERER_METRICS_PROVIDER
+          value: prometheus
+        - name: ORDERER_OPERATIONS_LISTENADDRESS
+          value: 0.0.0.0:9443
         - name: ORDERER_GENERAL_BOOTSTRAPMETHOD
           value: none
         - name: ORDERER_GENERAL_LOCALMSPID
@@ -55,14 +80,6 @@ spec:
           value: /var/hyperledger/orderer/tls/server.key
         - name: ORDERER_GENERAL_CLUSTER_ROOTCAS
           value: "[/var/hyperledger/orderer/tls/ca.crt]"
-        - name: ORDERER_GENERAL_CLUSTER_LISTENADDRESS
-          value: "0.0.0.0"
-        - name: ORDERER_GENERAL_CLUSTER_LISTENPORT
-          value: "7051"
-        - name: ORDERER_GENERAL_CLUSTER_SERVERCERTIFICATE
-          value: /var/hyperledger/orderer/tls/server.crt
-        - name: ORDERER_GENERAL_CLUSTER_SERVERPRIVATEKEY
-          value: /var/hyperledger/orderer/tls/server.key
         - name: ORDERER_CHANNELPARTICIPATION_ENABLED
           value: "true"
         - name: ORDERER_ADMIN_LISTENADDRESS
@@ -112,19 +129,31 @@ spec:
         - name: artifacts
           mountPath: /var/hyperledger/orderer/registrar-channel.block
           subPath: registrar-channel.block
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: operations
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
         livenessProbe:
-          tcpSocket:
-            port: 7050
+          httpGet:
+            path: /healthz
+            port: operations
           initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 3
         readinessProbe:
-          tcpSocket:
-            port: 7050
+          httpGet:
+            path: /healthz
+            port: operations
           initialDelaySeconds: 10
           periodSeconds: 5
+          timeoutSeconds: 3
       volumes:
       - name: orderer-storage
-        emptyDir: {}
+        persistentVolumeClaim:
+          claimName: orderer-3-pvc
       - name: orderer-config
         configMap:
           name: fabric-common-config
@@ -153,3 +182,6 @@ spec:
   - port: 7053
     targetPort: 7053
     name: admin
+  - port: 9443
+    targetPort: 9443
+    name: operations

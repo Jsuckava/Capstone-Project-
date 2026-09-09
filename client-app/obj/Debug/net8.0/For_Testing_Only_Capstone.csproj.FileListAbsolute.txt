@@ -1,602 +1,152 @@
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/appsettings.Development.json
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/appsettings.json
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone.staticwebassets.endpoints.json
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone.exe
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone.deps.json
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone.runtimeconfig.json
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone.pdb
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ClosedXML.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ClosedXML.Parser.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/CsvHelper.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/DocumentFormat.OpenXml.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/DocumentFormat.OpenXml.Framework.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ExcelNumberFormat.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Humanizer.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.AspNetCore.OpenApi.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.Bcl.AsyncInterfaces.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.CodeAnalysis.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.CodeAnalysis.CSharp.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.CodeAnalysis.CSharp.Workspaces.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.CodeAnalysis.Workspaces.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Abstractions.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Design.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Relational.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.Extensions.Caching.Memory.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.Extensions.DependencyInjection.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.Extensions.DependencyModel.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.Extensions.Diagnostics.Abstractions.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.Extensions.Diagnostics.HealthChecks.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.Extensions.Hosting.Abstractions.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.Extensions.Logging.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.Extensions.Logging.Abstractions.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.Extensions.Options.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.OpenApi.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Mono.TextTemplating.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Npgsql.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Npgsql.EntityFrameworkCore.PostgreSQL.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/RBush.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Serilog.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Serilog.AspNetCore.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Serilog.Extensions.Hosting.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Serilog.Extensions.Logging.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Serilog.Formatting.Compact.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Serilog.Settings.Configuration.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Serilog.Sinks.Console.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Serilog.Sinks.Debug.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Serilog.Sinks.File.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/SixLabors.Fonts.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Swashbuckle.AspNetCore.Swagger.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Swashbuckle.AspNetCore.SwaggerGen.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Swashbuckle.AspNetCore.SwaggerUI.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/System.CodeDom.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/System.Composition.AttributedModel.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/System.Composition.Convention.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/System.Composition.Hosting.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/System.Composition.Runtime.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/System.Composition.TypedParts.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/System.IO.Packaging.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.CSharp.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.CSharp.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.CSharp.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.CSharp.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.CSharp.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.CSharp.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.CSharp.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.CSharp.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.CSharp.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.CSharp.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.CSharp.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.CSharp.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.CSharp.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.Workspaces.resources.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.csproj.AssemblyReference.cache
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/rpswa.dswa.cache.json
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.GeneratedMSBuildEditorConfig.editorconfig
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.AssemblyInfoInputs.cache
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.AssemblyInfo.cs
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.csproj.CoreCompileInputs.cache
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.MvcApplicationPartsAssemblyInfo.cs
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.MvcApplicationPartsAssemblyInfo.cache
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.sourcelink.json
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/rjimswa.dswa.cache.json
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/rjsmrazor.dswa.cache.json
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/rjsmcshtml.dswa.cache.json
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/scopedcss/bundle/For_Testing_Only_Capstone.styles.css
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/staticwebassets.build.json
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/staticwebassets.build.json.cache
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/staticwebassets.development.json
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/staticwebassets.build.endpoints.json
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/swae.build.ex.cache
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Test.DB73ECCE.Up2Date
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/refint/For_Testing_Only_Capstone.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.pdb
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.genruntimeconfig.cache
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/ref/For_Testing_Only_Capstone.dll
-/app/bin/Debug/net8.0/appsettings.json
-/app/bin/Debug/net8.0/For_Testing_Only_Capstone
-/app/bin/Debug/net8.0/For_Testing_Only_Capstone.deps.json
-/app/bin/Debug/net8.0/For_Testing_Only_Capstone.runtimeconfig.json
-/app/bin/Debug/net8.0/For_Testing_Only_Capstone.dll
-/app/bin/Debug/net8.0/For_Testing_Only_Capstone.pdb
-/app/bin/Debug/net8.0/ClosedXML.dll
-/app/bin/Debug/net8.0/ClosedXML.Parser.dll
-/app/bin/Debug/net8.0/CsvHelper.dll
-/app/bin/Debug/net8.0/DocumentFormat.OpenXml.dll
-/app/bin/Debug/net8.0/DocumentFormat.OpenXml.Framework.dll
-/app/bin/Debug/net8.0/ExcelNumberFormat.dll
-/app/bin/Debug/net8.0/Humanizer.dll
-/app/bin/Debug/net8.0/Microsoft.AspNetCore.OpenApi.dll
-/app/bin/Debug/net8.0/Microsoft.Bcl.AsyncInterfaces.dll
-/app/bin/Debug/net8.0/Microsoft.CodeAnalysis.dll
-/app/bin/Debug/net8.0/Microsoft.CodeAnalysis.CSharp.dll
-/app/bin/Debug/net8.0/Microsoft.CodeAnalysis.CSharp.Workspaces.dll
-/app/bin/Debug/net8.0/Microsoft.CodeAnalysis.Workspaces.dll
-/app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.dll
-/app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Abstractions.dll
-/app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Design.dll
-/app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Relational.dll
-/app/bin/Debug/net8.0/Microsoft.Extensions.Caching.Memory.dll
-/app/bin/Debug/net8.0/Microsoft.Extensions.DependencyInjection.dll
-/app/bin/Debug/net8.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
-/app/bin/Debug/net8.0/Microsoft.Extensions.DependencyModel.dll
-/app/bin/Debug/net8.0/Microsoft.Extensions.Diagnostics.Abstractions.dll
-/app/bin/Debug/net8.0/Microsoft.Extensions.Diagnostics.HealthChecks.dll
-/app/bin/Debug/net8.0/Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.dll
-/app/bin/Debug/net8.0/Microsoft.Extensions.Hosting.Abstractions.dll
-/app/bin/Debug/net8.0/Microsoft.Extensions.Logging.dll
-/app/bin/Debug/net8.0/Microsoft.Extensions.Logging.Abstractions.dll
-/app/bin/Debug/net8.0/Microsoft.Extensions.Options.dll
-/app/bin/Debug/net8.0/Microsoft.OpenApi.dll
-/app/bin/Debug/net8.0/Mono.TextTemplating.dll
-/app/bin/Debug/net8.0/Npgsql.dll
-/app/bin/Debug/net8.0/Npgsql.EntityFrameworkCore.PostgreSQL.dll
-/app/bin/Debug/net8.0/RBush.dll
-/app/bin/Debug/net8.0/Serilog.dll
-/app/bin/Debug/net8.0/Serilog.AspNetCore.dll
-/app/bin/Debug/net8.0/Serilog.Extensions.Hosting.dll
-/app/bin/Debug/net8.0/Serilog.Extensions.Logging.dll
-/app/bin/Debug/net8.0/Serilog.Formatting.Compact.dll
-/app/bin/Debug/net8.0/Serilog.Settings.Configuration.dll
-/app/bin/Debug/net8.0/Serilog.Sinks.Console.dll
-/app/bin/Debug/net8.0/Serilog.Sinks.Debug.dll
-/app/bin/Debug/net8.0/Serilog.Sinks.File.dll
-/app/bin/Debug/net8.0/SixLabors.Fonts.dll
-/app/bin/Debug/net8.0/Swashbuckle.AspNetCore.Swagger.dll
-/app/bin/Debug/net8.0/Swashbuckle.AspNetCore.SwaggerGen.dll
-/app/bin/Debug/net8.0/Swashbuckle.AspNetCore.SwaggerUI.dll
-/app/bin/Debug/net8.0/System.CodeDom.dll
-/app/bin/Debug/net8.0/System.Composition.AttributedModel.dll
-/app/bin/Debug/net8.0/System.Composition.Convention.dll
-/app/bin/Debug/net8.0/System.Composition.Hosting.dll
-/app/bin/Debug/net8.0/System.Composition.Runtime.dll
-/app/bin/Debug/net8.0/System.Composition.TypedParts.dll
-/app/bin/Debug/net8.0/System.IO.Packaging.dll
-/app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.resources.dll
-/app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.resources.dll
-/app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.resources.dll
-/app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.resources.dll
-/app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.resources.dll
-/app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.resources.dll
-/app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.resources.dll
-/app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.resources.dll
-/app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.resources.dll
-/app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.resources.dll
-/app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.resources.dll
-/app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.resources.dll
-/app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.resources.dll
-/app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.CSharp.resources.dll
-/app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.CSharp.resources.dll
-/app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.CSharp.resources.dll
-/app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.CSharp.resources.dll
-/app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.CSharp.resources.dll
-/app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.CSharp.resources.dll
-/app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.CSharp.resources.dll
-/app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.CSharp.resources.dll
-/app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.CSharp.resources.dll
-/app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.CSharp.resources.dll
-/app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.CSharp.resources.dll
-/app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.CSharp.resources.dll
-/app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.CSharp.resources.dll
-/app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/app/obj/Debug/net8.0/For_Testing_Only_Capstone.csproj.AssemblyReference.cache
-/app/obj/Debug/net8.0/For_Testing_Only_Capstone.GeneratedMSBuildEditorConfig.editorconfig
-/app/obj/Debug/net8.0/For_Testing_Only_Capstone.AssemblyInfoInputs.cache
-/app/obj/Debug/net8.0/For_Testing_Only_Capstone.AssemblyInfo.cs
-/app/obj/Debug/net8.0/For_Testing_Only_Capstone.csproj.CoreCompileInputs.cache
-/app/obj/Debug/net8.0/For_Testing_Only_Capstone.MvcApplicationPartsAssemblyInfo.cs
-/app/obj/Debug/net8.0/For_Testing_Only_Capstone.MvcApplicationPartsAssemblyInfo.cache
-/app/obj/Debug/net8.0/staticwebassets.build.json
-/app/obj/Debug/net8.0/staticwebassets.development.json
-/app/obj/Debug/net8.0/staticwebassets/msbuild.For_Testing_Only_Capstone.Microsoft.AspNetCore.StaticWebAssets.props
-/app/obj/Debug/net8.0/staticwebassets/msbuild.build.For_Testing_Only_Capstone.props
-/app/obj/Debug/net8.0/staticwebassets/msbuild.buildMultiTargeting.For_Testing_Only_Capstone.props
-/app/obj/Debug/net8.0/staticwebassets/msbuild.buildTransitive.For_Testing_Only_Capstone.props
-/app/obj/Debug/net8.0/staticwebassets.pack.json
-/app/obj/Debug/net8.0/scopedcss/bundle/For_Testing_Only_Capstone.styles.css
-/app/obj/Debug/net8.0/For_Test.DB73ECCE.Up2Date
-/app/obj/Debug/net8.0/For_Testing_Only_Capstone.dll
-/app/obj/Debug/net8.0/refint/For_Testing_Only_Capstone.dll
-/app/obj/Debug/net8.0/For_Testing_Only_Capstone.pdb
-/app/obj/Debug/net8.0/For_Testing_Only_Capstone.genruntimeconfig.cache
-/app/obj/Debug/net8.0/ref/For_Testing_Only_Capstone.dll
-/app/bin/Debug/net8.0/Microsoft.AspNetCore.Authentication.JwtBearer.dll
-/app/bin/Debug/net8.0/Microsoft.IdentityModel.Abstractions.dll
-/app/bin/Debug/net8.0/Microsoft.IdentityModel.JsonWebTokens.dll
-/app/bin/Debug/net8.0/Microsoft.IdentityModel.Logging.dll
-/app/bin/Debug/net8.0/Microsoft.IdentityModel.Protocols.dll
-/app/bin/Debug/net8.0/Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
-/app/bin/Debug/net8.0/Microsoft.IdentityModel.Tokens.dll
-/app/bin/Debug/net8.0/System.IdentityModel.Tokens.Jwt.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.AspNetCore.Authentication.JwtBearer.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Abstractions.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.JsonWebTokens.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Logging.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Protocols.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Tokens.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/bin/Debug/net8.0/System.IdentityModel.Tokens.Jwt.dll
-/mnt/c/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.csproj.AssemblyReference.cache
-/mnt/c/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.GeneratedMSBuildEditorConfig.editorconfig
-/mnt/c/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.AssemblyInfoInputs.cache
-/mnt/c/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.AssemblyInfo.cs
-/mnt/c/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.csproj.CoreCompileInputs.cache
-/mnt/c/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.MvcApplicationPartsAssemblyInfo.cs
-/mnt/c/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.MvcApplicationPartsAssemblyInfo.cache
-/mnt/c/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.sourcelink.json
-/mnt/c/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.dll
-/mnt/c/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/refint/For_Testing_Only_Capstone.dll
-/mnt/c/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.pdb
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/appsettings.json
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/appsettings.Development.json
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone.deps.json
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone.runtimeconfig.json
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone.pdb
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ClosedXML.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ClosedXML.Parser.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/CsvHelper.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/DocumentFormat.OpenXml.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/DocumentFormat.OpenXml.Framework.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ExcelNumberFormat.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Humanizer.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.AspNetCore.Authentication.JwtBearer.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.AspNetCore.OpenApi.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.Bcl.AsyncInterfaces.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.CodeAnalysis.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.CodeAnalysis.CSharp.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.CodeAnalysis.CSharp.Workspaces.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.CodeAnalysis.Workspaces.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Abstractions.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Design.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Relational.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.Extensions.Caching.Memory.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.Extensions.DependencyInjection.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.Extensions.DependencyModel.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.Extensions.Diagnostics.Abstractions.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.Extensions.Diagnostics.HealthChecks.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.Extensions.Hosting.Abstractions.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.Extensions.Logging.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.Extensions.Logging.Abstractions.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.Extensions.Options.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Abstractions.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.JsonWebTokens.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Logging.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Protocols.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Tokens.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Microsoft.OpenApi.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Mono.TextTemplating.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Npgsql.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Npgsql.EntityFrameworkCore.PostgreSQL.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/RBush.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Serilog.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Serilog.AspNetCore.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Serilog.Extensions.Hosting.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Serilog.Extensions.Logging.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Serilog.Formatting.Compact.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Serilog.Settings.Configuration.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Serilog.Sinks.Console.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Serilog.Sinks.Debug.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Serilog.Sinks.File.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/SixLabors.Fonts.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Swashbuckle.AspNetCore.Swagger.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Swashbuckle.AspNetCore.SwaggerGen.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/Swashbuckle.AspNetCore.SwaggerUI.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/System.CodeDom.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/System.Composition.AttributedModel.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/System.Composition.Convention.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/System.Composition.Hosting.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/System.Composition.Runtime.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/System.Composition.TypedParts.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/System.IdentityModel.Tokens.Jwt.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/System.IO.Packaging.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.CSharp.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.CSharp.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.CSharp.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.CSharp.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.CSharp.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.CSharp.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.CSharp.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.CSharp.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.CSharp.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.CSharp.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.CSharp.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.CSharp.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.CSharp.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.csproj.AssemblyReference.cache
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.GeneratedMSBuildEditorConfig.editorconfig
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.AssemblyInfoInputs.cache
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.AssemblyInfo.cs
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.csproj.CoreCompileInputs.cache
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.MvcApplicationPartsAssemblyInfo.cs
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.MvcApplicationPartsAssemblyInfo.cache
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/staticwebassets.build.json
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/staticwebassets.development.json
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/staticwebassets/msbuild.For_Testing_Only_Capstone.Microsoft.AspNetCore.StaticWebAssets.props
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/staticwebassets/msbuild.build.For_Testing_Only_Capstone.props
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/staticwebassets/msbuild.buildMultiTargeting.For_Testing_Only_Capstone.props
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/staticwebassets/msbuild.buildTransitive.For_Testing_Only_Capstone.props
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/staticwebassets.pack.json
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/scopedcss/bundle/For_Testing_Only_Capstone.styles.css
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.csproj.CopyComplete
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/refint/For_Testing_Only_Capstone.dll
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.pdb
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.genruntimeconfig.cache
-/mnt/c/Users/DELL/Documents/Pls let this shi work (V2)/client-app/obj/Debug/net8.0/ref/For_Testing_Only_Capstone.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Casptone 1/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.csproj.AssemblyReference.cache
-C:/Users/pascu/Documents/GitHub2/GitHub/Casptone 1/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/rpswa.dswa.cache.json
-C:/Users/pascu/Documents/GitHub2/GitHub/Casptone 1/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.GeneratedMSBuildEditorConfig.editorconfig
-C:/Users/pascu/Documents/GitHub2/GitHub/Casptone 1/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.AssemblyInfoInputs.cache
-C:/Users/pascu/Documents/GitHub2/GitHub/Casptone 1/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.AssemblyInfo.cs
-C:/Users/pascu/Documents/GitHub2/GitHub/Casptone 1/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Casptone 1/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/refint/For_Testing_Only_Capstone.dll
-C:/Users/pascu/Documents/GitHub2/GitHub/Casptone 1/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.pdb
-/app/bin/Debug/net8.0/assets/plvlogo.png
-/app/bin/Debug/net8.0/MessagePack.dll
-/app/bin/Debug/net8.0/MessagePack.Annotations.dll
-/app/bin/Debug/net8.0/Microsoft.AspNetCore.SignalR.StackExchangeRedis.dll
-/app/bin/Debug/net8.0/Microsoft.NET.StringTools.dll
-/app/bin/Debug/net8.0/Pipelines.Sockets.Unofficial.dll
-/app/bin/Debug/net8.0/StackExchange.Redis.dll
-/app/bin/Debug/net8.0/appsettings.Development.json
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/appsettings.json
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/assets/plvlogo.png
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/appsettings.Development.json
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone.deps.json
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone.runtimeconfig.json
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/For_Testing_Only_Capstone.pdb
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ClosedXML.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ClosedXML.Parser.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/CsvHelper.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/DocumentFormat.OpenXml.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/DocumentFormat.OpenXml.Framework.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ExcelNumberFormat.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Humanizer.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/MessagePack.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/MessagePack.Annotations.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.AspNetCore.Authentication.JwtBearer.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.AspNetCore.OpenApi.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.AspNetCore.SignalR.StackExchangeRedis.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.Bcl.AsyncInterfaces.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.CodeAnalysis.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.CodeAnalysis.CSharp.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.CodeAnalysis.CSharp.Workspaces.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.CodeAnalysis.Workspaces.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Abstractions.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Design.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Relational.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.Extensions.Caching.Memory.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.Extensions.DependencyInjection.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.Extensions.DependencyModel.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.Extensions.Diagnostics.Abstractions.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.Extensions.Diagnostics.HealthChecks.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.Extensions.Hosting.Abstractions.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.Extensions.Logging.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.Extensions.Logging.Abstractions.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.Extensions.Options.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Abstractions.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.JsonWebTokens.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Logging.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Protocols.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.IdentityModel.Tokens.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.NET.StringTools.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Microsoft.OpenApi.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Mono.TextTemplating.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Npgsql.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Npgsql.EntityFrameworkCore.PostgreSQL.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Pipelines.Sockets.Unofficial.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/RBush.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Serilog.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Serilog.AspNetCore.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Serilog.Extensions.Hosting.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Serilog.Extensions.Logging.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Serilog.Formatting.Compact.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Serilog.Settings.Configuration.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Serilog.Sinks.Console.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Serilog.Sinks.Debug.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Serilog.Sinks.File.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/SixLabors.Fonts.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/StackExchange.Redis.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Swashbuckle.AspNetCore.Swagger.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Swashbuckle.AspNetCore.SwaggerGen.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/Swashbuckle.AspNetCore.SwaggerUI.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/System.CodeDom.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/System.Composition.AttributedModel.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/System.Composition.Convention.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/System.Composition.Hosting.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/System.Composition.Runtime.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/System.Composition.TypedParts.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/System.IdentityModel.Tokens.Jwt.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/System.IO.Packaging.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.CSharp.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.CSharp.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.CSharp.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.CSharp.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.CSharp.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.CSharp.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.CSharp.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.CSharp.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.CSharp.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.CSharp.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.CSharp.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.CSharp.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.CSharp.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/fr/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/it/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ja/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ko/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/pl/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/pt-BR/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/ru/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/tr/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/zh-Hans/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/bin/Debug/net8.0/zh-Hant/Microsoft.CodeAnalysis.Workspaces.resources.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.csproj.AssemblyReference.cache
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.GeneratedMSBuildEditorConfig.editorconfig
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.AssemblyInfoInputs.cache
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.AssemblyInfo.cs
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.csproj.CoreCompileInputs.cache
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.MvcApplicationPartsAssemblyInfo.cs
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.MvcApplicationPartsAssemblyInfo.cache
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.sourcelink.json
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/staticwebassets.build.json
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/staticwebassets.development.json
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/staticwebassets/msbuild.For_Testing_Only_Capstone.Microsoft.AspNetCore.StaticWebAssets.props
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/staticwebassets/msbuild.build.For_Testing_Only_Capstone.props
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/staticwebassets/msbuild.buildMultiTargeting.For_Testing_Only_Capstone.props
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/staticwebassets/msbuild.buildTransitive.For_Testing_Only_Capstone.props
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/staticwebassets.pack.json
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/scopedcss/bundle/For_Testing_Only_Capstone.styles.css
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.csproj.CopyComplete
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/refint/For_Testing_Only_Capstone.dll
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.pdb
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/For_Testing_Only_Capstone.genruntimeconfig.cache
-/home/dricianfranciscordon/Capstone-Project-BlockChain-BlockGo/client-app/obj/Debug/net8.0/ref/For_Testing_Only_Capstone.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\appsettings.Development.json
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\appsettings.json
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\assets\plvlogo.png
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\For_Testing_Only_Capstone.staticwebassets.endpoints.json
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\For_Testing_Only_Capstone.exe
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\For_Testing_Only_Capstone.deps.json
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\For_Testing_Only_Capstone.runtimeconfig.json
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\For_Testing_Only_Capstone.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\For_Testing_Only_Capstone.pdb
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ClosedXML.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ClosedXML.Parser.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\CsvHelper.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\DocumentFormat.OpenXml.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\DocumentFormat.OpenXml.Framework.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ExcelNumberFormat.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Humanizer.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\MessagePack.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\MessagePack.Annotations.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.AspNetCore.OpenApi.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.AspNetCore.SignalR.StackExchangeRedis.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.Bcl.AsyncInterfaces.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.CodeAnalysis.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.CodeAnalysis.CSharp.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.CodeAnalysis.CSharp.Workspaces.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.CodeAnalysis.Workspaces.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.EntityFrameworkCore.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.EntityFrameworkCore.Abstractions.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.EntityFrameworkCore.Design.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.EntityFrameworkCore.Relational.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.Extensions.Caching.Memory.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.Extensions.DependencyInjection.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.Extensions.DependencyInjection.Abstractions.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.Extensions.DependencyModel.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.Extensions.Diagnostics.Abstractions.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.Extensions.Diagnostics.HealthChecks.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.Extensions.Hosting.Abstractions.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.Extensions.Logging.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.Extensions.Logging.Abstractions.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.Extensions.Options.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.IdentityModel.Abstractions.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.IdentityModel.JsonWebTokens.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.IdentityModel.Logging.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.IdentityModel.Tokens.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.NET.StringTools.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Microsoft.OpenApi.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Mono.TextTemplating.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Npgsql.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Npgsql.EntityFrameworkCore.PostgreSQL.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Pipelines.Sockets.Unofficial.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\RBush.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Serilog.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Serilog.AspNetCore.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Serilog.Extensions.Hosting.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Serilog.Extensions.Logging.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Serilog.Formatting.Compact.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Serilog.Settings.Configuration.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Serilog.Sinks.Console.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Serilog.Sinks.Debug.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Serilog.Sinks.File.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\SixLabors.Fonts.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\StackExchange.Redis.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Swashbuckle.AspNetCore.Swagger.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Swashbuckle.AspNetCore.SwaggerGen.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\Swashbuckle.AspNetCore.SwaggerUI.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\System.CodeDom.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\System.Composition.AttributedModel.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\System.Composition.Convention.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\System.Composition.Hosting.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\System.Composition.Runtime.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\System.Composition.TypedParts.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\System.IdentityModel.Tokens.Jwt.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\System.IO.Packaging.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\cs\Microsoft.CodeAnalysis.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\de\Microsoft.CodeAnalysis.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\es\Microsoft.CodeAnalysis.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\fr\Microsoft.CodeAnalysis.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\it\Microsoft.CodeAnalysis.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ja\Microsoft.CodeAnalysis.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ko\Microsoft.CodeAnalysis.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\pl\Microsoft.CodeAnalysis.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\pt-BR\Microsoft.CodeAnalysis.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ru\Microsoft.CodeAnalysis.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\tr\Microsoft.CodeAnalysis.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\zh-Hans\Microsoft.CodeAnalysis.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\zh-Hant\Microsoft.CodeAnalysis.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\cs\Microsoft.CodeAnalysis.CSharp.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\de\Microsoft.CodeAnalysis.CSharp.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\es\Microsoft.CodeAnalysis.CSharp.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\fr\Microsoft.CodeAnalysis.CSharp.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\it\Microsoft.CodeAnalysis.CSharp.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ja\Microsoft.CodeAnalysis.CSharp.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ko\Microsoft.CodeAnalysis.CSharp.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\pl\Microsoft.CodeAnalysis.CSharp.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\pt-BR\Microsoft.CodeAnalysis.CSharp.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ru\Microsoft.CodeAnalysis.CSharp.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\tr\Microsoft.CodeAnalysis.CSharp.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\zh-Hans\Microsoft.CodeAnalysis.CSharp.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\zh-Hant\Microsoft.CodeAnalysis.CSharp.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\cs\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\de\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\es\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\fr\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\it\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ja\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ko\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\pl\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\pt-BR\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ru\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\tr\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\zh-Hans\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\zh-Hant\Microsoft.CodeAnalysis.CSharp.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\cs\Microsoft.CodeAnalysis.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\de\Microsoft.CodeAnalysis.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\es\Microsoft.CodeAnalysis.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\fr\Microsoft.CodeAnalysis.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\it\Microsoft.CodeAnalysis.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ja\Microsoft.CodeAnalysis.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ko\Microsoft.CodeAnalysis.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\pl\Microsoft.CodeAnalysis.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\pt-BR\Microsoft.CodeAnalysis.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\ru\Microsoft.CodeAnalysis.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\tr\Microsoft.CodeAnalysis.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\zh-Hans\Microsoft.CodeAnalysis.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\bin\Debug\net8.0\zh-Hant\Microsoft.CodeAnalysis.Workspaces.resources.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\For_Testing_Only_Capstone.csproj.AssemblyReference.cache
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\rpswa.dswa.cache.json
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\For_Testing_Only_Capstone.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\For_Testing_Only_Capstone.AssemblyInfoInputs.cache
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\For_Testing_Only_Capstone.AssemblyInfo.cs
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\For_Testing_Only_Capstone.csproj.CoreCompileInputs.cache
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\For_Testing_Only_Capstone.MvcApplicationPartsAssemblyInfo.cs
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\For_Testing_Only_Capstone.MvcApplicationPartsAssemblyInfo.cache
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\For_Testing_Only_Capstone.sourcelink.json
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\rjimswa.dswa.cache.json
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\rjsmrazor.dswa.cache.json
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\rjsmcshtml.dswa.cache.json
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\scopedcss\bundle\For_Testing_Only_Capstone.styles.css
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\staticwebassets.build.json
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\staticwebassets.build.json.cache
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\staticwebassets.development.json
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\staticwebassets.build.endpoints.json
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\swae.build.ex.cache
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\For_Test.DB73ECCE.Up2Date
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\For_Testing_Only_Capstone.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\refint\For_Testing_Only_Capstone.dll
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\For_Testing_Only_Capstone.pdb
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\For_Testing_Only_Capstone.genruntimeconfig.cache
+C:\Users\pascu\Documents\GitHub2\GitHub\Capstone-Project-\For_Testing_Only_Capstone\client-app\obj\Debug\net8.0\ref\For_Testing_Only_Capstone.dll

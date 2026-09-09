@@ -19,9 +19,9 @@ function SectionReviewPanel({
   selectedSection,
   activeTerm,
   onSendBack,
+  onApprove,
   onSubmitToRegistrar,
   onViewIpfs,
-  viewMode = "forReview",
 }) {
   const [draftNotes, setDraftNotes] = useState({});
   const note = selectedSection
@@ -108,16 +108,10 @@ function SectionReviewPanel({
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
         <h3 className="text-xl font-semibold text-[#003366]">Section Review Panel</h3>
-        <p className="mt-2 text-sm text-slate-500">
-          Select a faculty section from the monitoring table to review submitted grades,
-          send corrections back, or forward them to the registrar.
-        </p>
+        
       </div>
     );
   }
-
-  const isViewOnlyMode =
-    viewMode === "returned" || viewMode === "forwarded";
 
   return (
     <div className="space-y-6">
@@ -225,9 +219,7 @@ function SectionReviewPanel({
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h3 className="text-lg font-bold text-[#003366]">Submitted Grades</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Review all grades encoded by the faculty member before making a chairperson decision.
-            </p>
+            
           </div>
         </div>
 
@@ -269,93 +261,92 @@ function SectionReviewPanel({
         </div>
       </div>
 
-      {!isViewOnlyMode ? (
-        <>
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="text-lg font-bold text-[#003366]">Chairperson Decision</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Add a review note when sending a section back to faculty, or forward the reviewed section directly to the registrar.
-            </p>
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="text-lg font-bold text-[#003366]">Chairperson Decision</h3>
+        
 
-            <div className="mt-4">
-              <label className="mb-2 block text-sm font-medium text-slate-700">Review Note</label>
-              <textarea
-                value={note}
-                onChange={(event) => {
-                  if (!selectedSection) return;
+        <div className="mt-4">
+          <label className="mb-2 block text-sm font-medium text-slate-700">Review Note</label>
+          <textarea
+            value={note}
+            onChange={(event) => {
+              if (!selectedSection) return;
 
-                  setDraftNotes((prev) => ({
-                    ...prev,
-                    [selectedSection.reviewKey]: event.target.value,
-                  }));
-                }}
-                placeholder="Enter the discrepancy, correction request, or approval remark here..."
-                className="min-h-[120px] w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#003366]"
-              />
-            </div>
+              setDraftNotes((prev) => ({
+                ...prev,
+                [selectedSection.reviewKey]: event.target.value,
+              }));
+            }}
+            placeholder="Enter the discrepancy, correction request, or approval remark here..."
+            className="min-h-[120px] w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#003366]"
+          />
+        </div>
 
-            <div className="mt-6 flex flex-col gap-3 md:flex-row">
-              <button
-                onClick={() => onSendBack(note)}
-                disabled={!note.trim() || selectedSection.reviewStatus === "forwarded"}
-                className="rounded-xl bg-red-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+        <div className="mt-6 flex flex-col gap-3 md:flex-row">
+          <button
+            onClick={() => onSendBack(note)}
+            disabled={!note.trim() || selectedSection.reviewStatus === "forwarded"}
+            className="rounded-xl bg-red-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            Send Back to Faculty
+          </button>
+          <button
+            onClick={() => onApprove(note)}
+            disabled={selectedSection.reviewStatus === "forwarded"}
+            className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            Approve Section
+          </button>
+          <button
+            onClick={() => onSubmitToRegistrar(note)}
+            disabled={selectedSection.reviewStatus !== "approved"}
+            className="rounded-xl bg-[#003366] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#00264d] disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            Forward to Registrar
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="text-lg font-bold text-[#003366]">Decision Log</h3>
+        
+
+        <div className="mt-4 space-y-3">
+          {(selectedSection.reviewLogs || []).length ? (
+            [...selectedSection.reviewLogs].reverse().map((log, index) => (
+              <div
+                key={`${log.timestamp}-${index}`}
+                className="rounded-xl border border-slate-200 bg-slate-50 p-4"
               >
-                Send Back to Faculty
-              </button>
-              <button
-                onClick={() => onSubmitToRegistrar(note)}
-                disabled={selectedSection.reviewStatus === "forwarded"}
-                className="rounded-xl bg-[#003366] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#00264d] disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                Forward to Registrar
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="text-lg font-bold text-[#003366]">Decision Log</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Approval and send-back history for this section.
-            </p>
-
-            <div className="mt-4 space-y-3">
-              {(selectedSection.reviewLogs || []).length ? (
-                [...selectedSection.reviewLogs].reverse().map((log, index) => (
-                  <div
-                    key={`${log.timestamp}-${index}`}
-                    className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <span
+                    className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${getReviewStatusClasses(
+                      log.status
+                    )}`}
                   >
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <span
-                        className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${getReviewStatusClasses(
-                          log.status
-                        )}`}
-                      >
-                        {getReviewStatusLabel(log.status)}
-                      </span>
-                      <p className="text-xs text-slate-500">
-                        {formatLogDate(log.timestamp)}
-                      </p>
-                    </div>
-                    <p className="mt-2 text-sm font-semibold text-slate-700">
-                      {log.actor || "Chairperson"}
-                    </p>
-                    {log.note ? (
-                      <p className="mt-1 text-sm text-slate-600">{log.note}</p>
-                    ) : (
-                      <p className="mt-1 text-sm text-slate-400">No note added.</p>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-sm text-slate-500">
-                  No chairperson decision has been recorded yet.
+                    {getReviewStatusLabel(log.status)}
+                  </span>
+                  <p className="text-xs text-slate-500">
+                    {formatLogDate(log.timestamp)}
+                  </p>
                 </div>
-              )}
+                <p className="mt-2 text-sm font-semibold text-slate-700">
+                  {log.actor || "Chairperson"}
+                </p>
+                {log.note ? (
+                  <p className="mt-1 text-sm text-slate-600">{log.note}</p>
+                ) : (
+                  <p className="mt-1 text-sm text-slate-400">No note added.</p>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-sm text-slate-500">
+              No chairperson decision has been recorded yet.
             </div>
-          </div>
-        </>
-      ) : null}
+          )}
+        </div>
+      </div>
     </div>
   );
 }

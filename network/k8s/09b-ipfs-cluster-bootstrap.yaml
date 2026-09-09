@@ -1,0 +1,118 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ipfs-cluster-bootstrap
+  namespace: plv-fabric
+  labels:
+    app: ipfs-cluster-bootstrap
+spec:
+  backoffLimit: 4
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: ipfs-cluster-bootstrap
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: bootstrap
+        image: node:20-alpine
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 5m
+            memory: 32Mi
+          limits:
+            memory: 128Mi
+        command: ["node", "/scripts/bootstrap.mjs"]
+        volumeMounts:
+        - name: scripts
+          mountPath: /scripts
+          readOnly: true
+      volumes:
+      - name: scripts
+        configMap:
+          name: ipfs-cluster-bootstrap-script
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ipfs-cluster-bootstrap-script
+  namespace: plv-fabric
+data:
+  bootstrap.mjs: |-
+    const nodes = [
+      {
+        name: "main",
+        api: "http://ipfs-api.plv-fabric.svc.cluster.local:5001",
+        dns: "ipfs-node-0.ipfs-headless.plv-fabric.svc.cluster.local"
+      },
+      {
+        name: "annex",
+        api: "http://ipfs-annex-api.plv-annex-campus.svc.cluster.local:5001",
+        dns: "ipfs-annex-0.ipfs-annex-headless.plv-annex-campus.svc.cluster.local"
+      },
+      {
+        name: "pubad",
+        api: "http://ipfs-pubad-api.plv-pubad-campus.svc.cluster.local:5001",
+        dns: "ipfs-pubad-0.ipfs-pubad-headless.plv-pubad-campus.svc.cluster.local"
+      }
+    ];
+
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    async function post(node, command, retries = 20) {
+      let lastError;
+      for (let attempt = 1; attempt <= retries; attempt += 1) {
+        try {
+          const response = await fetch(`${node.api}/api/v0/${command}`, {
+            method: "POST",
+            signal: AbortSignal.timeout(300_000)
+          });
+          const body = await response.text();
+          if (!response.ok) throw new Error(`${response.status}: ${body}`);
+          return body ? JSON.parse(body) : {};
+        } catch (error) {
+          lastError = error;
+          if (attempt < retries) await sleep(Math.min(attempt * 1000, 5000));
+        }
+      }
+      throw new Error(`${node.name} ${command} failed: ${lastError}`);
+    }
+
+    console.log("Waiting for all three private IPFS APIs...");
+    for (const node of nodes) {
+      const identity = await post(node, "id");
+      node.id = identity.ID;
+      node.multiaddr = `/dns4/${node.dns}/tcp/4001/p2p/${node.id}`;
+      console.log(`${node.name}: ${node.id}`);
+    }
+
+    console.log("Adding persistent bootstrap addresses and connecting the full mesh...");
+    for (const source of nodes) {
+      for (const target of nodes) {
+        if (source === target) continue;
+        const arg = encodeURIComponent(target.multiaddr);
+        await post(source, `bootstrap/add?arg=${arg}`);
+        await post(source, `swarm/connect?arg=${arg}`);
+      }
+    }
+
+    console.log("Replicating every existing recursive Main pin to Annex and Pubad...");
+    const mainPins = await post(nodes[0], "pin/ls?type=recursive");
+    const cids = Object.keys(mainPins.Keys ?? {});
+    for (const cid of cids) {
+      for (const node of nodes.slice(1)) {
+        await post(node, `pin/add?arg=${encodeURIComponent(cid)}&recursive=true`, 6);
+      }
+      console.log(`replicated ${cid}`);
+    }
+
+    for (const node of nodes) {
+      const peers = await post(node, "swarm/peers");
+      const pins = await post(node, "pin/ls?type=recursive");
+      console.log(`${node.name}: ${peers.Peers?.length ?? 0} peers, ${Object.keys(pins.Keys ?? {}).length} recursive pins`);
+      if ((peers.Peers?.length ?? 0) < 2) throw new Error(`${node.name} does not see both peer nodes`);
+    }
+
+    console.log("Three-node private IPFS mesh is connected and existing Main pins are replicated.");

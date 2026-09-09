@@ -22,6 +22,8 @@ export const SHARED_CLIENT_STATE_KEYS = [
   "irregularSubjectAssignments",
   "encodingPeriod",
   "facultyLoadResetAt",
+  "STUDENT_BATCHES_KEY",
+  "STUDENT_SUBMISSION_LOGS_KEY",
 ];
 
 const parseLocalValue = (key) => {
@@ -75,83 +77,25 @@ export const pushAssignmentsSharedState = () =>
     console.warn("Shared assignment sync failed:", error)
   );
 
-export const clearAllSharedClientState = async () => {
-  const emptyDefaults = {
-    [STUDENT_BATCHES_KEY]: [],
-    [STUDENT_SUBMISSION_LOGS_KEY]: [],
-    studentMasterlist: [],
-    studentSections: [],
-    registrarAssignments: [],
-    [CHAIRPERSON_REVIEW_KEY]: {},
-    [STUDENT_PUBLISHED_GRADES_KEY]: {},
-    graduatingStudents: [],
-    irregularSubjectAssignments: [],
-    chairpersonStudentBatches: [],
-    chairpersonSubmissionLogs: [],
-    studentMasterlist: [],
-    studentSections: [],
-    [STUDENT_BATCHES_KEY]: [],
-    [STUDENT_SUBMISSION_LOGS_KEY]: [],
-    encodingPeriod: {
-      semester: "2nd Semester",
-      startDate: "",
-      endDate: "",
-      term: "midterm",
-    },
-    facultyLoadResetAt: new Date().toISOString(),
-  };
-
-  await Promise.all(
-    Object.entries(emptyDefaults).map(async ([key, value]) => {
-      localStorage.setItem(key, JSON.stringify(value));
-      try {
-        await saveSharedClientState(key, value);
-      } catch (error) {
-        console.warn(`Failed to clear shared state for key: ${key}`, error);
-      }
-    })
-  );
-
-  window.dispatchEvent(
-    new CustomEvent("blockgo:shared-client-state-changed", {
-      detail: { keys: Object.keys(emptyDefaults) },
-    })
-  );
-
-  window.dispatchEvent(
-    new CustomEvent("blockgo:system-setting-changed", {
-      detail: {
-        key: "encoding_period",
-        value: emptyDefaults.encodingPeriod,
-      },
-    })
-  );
-};
-
 export const pullSharedClientState = async (keys = SHARED_CLIENT_STATE_KEYS) => {
   const results = await Promise.allSettled(
     keys.map(async (key) => {
       const response = await fetchSharedClientState(key);
       const localValue = parseLocalValue(key);
-
-      // Only push local state back to server if the server has NO record for this key (value is null)
-      // and the client DOES have a meaningful value. 
-      // This prevents "merging" local data back into an intentionally cleared (empty) server state.
       if (
-        (response?.value === null || response?.value === undefined) &&
-        hasMeaningfulLocalValue(localValue)
+        response?.value === null ||
+        response?.value === undefined ||
+        (!hasMeaningfulLocalValue(response.value) &&
+          hasMeaningfulLocalValue(localValue))
       ) {
-        await saveSharedClientState(key, localValue);
-        return key;
+        if (hasMeaningfulLocalValue(localValue)) {
+          await saveSharedClientState(key, localValue);
+          return key;
+        }
+        return null;
       }
-
-      // If server has a value (even if it's empty like [] or {}), we accept it.
-      if (response?.value !== null && response?.value !== undefined) {
-        storeLocalValue(key, response.value);
-        return key;
-      }
-
-      return null;
+      storeLocalValue(key, response.value);
+      return key;
     })
   );
 

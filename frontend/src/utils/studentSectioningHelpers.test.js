@@ -1,6 +1,8 @@
 import {
   buildCsvContent,
   buildStudentCsvContent,
+  getGregorianCalendarYear,
+  getNextStudentId,
   parseCsvRows,
   parseStudentIdSpreadsheet,
 } from "./studentSectioningHelpers";
@@ -66,5 +68,46 @@ describe("studentSectioningHelpers", () => {
     expect(buildCsvContent([["department"], ["Bachelor, Sample"]])).toBe(
       'department\n"Bachelor, Sample"'
     );
+  });
+
+  it("generates the first student ID from the selected four-digit year", () => {
+    expect(getNextStudentId("2026", [])).toBe("26-0001");
+    expect(getNextStudentId("2027-2028", [])).toBe("27-0001");
+  });
+
+  it("uses Gregorian leap years without changing the ID sequence format", () => {
+    expect(getGregorianCalendarYear(new Date("2000-02-29T12:00:00Z"))).toBe(2000);
+    expect(getGregorianCalendarYear(new Date("2024-02-29T12:00:00Z"))).toBe(2024);
+    expect(getNextStudentId("2024", [])).toBe("24-0001");
+  });
+
+  it("increments the highest ID used for that year across active and removed students", () => {
+    const batches = [
+      {
+        students: [
+          { studentId: "26-0002" },
+          { studentId: "27-0099" },
+        ],
+        removedStudents: [{ studentId: "26-0007" }],
+      },
+      { students: [{ studentId: "26-0004" }] },
+    ];
+
+    expect(getNextStudentId("2026", batches)).toBe("26-0008");
+    expect(getNextStudentId("2027", batches)).toBe("27-0100");
+  });
+
+  it("continues after the highest ID already persisted by the backend", () => {
+    const localBatches = [{ students: [{ studentId: "26-0052" }] }];
+
+    expect(getNextStudentId("2026", [], 50)).toBe("26-0051");
+    expect(getNextStudentId("2026", localBatches, 50)).toBe("26-0053");
+  });
+
+  it("does not generate an ID for an invalid year or reuse an exhausted prefix", () => {
+    expect(getNextStudentId("26", [])).toBe("");
+    expect(
+      getNextStudentId("2026", [{ students: [{ studentId: "26-9999" }] }])
+    ).toBe("");
   });
 });

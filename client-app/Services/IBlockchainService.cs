@@ -11,6 +11,9 @@ namespace BlockGo.Services
         Task<string> ReturnGradeAsync(string recordId, string note, string invokerUsername);
         Task<string> GetGradeAsync(string recordId, string invokerUsername);
         Task<string> GetAllGradesAsync(string invokerUsername);
+        Task<string> GetStudentTransactionsAsync(string studentUsername);
+        Task<string> GetGradeHistoryAsync(string recordId, string invokerUsername);
+        Task<string> RecordAuditEventAsync(BlockchainAuditEvent auditEvent, string invokerUsername);
         Task<string> ApproveGradeAsync(string recordId, string invokerUsername);
         Task<string> FinalizeGradeAsync(string recordId, string invokerUsername);
     }

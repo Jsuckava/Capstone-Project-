@@ -1,5 +1,17 @@
 ---
 # Fabric CA for Registrar Organization
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fabric-ca-registrar-pvc
+  namespace: plv-main-campus
+spec:
+  accessModes: [ "ReadWriteOnce" ]
+  storageClassName: fabric-storage
+  resources:
+    requests:
+      storage: 2Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,11 +29,13 @@ spec:
         org: registrar
     spec:
       serviceAccountName: fabric-sa
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_A__"
       initContainers:
       - name: init-ca
         image: alpine:latest
         imagePullPolicy: IfNotPresent
-        command: ["sh", "-c", "mkdir -p /data/msp/keystore && (cp -L /raw/ca-cert.pem /data/ca-cert.pem 2>/dev/null || true) && (cp -L /raw/tls-cert.pem /data/tls-cert.pem 2>/dev/null || true) && (cp -L /raw/ca-key.pem /data/msp/keystore/key_sk 2>/dev/null || true) && (cp -L /raw/tls-key.pem /data/msp/keystore/tls_key_sk 2>/dev/null || true) && chmod -R 777 /data"]
+        command: ["sh", "-c", "mkdir -p /data/msp/keystore && (cp -L /raw/ca-cert.pem /data/ca-cert.pem 2>/dev/null || true) && (cp -L /raw/tls-cert.pem /data/tls-cert.pem 2>/dev/null || true) && (cp -L /raw/ca-key.pem /data/msp/keystore/key_sk 2>/dev/null || true) && (cp -L /raw/tls-key.pem /data/msp/keystore/tls_key_sk 2>/dev/null || true) && chmod -R 700 /data"]
         volumeMounts:
         - name: raw-identity
           mountPath: /raw
@@ -45,13 +59,14 @@ spec:
           valueFrom:
             secretKeyRef:
               name: blockgo-secrets
-              key: BOOTSTRAP_REGISTRAR_PASS
+              key: FABRIC_CA_REGISTRAR_PASS
         volumeMounts:
         - name: ca-data
           mountPath: /etc/hyperledger/fabric-ca-server
       volumes:
       - name: ca-data
-        emptyDir: {}
+        persistentVolumeClaim:
+          claimName: fabric-ca-registrar-pvc
       - name: raw-identity
         secret:
           secretName: ca-registrar-identity
@@ -69,6 +84,18 @@ spec:
     name: ca
 ---
 # Fabric CA for Faculty Organization
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fabric-ca-faculty-pvc
+  namespace: plv-annex-campus
+spec:
+  accessModes: [ "ReadWriteOnce" ]
+  storageClassName: fabric-storage
+  resources:
+    requests:
+      storage: 2Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -86,11 +113,13 @@ spec:
         org: faculty
     spec:
       serviceAccountName: fabric-sa
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_B__"
       initContainers:
       - name: init-ca
         image: alpine:latest
         imagePullPolicy: IfNotPresent
-        command: ["sh", "-c", "mkdir -p /data/msp/keystore && (cp -L /raw/ca-cert.pem /data/ca-cert.pem 2>/dev/null || true) && (cp -L /raw/tls-cert.pem /data/tls-cert.pem 2>/dev/null || true) && (cp -L /raw/ca-key.pem /data/msp/keystore/key_sk 2>/dev/null || true) && (cp -L /raw/tls-key.pem /data/msp/keystore/tls_key_sk 2>/dev/null || true) && chmod -R 777 /data"]
+        command: ["sh", "-c", "mkdir -p /data/msp/keystore && (cp -L /raw/ca-cert.pem /data/ca-cert.pem 2>/dev/null || true) && (cp -L /raw/tls-cert.pem /data/tls-cert.pem 2>/dev/null || true) && (cp -L /raw/ca-key.pem /data/msp/keystore/key_sk 2>/dev/null || true) && (cp -L /raw/tls-key.pem /data/msp/keystore/tls_key_sk 2>/dev/null || true) && chmod -R 700 /data"]
         volumeMounts:
         - name: raw-identity
           mountPath: /raw
@@ -113,13 +142,14 @@ spec:
           valueFrom:
             secretKeyRef:
               name: blockgo-secrets
-              key: BOOTSTRAP_REGISTRAR_PASS
+              key: FABRIC_CA_FACULTY_PASS
         volumeMounts:
         - name: ca-data
           mountPath: /etc/hyperledger/fabric-ca-server
       volumes:
       - name: ca-data
-        emptyDir: {}
+        persistentVolumeClaim:
+          claimName: fabric-ca-faculty-pvc
       - name: raw-identity
         secret:
           secretName: ca-faculty-identity
@@ -137,6 +167,18 @@ spec:
     name: ca
 ---
 # Fabric CA for Department Organization
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fabric-ca-department-pvc
+  namespace: plv-pubad-campus
+spec:
+  accessModes: [ "ReadWriteOnce" ]
+  storageClassName: fabric-storage
+  resources:
+    requests:
+      storage: 2Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -154,11 +196,13 @@ spec:
         org: department
     spec:
       serviceAccountName: fabric-sa
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_C__"
       initContainers:
       - name: init-ca
         image: alpine:latest
         imagePullPolicy: IfNotPresent
-        command: ["sh", "-c", "mkdir -p /data/msp/keystore && (cp -L /raw/ca-cert.pem /data/ca-cert.pem 2>/dev/null || true) && (cp -L /raw/tls-cert.pem /data/tls-cert.pem 2>/dev/null || true) && (cp -L /raw/ca-key.pem /data/msp/keystore/key_sk 2>/dev/null || true) && (cp -L /raw/tls-key.pem /data/msp/keystore/tls_key_sk 2>/dev/null || true) && chmod -R 777 /data"]
+        command: ["sh", "-c", "mkdir -p /data/msp/keystore && (cp -L /raw/ca-cert.pem /data/ca-cert.pem 2>/dev/null || true) && (cp -L /raw/tls-cert.pem /data/tls-cert.pem 2>/dev/null || true) && (cp -L /raw/ca-key.pem /data/msp/keystore/key_sk 2>/dev/null || true) && (cp -L /raw/tls-key.pem /data/msp/keystore/tls_key_sk 2>/dev/null || true) && chmod -R 700 /data"]
         volumeMounts:
         - name: raw-identity
           mountPath: /raw
@@ -181,13 +225,14 @@ spec:
           valueFrom:
             secretKeyRef:
               name: blockgo-secrets
-              key: BOOTSTRAP_REGISTRAR_PASS
+              key: FABRIC_CA_DEPARTMENT_PASS
         volumeMounts:
         - name: ca-data
           mountPath: /etc/hyperledger/fabric-ca-server
       volumes:
       - name: ca-data
-        emptyDir: {}
+        persistentVolumeClaim:
+          claimName: fabric-ca-department-pvc
       - name: raw-identity
         secret:
           secretName: ca-department-identity

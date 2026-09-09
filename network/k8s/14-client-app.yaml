@@ -1,165 +1,378 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dotnet-service-config
+  namespace: plv-fabric
+data:
+  POSTGRES_HOST: postgres.plv-main-campus.svc.cluster.local
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: ActivityLogs
+  REDIS_CONNECTION_STRING: redis-master.plv-fabric.svc.cluster.local:6379
+  MIDDLEWARE_URL: http://middleware-api.plv-fabric.svc.cluster.local:4000
+  Middleware__Url: http://middleware-api.plv-fabric.svc.cluster.local:4000
+  IPFS_HOST: ipfs-ha-gateway.plv-fabric.svc.cluster.local
+  IpfsApiUrl: http://ipfs-ha-api.plv-fabric.svc.cluster.local:5001/api/v0/add?cid-version=1&wrap-with-directory=false
+  IpfsUrl: http://ipfs-ha-api.plv-fabric.svc.cluster.local:5001
+  IpfsGatewayUrl: http://ipfs-ha-gateway.plv-fabric.svc.cluster.local:8080
+  IPFS_PEER_NODES: ipfs-api.plv-fabric.svc.cluster.local,ipfs-annex-api.plv-annex-campus.svc.cluster.local,ipfs-pubad-api.plv-pubad-campus.svc.cluster.local
+  Monitoring__FrontendUrl: http://frontend-service.plv-fabric.svc.cluster.local
+  Monitoring__MiddlewareUrl: http://middleware-api.plv-fabric.svc.cluster.local:4000
+  Monitoring__PrometheusUrl: http://prometheus.plv-fabric.svc.cluster.local:9090
+  Monitoring__GrafanaUrl: http://grafana.plv-fabric.svc.cluster.local:3000
+  PROMETHEUS_URL: http://prometheus.plv-fabric.svc.cluster.local:9090
+  GRAFANA_URL: http://grafana.plv-fabric.svc.cluster.local:3000
+  DOTNET_AUTH_SERVICE_URL: http://dotnet-auth-service.plv-fabric.svc.cluster.local:5101
+  DOTNET_ACADEMIC_SERVICE_URL: http://dotnet-academic-service.plv-fabric.svc.cluster.local:5102
+  DOTNET_GRADE_SERVICE_URL: http://dotnet-grade-service.plv-fabric.svc.cluster.local:5103
+  DOTNET_OPERATIONS_SERVICE_URL: http://dotnet-operations-service.plv-fabric.svc.cluster.local:5104
+  DOTNET_REALTIME_SERVICE_URL: http://dotnet-realtime-service.plv-fabric.svc.cluster.local:5105
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: client-app
+  name: dotnet-api-gateway
   namespace: plv-fabric
+  labels: { app: dotnet-api-gateway, tier: application, runtime: dotnet }
 spec:
-  replicas: 1
+  replicas: 2
   selector:
-    matchLabels:
-      app: client-app
+    matchLabels: { app: dotnet-api-gateway }
   strategy:
     type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 0
-      maxUnavailable: 1
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
   template:
     metadata:
-      labels:
-        app: client-app
+      labels: { app: dotnet-api-gateway, tier: application, runtime: dotnet }
     spec:
+      terminationGracePeriodSeconds: 35
       containers:
-      - name: client-app
+      - name: dotnet-api-gateway
         image: registry.example.com/plv-repo/client-app:latest
         imagePullPolicy: Always
-        ports:
-        - containerPort: 5000
+        ports: [{ name: http, containerPort: 5000 }]
         envFrom:
-        - secretRef:
-            name: blockgo-secrets
+        - configMapRef: { name: dotnet-service-config }
         env:
-        - name: ASPNETCORE_URLS
-          value: "http://+:5000"
-        - name: ENABLE_FILE_LOGGING
-          value: "false"
-        - name: ENABLE_REQUEST_LOGGING
-          value: "false"
-        - name: DOTNET_ThreadPool_MinThreads
-          value: "16"
-        - name: Jwt__Key
-          valueFrom:
-            secretKeyRef:
-              name: blockgo-secrets
-              key: JWT_SECRET
-        - name: Jwt__Secret
-          valueFrom:
-            secretKeyRef:
-              name: blockgo-secrets
-              key: JWT_SECRET
-        - name: JwtSettings__Key
-          valueFrom:
-            secretKeyRef:
-              name: blockgo-secrets
-              key: JWT_SECRET
-        - name: JwtSettings__Secret
-          valueFrom:
-            secretKeyRef:
-              name: blockgo-secrets
-              key: JWT_SECRET
-        - name: IpfsEncryptionKey
-          valueFrom:
-            secretKeyRef:
-              name: blockgo-secrets
-              key: IPFS_ENCRYPTION_KEY
-        - name: VaultPassword
-          valueFrom:
-            secretKeyRef:
-              name: blockgo-secrets
-              key: BOOTSTRAP_REGISTRAR_PASS
-        - name: MIDDLEWARE_URL
-          value: "http://middleware-api.plv-fabric.svc.cluster.local:4000"
-        - name: MiddlewareUrl
-          value: "http://middleware-api.plv-fabric.svc.cluster.local:4000"
-        - name: MiddlewareApiUrl
-          value: "http://middleware-api.plv-fabric.svc.cluster.local:4000"
-        - name: InternalApiKey
-          valueFrom:
-            secretKeyRef:
-              name: blockgo-secrets
-              key: INTERNAL_API_KEY
-        - name: INTERNAL_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: blockgo-secrets
-              key: INTERNAL_API_KEY
-        - name: IPFS_HOST
-          value: "ipfs-api.plv-fabric.svc.cluster.local"
-        - name: IpfsUrl
-          value: "http://ipfs-api.plv-fabric.svc.cluster.local:5001"
-        - name: IpfsGatewayUrl
-          value: "http://ipfs-gateway.plv-fabric.svc.cluster.local:8080"
-        - name: IPFS_PEER_NODES
-          value: "ipfs-node-0.ipfs-node.plv-fabric.svc.cluster.local,ipfs-node-1.ipfs-node.plv-fabric.svc.cluster.local,ipfs-node-2.ipfs-node.plv-fabric.svc.cluster.local"
-        - name: POSTGRES_DB
-          value: "ActivityLogs"
-        - name: POSTGRES_USER
-          valueFrom:
-            secretKeyRef:
-              name: blockgo-secrets
-              key: POSTGRES_USER
-        - name: POSTGRES_PASS
-          valueFrom:
-            secretKeyRef:
-              name: blockgo-secrets
-              key: POSTGRES_PASS
-        - name: ConnectionStrings__MasterConnection
-          value: "Host=postgres.plv-main-campus.svc.cluster.local;Port=5432;Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASS)"
-        - name: ConnectionStrings__ReplicaConnection
-          value: "Host=postgres.plv-main-campus.svc.cluster.local;Port=5432;Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASS)"
-        - name: ConnectionStrings__PostgresConnection
-          value: "Host=postgres.plv-main-campus.svc.cluster.local;Port=5432;Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASS)"
+        - { name: DOTNET_SERVICE_NAME, value: gateway }
+        - { name: DOTNET_SERVICE_PORT, value: "5000" }
+        - { name: ASPNETCORE_URLS, value: "http://+:5000" }
+        startupProbe:
+          httpGet: { path: /health, port: 5000 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        readinessProbe:
+          httpGet: { path: /api/ready, port: 5000 }
+          periodSeconds: 5
+          timeoutSeconds: 4
+          failureThreshold: 3
+        livenessProbe:
+          httpGet: { path: /health, port: 5000 }
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
         resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "768Mi"
-            cpu: "1000m"
+          requests: { memory: 64Mi, cpu: 50m }
+          limits: { memory: 192Mi, cpu: 300m }
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: client-app-service
   namespace: plv-fabric
+  labels: { app: dotnet-api-gateway, compatibility: client-app }
   annotations:
     cloud.google.com/neg: '{"ingress": true}'
-    cloud.google.com/backend-config: '{"ports":{"5000":"client-app-backend-config"}}'
 spec:
+  selector: { app: dotnet-api-gateway }
+  ports: [{ name: http, protocol: TCP, port: 5000, targetPort: 5000 }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dotnet-api-gateway
+  namespace: plv-fabric
+  labels: { app: dotnet-api-gateway }
+spec:
+  selector: { app: dotnet-api-gateway }
+  ports: [{ name: http, protocol: TCP, port: 5000, targetPort: 5000 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dotnet-auth-service
+  namespace: plv-fabric
+  labels: { app: dotnet-auth-service, tier: application, runtime: dotnet }
+spec:
+  replicas: 2
   selector:
-    app: client-app
-  ports:
-  - protocol: TCP
-    port: 5000
-    targetPort: 5000
+    matchLabels: { app: dotnet-auth-service }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels: { app: dotnet-auth-service, tier: application, runtime: dotnet }
+    spec:
+      terminationGracePeriodSeconds: 35
+      containers:
+      - name: dotnet-auth-service
+        image: registry.example.com/plv-repo/client-app:latest
+        imagePullPolicy: Always
+        ports: [{ name: http, containerPort: 5101 }]
+        envFrom:
+        - configMapRef: { name: dotnet-service-config }
+        - secretRef: { name: blockgo-secrets }
+        env:
+        - { name: DOTNET_SERVICE_NAME, value: auth }
+        - { name: DOTNET_SERVICE_PORT, value: "5101" }
+        - { name: ASPNETCORE_URLS, value: "http://+:5101" }
+        startupProbe: &auth-startup
+          httpGet: { path: /health, port: 5101 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        readinessProbe: &auth-ready
+          httpGet: { path: /api/ready, port: 5101 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe: *auth-startup
+        resources:
+          requests: { memory: 128Mi, cpu: 75m }
+          limits: { memory: 384Mi, cpu: 500m }
 ---
-apiVersion: cloud.google.com/v1
-kind: BackendConfig
+apiVersion: v1
+kind: Service
 metadata:
-  name: client-app-backend-config
+  name: dotnet-auth-service
   namespace: plv-fabric
+  labels: { app: dotnet-auth-service }
 spec:
-  timeoutSec: 3600
-  healthCheck:
-    type: HTTP
-    requestPath: /health
-    port: 5000
+  selector: { app: dotnet-auth-service }
+  ports: [{ name: http, port: 5101, targetPort: 5101 }]
 ---
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: client-app-hpa
+  name: dotnet-academic-service
   namespace: plv-fabric
+  labels: { app: dotnet-academic-service, tier: application, runtime: dotnet }
 spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: client-app
-  minReplicas: 1
-  maxReplicas: 1
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
+  replicas: 2
+  selector:
+    matchLabels: { app: dotnet-academic-service }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels: { app: dotnet-academic-service, tier: application, runtime: dotnet }
+    spec:
+      terminationGracePeriodSeconds: 35
+      containers:
+      - name: dotnet-academic-service
+        image: registry.example.com/plv-repo/client-app:latest
+        imagePullPolicy: Always
+        ports: [{ name: http, containerPort: 5102 }]
+        envFrom:
+        - configMapRef: { name: dotnet-service-config }
+        - secretRef: { name: blockgo-secrets }
+        env:
+        - { name: DOTNET_SERVICE_NAME, value: academic }
+        - { name: DOTNET_SERVICE_PORT, value: "5102" }
+        - { name: ASPNETCORE_URLS, value: "http://+:5102" }
+        startupProbe: &academic-startup
+          httpGet: { path: /health, port: 5102 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        readinessProbe: &academic-ready
+          httpGet: { path: /api/ready, port: 5102 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe: *academic-startup
+        resources:
+          requests: { memory: 128Mi, cpu: 75m }
+          limits: { memory: 384Mi, cpu: 500m }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dotnet-academic-service
+  namespace: plv-fabric
+  labels: { app: dotnet-academic-service }
+spec:
+  selector: { app: dotnet-academic-service }
+  ports: [{ name: http, port: 5102, targetPort: 5102 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dotnet-grade-service
+  namespace: plv-fabric
+  labels: { app: dotnet-grade-service, tier: application, runtime: dotnet }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: dotnet-grade-service }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels: { app: dotnet-grade-service, tier: application, runtime: dotnet }
+    spec:
+      terminationGracePeriodSeconds: 35
+      containers:
+      - name: dotnet-grade-service
+        image: registry.example.com/plv-repo/client-app:latest
+        imagePullPolicy: Always
+        ports: [{ name: http, containerPort: 5103 }]
+        envFrom:
+        - configMapRef: { name: dotnet-service-config }
+        - secretRef: { name: blockgo-secrets }
+        env:
+        - { name: DOTNET_SERVICE_NAME, value: grade }
+        - { name: DOTNET_SERVICE_PORT, value: "5103" }
+        - { name: ASPNETCORE_URLS, value: "http://+:5103" }
+        startupProbe: &grade-startup
+          httpGet: { path: /health, port: 5103 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        readinessProbe: &grade-ready
+          httpGet: { path: /api/ready, port: 5103 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe: *grade-startup
+        resources:
+          requests: { memory: 192Mi, cpu: 100m }
+          limits: { memory: 512Mi, cpu: 750m }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dotnet-grade-service
+  namespace: plv-fabric
+  labels: { app: dotnet-grade-service }
+spec:
+  selector: { app: dotnet-grade-service }
+  ports: [{ name: http, port: 5103, targetPort: 5103 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dotnet-operations-service
+  namespace: plv-fabric
+  labels: { app: dotnet-operations-service, tier: application, runtime: dotnet }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: dotnet-operations-service }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels: { app: dotnet-operations-service, tier: application, runtime: dotnet }
+    spec:
+      terminationGracePeriodSeconds: 35
+      containers:
+      - name: dotnet-operations-service
+        image: registry.example.com/plv-repo/client-app:latest
+        imagePullPolicy: Always
+        ports: [{ name: http, containerPort: 5104 }]
+        envFrom:
+        - configMapRef: { name: dotnet-service-config }
+        - secretRef: { name: blockgo-secrets }
+        env:
+        - { name: DOTNET_SERVICE_NAME, value: operations }
+        - { name: DOTNET_SERVICE_PORT, value: "5104" }
+        - { name: ASPNETCORE_URLS, value: "http://+:5104" }
+        startupProbe: &operations-startup
+          httpGet: { path: /health, port: 5104 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        readinessProbe: &operations-ready
+          httpGet: { path: /api/ready, port: 5104 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe: *operations-startup
+        resources:
+          requests: { memory: 128Mi, cpu: 75m }
+          limits: { memory: 384Mi, cpu: 500m }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dotnet-operations-service
+  namespace: plv-fabric
+  labels: { app: dotnet-operations-service }
+spec:
+  selector: { app: dotnet-operations-service }
+  ports: [{ name: http, port: 5104, targetPort: 5104 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dotnet-realtime-service
+  namespace: plv-fabric
+  labels: { app: dotnet-realtime-service, tier: application, runtime: dotnet }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: dotnet-realtime-service }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels: { app: dotnet-realtime-service, tier: application, runtime: dotnet }
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: dotnet-realtime-service
+        image: registry.example.com/plv-repo/client-app:latest
+        imagePullPolicy: Always
+        ports: [{ name: http, containerPort: 5105 }]
+        envFrom:
+        - configMapRef: { name: dotnet-service-config }
+        - secretRef: { name: blockgo-secrets }
+        env:
+        - { name: DOTNET_SERVICE_NAME, value: realtime }
+        - { name: DOTNET_SERVICE_PORT, value: "5105" }
+        - { name: ASPNETCORE_URLS, value: "http://+:5105" }
+        startupProbe: &realtime-startup
+          httpGet: { path: /health, port: 5105 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        readinessProbe: &realtime-ready
+          httpGet: { path: /api/ready, port: 5105 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe: *realtime-startup
+        resources:
+          requests: { memory: 128Mi, cpu: 75m }
+          limits: { memory: 384Mi, cpu: 500m }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dotnet-realtime-service
+  namespace: plv-fabric
+  labels: { app: dotnet-realtime-service }
+spec:
+  selector: { app: dotnet-realtime-service }
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+  ports: [{ name: http, port: 5105, targetPort: 5105 }]

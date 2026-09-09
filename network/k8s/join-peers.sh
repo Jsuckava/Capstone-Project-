@@ -1,66 +1,105 @@
 #!/bin/bash
 
-# Join Fabric Peers to Channel in Kubernetes
-set -e
+# Join all organization peers to the application channel.
 
-# Ensure script always runs from the network/ directory context
+set -euo pipefail
+
 cd "$(dirname "$0")/.."
 
-CHANNEL_NAME=${1:-registrar-channel}
+PROFILE="${K8S_PROFILE:-local}"
+CHANNEL_NAME="${1:-registrar-channel}"
+ARTIFACTS_DIR="./channel-artifacts-final"
+if [[ "$PROFILE" == "production" ]]; then
+    ARTIFACTS_DIR="./channel-artifacts-k8s"
+fi
+CHANNEL_BLOCK="${ARTIFACTS_DIR}/${CHANNEL_NAME}.block"
+
+if [[ "$PROFILE" == "local" ]]; then
+    export KUBECTL_REMOTE_COMMAND_WEBSOCKETS="${KUBECTL_REMOTE_COMMAND_WEBSOCKETS:-false}"
+fi
+
+[[ -f "$CHANNEL_BLOCK" ]] || {
+    echo "ERROR: Channel block not found: $CHANNEL_BLOCK" >&2
+    exit 1
+}
+
+peer_exec() {
+    local namespace="$1"
+    local pod="$2"
+    local msp_id="$3"
+    local tls_override="$4"
+    shift 4
+
+    MSYS_NO_PATHCONV=1 kubectl exec -n "$namespace" "$pod" -- env \
+        CORE_PEER_TLS_ENABLED=true \
+        CORE_PEER_TLS_ROOTCERT_FILE=/var/hyperledger/tls/ca.crt \
+        CORE_PEER_TLS_SERVERHOSTOVERRIDE="$tls_override" \
+        CORE_PEER_LOCALMSPID="$msp_id" \
+        CORE_PEER_MSPCONFIGPATH=/tmp/blockgo-admin-msp \
+        CORE_PEER_ADDRESS=127.0.0.1:7051 \
+        "$@"
+}
+
+join_peer() {
+    local deployment="$1"
+    local namespace="$2"
+    local org="$3"
+    local msp_id="$4"
+    local peer_number="${5:-0}"
+    local domain="${org}.capstone.com"
+    local tls_override="peer${peer_number}.${domain}"
+    local admin_msp="./crypto-config-final-v2/peerOrganizations/${domain}/users/Admin@${domain}/msp"
+    local attempts=20
+
+    [[ -d "$admin_msp" ]] || {
+        echo "ERROR: Admin MSP not found: $admin_msp" >&2
+        return 1
+    }
+
+    for attempt in $(seq 1 "$attempts"); do
+        local pod
+        local channels
+        pod="$(kubectl get pods -n "$namespace" -l "app=$deployment" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+
+        if [[ -n "$pod" ]] && kubectl wait --for=condition=Ready "pod/$pod" -n "$namespace" --timeout=30s >/dev/null 2>&1; then
+            kubectl exec -n "$namespace" "$pod" -- rm -rf /tmp/blockgo-admin-msp >/dev/null
+            kubectl cp "$admin_msp" "$namespace/$pod:/tmp/blockgo-admin-msp" >/dev/null
+
+            channels="$(peer_exec "$namespace" "$pod" "$msp_id" "$tls_override" peer channel list 2>/dev/null || true)"
+            if grep -Fq "$CHANNEL_NAME" <<<"$channels"; then
+                echo "[SKIP] $deployment is already joined to $CHANNEL_NAME."
+                return 0
+            fi
+
+            echo "[JOIN] Joining $deployment to $CHANNEL_NAME (attempt $attempt/$attempts)..."
+            kubectl cp "$CHANNEL_BLOCK" "$namespace/$pod:/tmp/${CHANNEL_NAME}.block" >/dev/null
+            if peer_exec "$namespace" "$pod" "$msp_id" "$tls_override" \
+                peer channel join -b "/tmp/${CHANNEL_NAME}.block"; then
+                echo "[OK] $deployment joined $CHANNEL_NAME."
+                return 0
+            fi
+        fi
+
+        sleep 5
+    done
+
+    echo "ERROR: Failed to join $deployment to $CHANNEL_NAME after $attempts attempts." >&2
+    return 1
+}
 
 echo "======================================"
 echo "Fabric Peer Channel Join"
 echo "======================================"
 echo "Channel: $CHANNEL_NAME"
-echo ""
 
-# Function to join a peer
-join_peer() {
-    local DEPLOY_NAME=$1
-    local NAMESPACE=$2
+join_peer "peer-registrar" "plv-main-campus" "registrar" "RegistrarMSP"
+join_peer "peer-faculty" "plv-annex-campus" "faculty" "FacultyMSP"
+join_peer "peer-department" "plv-pubad-campus" "department" "DepartmentMSP"
 
-    echo "Joining $DEPLOY_NAME in $NAMESPACE to $CHANNEL_NAME..."
-    
-    local ORG_NAME=${DEPLOY_NAME#peer-}
-    local OVERRIDE="peer0.${ORG_NAME}.capstone.com"
-    local DOMAIN="${ORG_NAME}.capstone.com"
+if [[ "$PROFILE" == "production" ]]; then
+    join_peer "peer-registrar-2" "plv-main-campus" "registrar" "RegistrarMSP" 1
+    join_peer "peer-faculty-2" "plv-annex-campus" "faculty" "FacultyMSP" 1
+    join_peer "peer-department-2" "plv-pubad-campus" "department" "DepartmentMSP" 1
+fi
 
-    local max_retries=20
-    local attempt=1
-    while [ $attempt -le $max_retries ]; do
-        # Dynamically fetch pod name in case it restarted (CrashLoopBackOff)
-        local POD_NAME=$(kubectl get pods -n $NAMESPACE -l app=$DEPLOY_NAME -o jsonpath='{.items[0].metadata.name}')
-        
-        if [ -n "$POD_NAME" ]; then
-            # Re-copy files in every iteration because if the pod crashes, its /tmp directory is wiped!
-            kubectl cp ./channel-artifacts-final/${CHANNEL_NAME}.block $NAMESPACE/$POD_NAME:/tmp/${CHANNEL_NAME}.block 2>/dev/null || true
-            kubectl cp ./crypto-config-final-v2/peerOrganizations/${DOMAIN}/users/Admin@${DOMAIN}/msp $NAMESPACE/$POD_NAME:/tmp/admin-msp 2>/dev/null || true
-
-            set +e
-            local OUTPUT=$(MSYS_NO_PATHCONV=1 kubectl exec deployment/$DEPLOY_NAME -n $NAMESPACE -- env CORE_PEER_MSPCONFIGPATH=/tmp/admin-msp CORE_PEER_TLS_SERVERHOSTOVERRIDE=$OVERRIDE CORE_PEER_ADDRESS=127.0.0.1:7051 peer channel join -b /tmp/${CHANNEL_NAME}.block 2>&1)
-            local EXIT_CODE=$?
-            set -e
-
-            if [ $EXIT_CODE -eq 0 ] || echo "$OUTPUT" | grep -q "already exists"; then
-                echo "✓ Successfully joined channel"
-                return 0
-            fi
-        fi
-        echo "⚠ Attempt $attempt failed (Pod may be initializing/restarting). Retrying in 10 seconds..."
-        sleep 10
-        attempt=$((attempt + 1))
-    done
-    echo "⚠ Peer in $DEPLOY_NAME may already be in the channel or failed to connect."
-}
-
-# 1. Registrar Org
-join_peer "peer-registrar" "plv-main-campus"
-
-# 2. Faculty Org
-join_peer "peer-faculty" "plv-annex-campus"
-
-# 3. Department Org
-join_peer "peer-department" "plv-pubad-campus"
-
-echo ""
-echo "✓ Peer join operations complete"
+echo "All peers are joined to $CHANNEL_NAME."

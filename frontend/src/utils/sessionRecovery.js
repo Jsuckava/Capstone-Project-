@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchSharedClientState, saveSharedClientState } from "../services/api";
+import { getAuthToken } from "../services/authSession";
 
 const RECOVERY_STATE_PREFIX = "blockgo:recovery:state:";
 const FIELD_DRAFTS_KEY = "blockgo:recovery:fieldDrafts";
@@ -20,8 +21,8 @@ const safeParse = (rawValue, fallback) => {
 };
 
 const getStorageScope = () => {
-  const token = localStorage.getItem("token");
-  if (!token) return localStorage.getItem("userRole") || "guest";
+  const token = getAuthToken();
+  if (!token) return "guest";
 
   try {
     const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
@@ -45,7 +46,7 @@ const getUpdatedTime = (entry) => {
   return Number.isFinite(time) ? time : 0;
 };
 
-const hasSharedRecoveryAuth = () => Boolean(localStorage.getItem("token"));
+const hasSharedRecoveryAuth = () => Boolean(getAuthToken());
 
 const normalizeSharedRecovery = (value) =>
   value && typeof value === "object" && !Array.isArray(value) ? value : {};

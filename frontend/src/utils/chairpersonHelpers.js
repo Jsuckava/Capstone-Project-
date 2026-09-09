@@ -104,19 +104,14 @@ export const getSectionReviewRecord = ({ reviewData = {}, reviewKey }) =>
   };
 
 export const getReviewStatusLabel = (status = "pending") => {
-  if (status === "registrar_rejected") return "Registrar Rejected";
   if (status === "returned") return "Returned to Faculty";
   if (status === "approved") return "Approved by Chairperson";
-  if (status === "forwarded") return "Submitted to Registrar";
+  if (status === "forwarded") return "Forwarded to Registrar";
   if (status === "submitted") return "Submitted to Chairperson";
   return "Not Yet Submitted";
 };
 
 export const getReviewStatusClasses = (status = "pending") => {
-  if (status === "registrar_rejected") {
-    return "bg-rose-100 text-rose-700 border border-rose-200";
-  }
-
   if (status === "returned") {
     return "bg-red-100 text-red-700 border border-red-200";
   }
@@ -165,7 +160,6 @@ export const getFacultyStatusClasses = (status) => {
 };
 
 export const getChairActionLabel = (status = "pending") => {
-  if (status === "registrar_rejected") return "Registrar Rejected";
   if (status === "returned") return "Returned for Correction";
   if (status === "approved") return "Approved";
   if (status === "forwarded") return "Sent to Registrar";

@@ -1,0 +1,95 @@
+.subject-assignment{color:#334155;font-size:14px;line-height:1.5;min-width:0;background:transparent;padding:0;width:100%;margin:0}
+.sa-header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}
+.sa-breadcrumb{font-size:12px;margin-bottom:5px;color:#6887bb}
+.sa-breadcrumb span{margin:0 8px}
+.sa-header h2{font-size:24px;font-weight:700;line-height:1.2;color:#003366}
+.sa-header p{color:#64748b;margin-top:5px}
+.sa-help{white-space:nowrap;border:1px solid #dce9ff;color:#003366;padding:9px 13px;border-radius:6px;background:#f8fbff;font-weight:600}
+.sa-card{border:1px solid #e2e8f0;background:#fff;border-radius:16px;padding:20px;box-shadow:0 1px 2px #0000000d}
+.sa-heading{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.sa-heading h3,.sa-professor h3{font-size:16px;font-weight:700;color:#003366}
+.sa-heading p,.sa-professor p{font-size:12px;color:#64748b;margin-top:1px}
+.subject-assignment svg{width:18px;height:18px;flex-shrink:0}
+.sa-icon{width:29px;height:29px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eaf2ff;color:#174cbf;flex-shrink:0}
+.sa-lookup{display:grid;grid-template-columns:1fr 1.1fr;gap:20px;margin-bottom:12px}
+.sa-search{display:flex;align-items:center;gap:9px;border:1px solid #cbd5e1;border-radius:8px;padding:8px 12px;background:white}
+.sa-search svg{width:14px;height:14px;color:#5079b5}
+.sa-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;font-size:12px}
+.sa-search:focus-within{outline:2px solid #7eafff}
+.sa-search button{font-size:17px;line-height:1}
+.sa-professors{max-height:120px;overflow:auto}
+.sa-professors button{display:block;width:100%;text-align:left;padding:7px;border-bottom:1px solid #edf2fa}
+.sa-professors button:hover{background:#edf5ff}
+.sa-professors small{color:#7b90b4;margin-left:10px}
+.sa-professors p{padding-top:8px;color:#7b90b4}
+.sa-professor{display:flex;align-items:center;gap:14px;padding:12px;background:#f8fafc;border-radius:12px;min-width:0}
+.sa-avatar{display:flex;align-items:center;justify-content:center;border-radius:50%;background:#003366;width:46px;height:46px;flex-shrink:0;color:white;font-size:18px}
+.sa-badge{display:flex;align-items:center;gap:10px;background:#fff3c9;padding:10px 14px;border-radius:7px;margin-left:auto;white-space:nowrap}
+.sa-badge small{display:block;font-size:12px}
+.sa-tabs{display:flex;align-items:center;border:1px solid #e2e8f0;border-radius:12px;background:#fff;padding:4px;margin-bottom:16px;overflow:hidden}
+.sa-tabs button{display:flex;align-items:center;justify-content:center;gap:12px;padding:11px 22px;font-weight:700;min-width:24%}
+.sa-tabs button.active{background:#003366;color:#facc15;border-radius:10px;box-shadow:0 1px 2px #0000000d}
+.sa-tabs>span{font-size:12px;color:#64748b;padding:0 15px}
+.sa-columns{display:grid;grid-template-columns:minmax(0,1.02fr) minmax(0,1fr);gap:16px}
+.sa-columns>.sa-card{min-width:0}
+.sa-filters{display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:10px;margin-bottom:8px}
+.sa-filters label,.sa-program{font-size:12px;color:#617aaa;font-weight:600;min-width:0}
+.sa-filters select,.sa-program select{display:block;width:100%;margin-top:3px;border:1px solid #cbd5e1;border-radius:8px;padding:8px;background:white;font-size:12px;color:#214786}
+.sa-program{display:block;margin-bottom:12px}
+.sa-table-scroll{overflow:auto;margin-top:8px}
+.subject-assignment table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}
+.subject-assignment th{background:#f1f5f9;padding:10px 12px;font-size:12px;white-space:nowrap;font-weight:700}
+.subject-assignment td{border-bottom:1px solid #eaf0fa;padding:10px 12px}
+.subject-assignment tr.selected{background:#e3f0ff}
+.subject-assignment input[type=radio]{accent-color:#176bff;width:13px;height:13px}
+.sa-text-button{font-weight:600;white-space:nowrap}
+.sa-section-name{font-weight:600}
+.sa-section-name small{display:block;font-weight:400;color:#8294b4}
+.sa-schedule{width:100%;min-width:100px;padding:4px;background:transparent;border:1px solid #e2ebfa;border-radius:4px;font-size:12px}
+.sa-assign{background:#facc15;padding:6px 11px;border-radius:6px;white-space:nowrap;font-size:12px;font-weight:700;color:#003366}
+.sa-info{display:flex;align-items:center;gap:12px;background:#eaf3ff;border:1px solid #dcecff;color:#2165e2;border-radius:6px;padding:12px;font-size:12px;margin-bottom:10px}
+.sa-selected{margin-top:16px;margin-bottom:0;font-size:12px}
+.sa-selected>span{font-size:23px}
+.sa-selected p{color:#748bb6;margin-top:3px}
+.sa-footnote{font-size:12px;margin-top:5px;color:#7289b1}
+.subject-assignment td.sa-empty{text-align:center;color:#64748b;padding:30px 12px;line-height:1.6}
+.sa-assigned{margin-bottom:16px}
+.sa-assigned-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sa-assigned-header .sa-heading{margin:0}
+.sa-assigned-header .sa-icon{background:#003366;color:white}
+.sa-totals{display:flex;gap:8px}
+.sa-totals>div{display:flex;gap:12px;align-items:center;background:#eaf3ff;border-radius:6px;padding:7px 13px;min-width:125px}
+.sa-totals>div:last-child{background:#fff8dc}
+.sa-totals span{font-size:12px}
+.sa-totals strong{display:block;font-size:15px;line-height:1.1}
+.sa-assigned footer{display:flex;align-items:center;gap:12px;padding-top:10px}
+.sa-assigned footer>span{margin-left:auto;color:#718ab3;font-size:12px}
+.sa-clear{border:1px solid #d5e0f1;background:#f3f6fa;color:#5977a8;border-radius:5px;padding:7px 12px}
+.sa-save{display:flex;align-items:center;gap:15px;background:#003366;color:white;padding:9px 24px;border-radius:5px;font-weight:650;box-shadow:0 2px 4px #00336630}
+.sa-save svg{width:15px;height:15px}
+.sa-remove{color:#ff4141;padding:2px}
+.sa-remove svg{width:14px;height:14px}
+.sa-saved{color:#46806c}
+.subject-assignment button:disabled{opacity:.45;cursor:not-allowed}
+.subject-assignment button:focus-visible,.subject-assignment select:focus-visible{outline:2px solid #2e7fff;outline-offset:2px}
+@media(max-width:900px){.sa-lookup{grid-template-columns:1fr}
+.sa-header h2{font-size:20px}
+.sa-columns{grid-template-columns:1fr}
+.sa-professor{min-height:80px}
+}
+@media(max-width:600px){.subject-assignment{padding:8px}
+.sa-header{align-items:flex-start}
+.sa-help{font-size:12px;padding:6px}
+.sa-header h2{font-size:17px}
+.sa-tabs{flex-wrap:wrap}
+.sa-tabs button{flex:1;padding:10px}
+.sa-tabs>span{padding:8px}
+.sa-assigned-header{align-items:flex-start;flex-direction:column}
+.sa-badge{padding:7px}
+.sa-filters{gap:5px;grid-template-columns:1.2fr 1fr 1fr}
+.sa-save{padding:9px 12px}
+.sa-professor{gap:8px}
+.sa-assigned footer{flex-wrap:wrap}
+}
+
+
