@@ -61,7 +61,15 @@ jobs:
         working-directory: frontend
         run: |
           set -euo pipefail
-          npm run lint
+
+          if node -e "
+            const p = require('./package.json');
+            process.exit(p.scripts && p.scripts.lint ? 0 : 1);
+          "; then
+            npm run lint
+          else
+            echo "::warning::Frontend lint script is not configured yet; skipping."
+          fi
 
       - name: Frontend unit tests
         working-directory: frontend
