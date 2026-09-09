@@ -21,18 +21,17 @@
     "npm": ">=10"
   },
   "dependencies": {
-    "axios": "^1.13.5",
+    "@grpc/grpc-js": "^1.14.4",
+    "axios": "^1.20.0",
     "bcrypt": "^6.0.0",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.1",
-    "fabric-ca-client": "^2.2.20",
-    "fabric-network": "^2.2.20",
     "form-data": "^4.0.5",
     "js-yaml": "^4.1.1",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
-    "nodemailer": "^8.0.4",
+    "nodemailer": "^10.0.1",
     "pg": "^8.20.0"
   }
 }
