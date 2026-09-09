@@ -1,0 +1,9 @@
+
+> block-go@0.1.0 build
+> react-scripts build --outDir dist-final
+
+Failed to compile.
+
+ENOENT: no such file or directory, mkdir '/mnt/c/Users/pascu/Documents/GitHub2/GitHub/Capstone-Project-/For_Testing_Only_Capstone/frontend/build'
+
+

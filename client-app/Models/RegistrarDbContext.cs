@@ -5,15 +5,15 @@ using Microsoft.Extensions.Configuration;
 
 namespace For_Testing_Only_Capstone.Models;
 
-public partial class RegistrarDbContext : DbContext
+public abstract partial class RegistrarDbContext : DbContext
 {
-    private readonly IConfiguration? _configuration;
+    protected readonly IConfiguration? _configuration;
 
-    public RegistrarDbContext()
+    protected RegistrarDbContext()
     {
     }
 
-    public RegistrarDbContext(DbContextOptions<RegistrarDbContext> options, IConfiguration configuration)
+    protected RegistrarDbContext(DbContextOptions options, IConfiguration configuration)
         : base(options)
     {
         _configuration = configuration;
@@ -103,4 +103,21 @@ public partial class RegistrarDbContext : DbContext
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
+}
+
+public class RegistrarWriteDbContext : RegistrarDbContext
+{
+    public RegistrarWriteDbContext(DbContextOptions<RegistrarWriteDbContext> options, IConfiguration configuration) 
+        : base(options, configuration)
+    {
+    }
+}
+
+public class RegistrarReadDbContext : RegistrarDbContext
+{
+    public RegistrarReadDbContext(DbContextOptions<RegistrarReadDbContext> options, IConfiguration configuration) 
+        : base(options, configuration)
+    {
+        ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+    }
 }

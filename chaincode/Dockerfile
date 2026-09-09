@@ -11,6 +11,7 @@ RUN go build -o registrar_cc main.go
 
 FROM alpine:latest
 WORKDIR /app
+RUN apk add --no-cache bash ca-certificates
 COPY --from=builder /app/registrar_cc .
 
 CMD ["./registrar_cc"]

@@ -35,7 +35,7 @@
     "orderer.capstone.com": {
       "url": "grpcs://localhost:7050",
       "tlsCACerts": {
-        "path": "../network/crypto-config/ordererOrganizations/capstone.com/orderers/orderer.capstone.com/tls/ca.crt"
+        "path": "../network/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer.capstone.com/tls/ca.crt"
       },
       "grpcOptions": {
         "ssl-target-name-override": "orderer.capstone.com"
@@ -45,32 +45,32 @@
   "peers": {
     "peer0.registrar.capstone.com": {
       "url": "grpcs://localhost:7051",
-      "tlsCACerts": { "path": "../network/crypto-config/peerOrganizations/registrar.capstone.com/peers/peer0.registrar.capstone.com/tls/ca.crt" },
+      "tlsCACerts": { "path": "../network/crypto-config-final-v2/peerOrganizations/registrar.capstone.com/peers/peer0.registrar.capstone.com/tls/ca.crt" },
       "grpcOptions": { "ssl-target-name-override": "peer0.registrar.capstone.com" }
     },
     "peer1.registrar.capstone.com": {
       "url": "grpcs://localhost:8051",
-      "tlsCACerts": { "path": "../network/crypto-config/peerOrganizations/registrar.capstone.com/peers/peer1.registrar.capstone.com/tls/ca.crt" },
+      "tlsCACerts": { "path": "../network/crypto-config-final-v2/peerOrganizations/registrar.capstone.com/peers/peer1.registrar.capstone.com/tls/ca.crt" },
       "grpcOptions": { "ssl-target-name-override": "peer1.registrar.capstone.com" }
     },
     "peer0.department.capstone.com": {
       "url": "grpcs://localhost:11051",
-      "tlsCACerts": { "path": "../network/crypto-config/peerOrganizations/department.capstone.com/peers/peer0.department.capstone.com/tls/ca.crt" },
+      "tlsCACerts": { "path": "../network/crypto-config-final-v2/peerOrganizations/department.capstone.com/peers/peer0.department.capstone.com/tls/ca.crt" },
       "grpcOptions": { "ssl-target-name-override": "peer0.department.capstone.com" }
     },
     "peer1.department.capstone.com": {
       "url": "grpcs://localhost:12051",
-      "tlsCACerts": { "path": "../network/crypto-config/peerOrganizations/department.capstone.com/peers/peer1.department.capstone.com/tls/ca.crt" },
+      "tlsCACerts": { "path": "../network/crypto-config-final-v2/peerOrganizations/department.capstone.com/peers/peer1.department.capstone.com/tls/ca.crt" },
       "grpcOptions": { "ssl-target-name-override": "peer1.department.capstone.com" }
     },
     "peer0.faculty.capstone.com": {
       "url": "grpcs://localhost:9051",
-      "tlsCACerts": { "path": "../network/crypto-config/peerOrganizations/faculty.capstone.com/peers/peer0.faculty.capstone.com/tls/ca.crt" },
+      "tlsCACerts": { "path": "../network/crypto-config-final-v2/peerOrganizations/faculty.capstone.com/peers/peer0.faculty.capstone.com/tls/ca.crt" },
       "grpcOptions": { "ssl-target-name-override": "peer0.faculty.capstone.com" }
     },
     "peer1.faculty.capstone.com": {
       "url": "grpcs://localhost:10051",
-      "tlsCACerts": { "path": "../network/crypto-config/peerOrganizations/faculty.capstone.com/peers/peer1.faculty.capstone.com/tls/ca.crt" },
+      "tlsCACerts": { "path": "../network/crypto-config-final-v2/peerOrganizations/faculty.capstone.com/peers/peer1.faculty.capstone.com/tls/ca.crt" },
       "grpcOptions": { "ssl-target-name-override": "peer1.faculty.capstone.com" }
     }
   },
@@ -78,19 +78,19 @@
     "ca.registrar.capstone.com": {
       "url": "https://localhost:7054",
       "caName": "ca-registrar",
-      "tlsCACerts": { "path": "../network/crypto-config/peerOrganizations/registrar.capstone.com/msp/tlscacerts/tlsca.registrar.capstone.com-cert.pem" },
+      "tlsCACerts": { "path": "../network/crypto-config-final-v2/peerOrganizations/registrar.capstone.com/tlsca/tlsca.registrar.capstone.com-cert.pem" },
       "httpOptions": { "verify": false }
     },
     "ca.faculty.capstone.com": {
       "url": "https://localhost:8054",
       "caName": "ca-faculty",
-      "tlsCACerts": { "path": "../network/crypto-config/peerOrganizations/faculty.capstone.com/msp/tlscacerts/tlsca.faculty.capstone.com-cert.pem" },
+      "tlsCACerts": { "path": "../network/crypto-config-final-v2/peerOrganizations/faculty.capstone.com/tlsca/tlsca.faculty.capstone.com-cert.pem" },
       "httpOptions": { "verify": false }
     },
     "ca.department.capstone.com": {
       "url": "https://localhost:9054",
       "caName": "ca-department",
-      "tlsCACerts": { "path": "../network/crypto-config/peerOrganizations/department.capstone.com/msp/tlscacerts/tlsca.department.capstone.com-cert.pem" },
+      "tlsCACerts": { "path": "../network/crypto-config-final-v2/peerOrganizations/department.capstone.com/tlsca/tlsca.department.capstone.com-cert.pem" },
       "httpOptions": { "verify": false }
     }
   }

@@ -1,0 +1,421 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "process_resident_memory_bytes{job=\"middleware-api\"}",
+          "legendFormat": "{{pod}} rss",
+          "refId": "A"
+        },
+        {
+          "expr": "nodejs_heap_size_used_bytes{job=\"middleware-api\"}",
+          "legendFormat": "{{pod}} heap used",
+          "refId": "B"
+        }
+      ],
+      "title": "Middleware Memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "rate(process_resident_memory_bytes{job=\"middleware-api\"}[5m])",
+          "legendFormat": "{{pod}} rss growth",
+          "refId": "A"
+        }
+      ],
+      "title": "Memory Growth Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "blockgo_gateway_cache_entries{job=\"middleware-services\",service=\"ledger-service\"}",
+          "legendFormat": "{{pod}} gateways",
+          "refId": "A"
+        },
+        {
+          "expr": "blockgo_ca_config_cache_entries{job=\"middleware-services\",service=\"fabric-identity-service\"}",
+          "legendFormat": "{{pod}} CA configs",
+          "refId": "B"
+        }
+      ],
+      "title": "Cache Entries",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "sum by (pod) (rate(http_requests_total{job=\"middleware-api\"}[5m]))",
+          "legendFormat": "{{pod}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Request Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, pod) (rate(http_request_duration_seconds_bucket{job=\"middleware-api\"}[5m])))",
+          "legendFormat": "{{pod}} p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, pod) (rate(http_request_duration_seconds_bucket{job=\"middleware-api\"}[5m])))",
+          "legendFormat": "{{pod}} p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, pod) (rate(http_request_duration_seconds_bucket{job=\"middleware-api\"}[5m])))",
+          "legendFormat": "{{pod}} p99",
+          "refId": "C"
+        }
+      ],
+      "title": "Request Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "kube_pod_container_status_restarts_total{namespace=\"plv-fabric\",pod=~\"middleware-api.*\",container=\"api-gateway\"}",
+          "legendFormat": "{{pod}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Pod Restarts",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 7,
+      "targets": [
+        {
+          "expr": "container_memory_working_set_bytes{namespace=\"plv-fabric\",pod=~\"middleware-api.*\",container=\"api-gateway\"} / container_spec_memory_limit_bytes{namespace=\"plv-fabric\",pod=~\"middleware-api.*\",container=\"api-gateway\"}",
+          "legendFormat": "{{pod}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Middleware Memory Limit Utilization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 24
+      },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "kube_deployment_status_replicas_available{namespace=\"plv-fabric\",deployment=~\"frontend|client-app|middleware-api|auth-service|fabric-identity-service|ledger-service|grade-upload-service|settings-service\"}",
+          "legendFormat": "{{deployment}} available",
+          "refId": "A"
+        }
+      ],
+      "title": "Platform Available Replicas",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 24
+      },
+      "id": 9,
+      "targets": [
+        {
+          "expr": "kube_pod_container_status_restarts_total{namespace=\"plv-fabric\",pod=~\"(frontend|client-app|middleware-api|auth-service|fabric-identity-service|ledger-service|grade-upload-service|settings-service).*\",container=~\"frontend-nginx|client-app|api-gateway|auth-service|identity-service|ledger-service|upload-service|settings-service\"}",
+          "legendFormat": "{{pod}} {{container}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Platform Pod Restarts",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 24
+      },
+      "id": 10,
+      "targets": [
+        {
+          "expr": "container_memory_working_set_bytes{namespace=\"plv-fabric\",pod=~\"(frontend|client-app|middleware-api|auth-service|fabric-identity-service|ledger-service|grade-upload-service|settings-service).*\",container=~\"frontend-nginx|client-app|api-gateway|auth-service|identity-service|ledger-service|upload-service|settings-service\"} / container_spec_memory_limit_bytes{namespace=\"plv-fabric\",pod=~\"(frontend|client-app|middleware-api|auth-service|fabric-identity-service|ledger-service|grade-upload-service|settings-service).*\",container=~\"frontend-nginx|client-app|api-gateway|auth-service|identity-service|ledger-service|upload-service|settings-service\"}",
+          "legendFormat": "{{pod}} {{container}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Platform Memory Limit Utilization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "id": 11,
+      "targets": [
+        {
+          "expr": "sum by (pod, container) (rate(container_cpu_usage_seconds_total{namespace=\"plv-fabric\",pod=~\"(frontend|client-app|middleware-api|auth-service|fabric-identity-service|ledger-service|grade-upload-service|settings-service).*\",container=~\"frontend-nginx|client-app|api-gateway|auth-service|identity-service|ledger-service|upload-service|settings-service\"}[5m]))",
+          "legendFormat": "{{pod}} {{container}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Platform CPU Usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "id": 12,
+      "targets": [
+        {
+          "expr": "kube_deployment_spec_replicas{namespace=\"plv-fabric\",deployment=~\"frontend|client-app|middleware-api|auth-service|fabric-identity-service|ledger-service|grade-upload-service|settings-service\"}",
+          "legendFormat": "{{deployment}} desired",
+          "refId": "A"
+        },
+        {
+          "expr": "kube_deployment_status_replicas_available{namespace=\"plv-fabric\",deployment=~\"frontend|client-app|middleware-api|auth-service|fabric-identity-service|ledger-service|grade-upload-service|settings-service\"}",
+          "legendFormat": "{{deployment}} available",
+          "refId": "B"
+        }
+      ],
+      "title": "Desired vs Available Replicas",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "blockgo",
+    "middleware",
+    "frontend",
+    "backend",
+    "kubernetes"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Prometheus",
+        "multi": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "BlockGO Platform Operations",
+  "uid": "blockgo-platform-ops",
+  "version": 1,
+  "weekStart": ""
+}

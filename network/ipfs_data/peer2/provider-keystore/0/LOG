@@ -1,0 +1,8 @@
+=============== May 19, 2026 (UTC) ===============
+20:53:36.140610 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+20:53:36.786124 db@open opening
+20:53:36.811789 version@stat F·[] S·0B[] Sc·[]
+20:53:37.023666 db@janitor F·2 G·0
+20:53:37.023866 db@open done T·237.496915ms
+20:58:27.618306 db@close closing
+20:58:27.647285 db@close done T·28.9705ms

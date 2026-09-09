@@ -1,0 +1,6 @@
+[dotenv@17.3.1] injecting env (0) from .env -- tip: 🤖 agentic secret storage: https://dotenvx.com/as2
+[dotenv@17.3.1] injecting env (27) from ../network/.env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+Syncing natively trusted Cryptogen Admin certificates...
+Cryptogen Admin sync complete.
+
+Middleware online on port 4000

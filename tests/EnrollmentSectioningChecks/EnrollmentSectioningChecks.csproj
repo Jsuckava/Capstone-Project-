@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../client-app/Services/EnrollmentSectioningService.cs" Link="EnrollmentSectioningService.cs" />
+    <PackageReference Include="Npgsql" Version="8.0.6" />
+    <None Include="../../migrations/004_student_enrollment.sql" Link="enrollment.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../migrations/013_unassigned_enrollment_lookup.sql" Link="lookup.sql" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -6,20 +6,20 @@ namespace Client_app.Models
 {
     public class BulkGradeRecord
     {
-        public string student_id { get; set; }
-        public string course { get; set; }
-        public string section { get; set; }
-        public string subject_code { get; set; }
-        public string grade { get; set; }
-        public string semester { get; set; }
-        public string school_year { get; set; }
-        public string date { get; set; }
+        public string student_id { get; set; } = string.Empty;
+        public string course { get; set; } = string.Empty;
+        public string section { get; set; } = string.Empty;
+        public string subject_code { get; set; } = string.Empty;
+        public string grade { get; set; } = string.Empty;
+        public string semester { get; set; } = string.Empty;
+        public string school_year { get; set; } = string.Empty;
+        public string date { get; set; } = string.Empty;
     }
 
     public class BulkUploadError
     {
-        public string StudentId { get; set; }
-        public string Reason { get; set; }
+        public string StudentId { get; set; } = string.Empty;
+        public string Reason { get; set; } = string.Empty;
     }
 
     public class BulkGradeRecordMap : ClassMap<BulkGradeRecord>

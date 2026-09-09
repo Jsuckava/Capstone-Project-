@@ -1,0 +1,54 @@
+#!/bin/bash
+# package-ccaas.sh
+
+ORG=$1
+if [ -z "$ORG" ]; then
+  echo "Usage: ./package-ccaas.sh <registrar|faculty|department>"
+  exit 1
+fi
+
+# Set namespace and config based on organization
+if [ "$ORG" == "registrar" ]; then
+  NAMESPACE="plv-main-campus"
+elif [ "$ORG" == "faculty" ]; then
+  NAMESPACE="plv-annex-campus"
+elif [ "$ORG" == "department" ]; then
+  NAMESPACE="plv-pubad-campus"
+else
+  echo "Unknown org: $ORG"
+  exit 1
+fi
+
+echo "Packaging CCaaS for $ORG in namespace $NAMESPACE..."
+
+# 1. Base64 encode the TLS root cert (tr -d '\n' removes line breaks to make it JSON-safe)
+ROOT_CERT=$(cat crypto-config-final-v2/chaincode-tls/ca-bundle/ca-bundle.pem | base64 | tr -d '\n')
+
+# 2. Generate connection.json
+cat <<EOF > connection.json
+{
+  "address": "${ORG}-chaincode.${NAMESPACE}.svc.cluster.local:9999",
+  "dial_timeout": "10s",
+  "tls_required": true,
+  "client_auth_required": false,
+  "root_cert": "${ROOT_CERT}"
+}
+EOF
+
+# 3. Generate metadata.json
+cat <<EOF > metadata.json
+{
+  "type": "ccaas",
+  "label": "${ORG}_1.0"
+}
+EOF
+
+# 4. Package the chaincode
+tar cfz code.tar.gz connection.json
+tar cfz ${ORG}.tar.gz code.tar.gz metadata.json
+
+# Cleanup temporary files
+rm connection.json metadata.json code.tar.gz
+
+echo "Successfully generated ${ORG}.tar.gz!"
+echo "Ready to install on the $ORG peers."

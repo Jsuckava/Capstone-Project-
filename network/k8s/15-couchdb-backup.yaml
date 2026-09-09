@@ -1,0 +1,77 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: couchdb-backup-pvc
+  namespace: plv-fabric
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fabric-storage
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: couchdb-backup-cronjob
+  namespace: plv-fabric
+spec:
+  schedule: "0 2 * * *" # Runs every day at 2:00 AM server time
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: couchdb-backup
+            image: alpine:3.18
+            env:
+            - name: COUCHDB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: blockgo-secrets
+                  key: COUCHDB_USER
+            - name: COUCHDB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: blockgo-secrets
+                  key: COUCHDB_PASS
+            command:
+            - /bin/sh
+            - -c
+            - |
+              apk add --no-cache curl jq
+              DATE=$(date +%Y-%m-%d_%H-%M-%S)
+              BACKUP_DIR="/backups/$DATE"
+              
+              HOSTS="couchdb-registrar.plv-main-campus.svc.cluster.local:5984 couchdb-faculty.plv-annex-campus.svc.cluster.local:5984 couchdb-department.plv-pubad-campus.svc.cluster.local:5984"
+              
+              for HOST in $HOSTS; do
+                echo "Starting backup for $HOST..."
+                URL="http://${COUCHDB_USER}:${COUCHDB_PASS}@${HOST}"
+                ORG_DIR="$BACKUP_DIR/$(echo $HOST | cut -d'.' -f1)"
+                mkdir -p $ORG_DIR
+                
+                # Extract all databases and download full documents
+                DBS=$(curl -s $URL/_all_dbs | jq -r '.[]')
+                for DB in $DBS; do
+                  echo "  -> Backing up database: $DB"
+                  curl -s "$URL/$DB/_all_docs?include_docs=true" > "$ORG_DIR/${DB}.json"
+                done
+              done
+              
+              echo "Backup completed successfully at $BACKUP_DIR"
+              # Automatically clean up backups older than 14 days
+              find /backups/ -mindepth 1 -maxdepth 1 -type d -mtime +14 -exec rm -rf {} \;
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backups
+          volumes:
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: couchdb-backup-pvc

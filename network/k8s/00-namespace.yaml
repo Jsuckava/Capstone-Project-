@@ -1,0 +1,28 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: plv-fabric
+  labels:
+    name: plv-fabric
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: plv-main-campus
+  labels:
+    campus: main
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: plv-annex-campus
+  labels:
+    campus: annex
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: plv-pubad-campus
+  labels:
+    campus: pubad

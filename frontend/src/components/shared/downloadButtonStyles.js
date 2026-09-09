@@ -1,0 +1,2 @@
+export const downloadTemplateButtonClass =
+  "inline-flex items-center justify-center rounded-2xl border border-emerald-600 bg-emerald-500 px-5 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:border-emerald-700 hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:cursor-not-allowed disabled:border-emerald-300 disabled:bg-emerald-300 disabled:text-white/80";

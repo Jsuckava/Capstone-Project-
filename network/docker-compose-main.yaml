@@ -1,0 +1,490 @@
+networks:
+  registrar-net:
+    name: registrar-net
+
+x-middleware-common: &middleware-common
+  image: fabric-middleware:latest
+  build:
+    context: ../middleware
+    dockerfile: Dockerfile
+  env_file: .env
+  environment:
+    NODE_ENV: production
+    AUTH_SERVICE_URL: http://auth-service:4001
+    IDENTITY_SERVICE_URL: http://fabric-identity-service:4002
+    LEDGER_SERVICE_URL: http://ledger-service:4003
+    UPLOAD_SERVICE_URL: http://grade-upload-service:4004
+    SETTINGS_SERVICE_URL: http://settings-service:4005
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    CSHARP_API_URL: http://dotnet-container:5000
+    IPFS_API_URL: /dns4/ipfs0/tcp/5001/http
+    COUCHDB_WALLET_REGISTRAR_URL: http://couchdb_wallet_registrar:5984
+    COUCHDB_WALLET_FACULTY_URL: http://host.docker.internal:6990
+    COUCHDB_WALLET_DEPARTMENT_URL: http://host.docker.internal:7990
+    FABRIC_CA_REGISTRAR_URL: https://ca.registrar.capstone.com:7054
+    FABRIC_CA_FACULTY_URL: https://host.docker.internal:8054
+    FABRIC_CA_DEPARTMENT_URL: https://host.docker.internal:9054
+    FABRIC_CA_REGISTRAR_CERT: /network/fabric-ca/registrar/ca-cert.pem
+    FABRIC_CA_REGISTRAR_TLS_CERT: /network/fabric-ca/registrar/tls-cert.pem
+    FABRIC_CA_FACULTY_CERT: /network/fabric-ca/faculty/ca-cert.pem
+    FABRIC_CA_FACULTY_TLS_CERT: /network/fabric-ca/faculty/tls-cert.pem
+    FABRIC_CA_DEPARTMENT_CERT: /network/fabric-ca/department/ca-cert.pem
+    FABRIC_CA_DEPARTMENT_TLS_CERT: /network/fabric-ca/department/tls-cert.pem
+    FABRIC_GATEWAY_TLS_ROOTS: /etc/hyperledger/fabric-gateway-tls
+    CONNECTION_PROFILE_PATH: /app/connection.json
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  networks: [registrar-net]
+  restart: unless-stopped
+
+services:
+  ca.registrar.capstone.com:
+    image: hyperledger/fabric-ca:1.5.7
+    container_name: ca.registrar.capstone.com
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-registrar
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=7054
+      - FABRIC_CA_SERVER_CSR_HOSTS=127.0.0.1,localhost,ca.registrar.capstone.com,ca-registrar,ca-registrar.plv-main-campus.svc.cluster.local
+      - FABRIC_CA_SERVER_REGISTRY_IDENTITIES_0_NAME=admin
+      - FABRIC_CA_SERVER_REGISTRY_IDENTITIES_0_PASS=${BOOTSTRAP_REGISTRAR_PASS:-adminpw}
+      - FABRIC_CA_SERVER_REGISTRY_IDENTITIES_0_ATTRS=hf.Registrar.Roles=*,hf.Registrar.DelegateRoles=*,hf.Revoker=true,hf.IntermediateCA=true,hf.GenCRL=true,hf.Registrar.Attributes=*,hf.AffiliationMgr=true
+    ports: ["7054:7054"]
+    command: sh -c 'fabric-ca-server start -b admin:${BOOTSTRAP_REGISTRAR_PASS:-adminpw} -d'
+    volumes:
+      - ./fabric-ca/registrar:/etc/hyperledger/fabric-ca-server
+    networks: [registrar-net]
+
+  orderer.capstone.com:
+    image: hyperledger/fabric-orderer:2.5.4
+    container_name: orderer.capstone.com
+    environment:
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_LISTENPORT=7050
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+      - ORDERER_GENERAL_BOOTSTRAPMETHOD=file
+      - ORDERER_GENERAL_BOOTSTRAPFILE=/var/hyperledger/orderer/orderer.genesis.block
+      - ORDERER_GENERAL_TLS_ENABLED=true
+      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_TLS_ROOTCAS=/var/hyperledger/orderer/tls/ca.crt
+      - ORDERER_ADMIN_LISTENADDRESS=0.0.0.0:7053
+      - ORDERER_ADMIN_TLS_ENABLED=true
+      - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_ADMIN_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_ADMIN_TLS_ROOTCAS=/var/hyperledger/orderer/tls/ca.crt
+      - ORDERER_ADMIN_TLS_CLIENTAUTHREQUIRED=true
+    ports: ["7050:7050", "7053:7053"]
+    networks: [registrar-net]
+    extra_hosts:
+      - "orderer2.capstone.com:${ANNEX_CAMPUS_IP}"
+      - "orderer3.capstone.com:${PUBAD_CAMPUS_IP}"
+    volumes:
+      - ./channel-artifacts-final/orderer.genesis.block:/var/hyperledger/orderer/orderer.genesis.block
+      - ./crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer.capstone.com/msp:/var/hyperledger/orderer/msp
+      - ./crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer.capstone.com/tls:/var/hyperledger/orderer/tls
+
+  couchdb_registrar:
+    image: couchdb:3.2.2
+    container_name: couchdb_registrar
+    restart: unless-stopped
+    environment:
+      - COUCHDB_USER=${COUCHDB_USER}
+      - COUCHDB_PASSWORD=${COUCHDB_PASS}
+      - COUCHDB_SINGLE_NODE=true
+    ports: ["5985:5984"]
+    networks: [registrar-net]
+    healthcheck: &couchdb-health
+      test: ["CMD-SHELL", "curl -fsS -u \"$${COUCHDB_USER}:$${COUCHDB_PASSWORD}\" http://127.0.0.1:5984/_up >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 30s
+
+  couchdb_registrar_peer1:
+    image: couchdb:3.2.2
+    container_name: couchdb_registrar_peer1
+    restart: unless-stopped
+    environment:
+      - COUCHDB_USER=${COUCHDB_USER}
+      - COUCHDB_PASSWORD=${COUCHDB_PASS}
+      - COUCHDB_SINGLE_NODE=true
+    ports: ["5986:5984"]
+    networks: [registrar-net]
+    healthcheck: *couchdb-health
+
+  couchdb_wallet_registrar:
+    image: couchdb:3.2.2
+    container_name: couchdb_wallet_registrar
+    restart: unless-stopped
+    environment:
+      - COUCHDB_USER=${COUCHDB_USER}
+      - COUCHDB_PASSWORD=${COUCHDB_PASS}
+      - COUCHDB_SINGLE_NODE=true
+    ports: ["5990:5984"]
+    networks: [registrar-net]
+    healthcheck: *couchdb-health
+
+  peer0.registrar.capstone.com:
+    container_name: peer0.registrar.capstone.com
+    user: "root"
+    image: hyperledger/fabric-peer:2.5.4
+    environment:
+      - CORE_PEER_ID=peer0.registrar.capstone.com
+      - CORE_PEER_ADDRESS=peer0.registrar.capstone.com:7051
+      - CORE_PEER_LOCALMSPID=RegistrarMSP
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0.registrar.capstone.com:7051
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer1.registrar.capstone.com:7051
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb_registrar:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=${COUCHDB_USER}
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=${COUCHDB_PASS}
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/crypto-config-final-v2/peerOrganizations/registrar.capstone.com/peers/peer0.registrar.capstone.com/tls/ca.crt
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/crypto-config-final-v2/peerOrganizations/registrar.capstone.com/peers/peer0.registrar.capstone.com/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/crypto-config-final-v2/peerOrganizations/registrar.capstone.com/peers/peer0.registrar.capstone.com/tls/server.key
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/crypto-config-final-v2/peerOrganizations/registrar.capstone.com/peers/peer0.registrar.capstone.com/msp
+      - CORE_PEER_EXTERNALBUILDER_REGISTRY_BUILDERS_0_NAME=ccaas_builder
+      - CORE_PEER_EXTERNALBUILDER_REGISTRY_BUILDERS_0_PATH=/opt/builders/ccaas
+      - CORE_PEER_EXTERNALBUILDER_REGISTRY_BUILDERS_0_PROPAGATEENVIRONMENT=CHAINCODE_SERVER_ADDRESS,CHAINCODE_TLS_DISABLED
+    ports: ["7051:7051"]
+    networks: [registrar-net]
+    extra_hosts:
+      - "peer0.faculty.capstone.com:${ANNEX_CAMPUS_IP}"
+      - "peer1.faculty.capstone.com:${ANNEX_CAMPUS_IP}"
+      - "peer0.department.capstone.com:${PUBAD_CAMPUS_IP}"
+      - "peer1.department.capstone.com:${PUBAD_CAMPUS_IP}"
+    volumes: 
+      - ./config/core.yaml:/etc/hyperledger/fabric/core.yaml
+      - ./crypto-config-final-v2:/etc/hyperledger/fabric/crypto-config-final-v2
+      - ./builders:/opt/builders
+    depends_on:
+      couchdb_registrar: { condition: service_healthy }
+
+  peer1.registrar.capstone.com:
+    container_name: peer1.registrar.capstone.com
+    user: "root"
+    image: hyperledger/fabric-peer:2.5.4
+    environment:
+      - CORE_PEER_ID=peer1.registrar.capstone.com
+      - CORE_PEER_ADDRESS=peer1.registrar.capstone.com:7051
+      - CORE_PEER_LOCALMSPID=RegistrarMSP
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer1.registrar.capstone.com:7051
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0.registrar.capstone.com:7051
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb_registrar_peer1:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=${COUCHDB_USER}
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=${COUCHDB_PASS}
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/crypto-config-final-v2/peerOrganizations/registrar.capstone.com/peers/peer1.registrar.capstone.com/tls/ca.crt
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/crypto-config-final-v2/peerOrganizations/registrar.capstone.com/peers/peer1.registrar.capstone.com/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/crypto-config-final-v2/peerOrganizations/registrar.capstone.com/peers/peer1.registrar.capstone.com/tls/server.key
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/crypto-config-final-v2/peerOrganizations/registrar.capstone.com/peers/peer1.registrar.capstone.com/msp
+      - CORE_PEER_EXTERNALBUILDER_REGISTRY_BUILDERS_0_NAME=ccaas_builder
+      - CORE_PEER_EXTERNALBUILDER_REGISTRY_BUILDERS_0_PATH=/opt/builders/ccaas
+      - CORE_PEER_EXTERNALBUILDER_REGISTRY_BUILDERS_0_PROPAGATEENVIRONMENT=CHAINCODE_SERVER_ADDRESS,CHAINCODE_TLS_DISABLED
+    ports: ["8051:7051"]
+    networks: [registrar-net]
+    extra_hosts:
+      - "peer0.faculty.capstone.com:${ANNEX_CAMPUS_IP}"
+      - "peer1.faculty.capstone.com:${ANNEX_CAMPUS_IP}"
+      - "peer0.department.capstone.com:${PUBAD_CAMPUS_IP}"
+      - "peer1.department.capstone.com:${PUBAD_CAMPUS_IP}"
+    volumes:
+      - ./config/core.yaml:/etc/hyperledger/fabric/core.yaml
+      - ./crypto-config-final-v2:/etc/hyperledger/fabric/crypto-config-final-v2
+      - ./builders:/opt/builders
+    depends_on:
+      couchdb_registrar_peer1: { condition: service_healthy }
+
+  ipfs0:
+    image: ipfs/kubo:latest
+    container_name: ipfs0
+    environment: 
+      - IPFS_PROFILE=server
+      - LIBP2P_FORCE_PNET=1
+    networks:
+      registrar-net:
+        aliases:
+          - ipfs
+    ports: 
+      - "4001:4001"
+      - "5001:5001"
+      - "8081:8080"
+    volumes: 
+      - "./ipfs_data/peer0:/data/ipfs"
+      - "./swarm.key:/data/ipfs/swarm.key"
+    healthcheck:
+      test: ["CMD", "ipfs", "id"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  ipfs1:
+    image: ipfs/kubo:latest
+    container_name: ipfs1
+    environment: 
+      - IPFS_PROFILE=server
+      - LIBP2P_FORCE_PNET=1
+    networks: [registrar-net]
+    ports: ["5002:5001","8082:8080"]
+    volumes: 
+      - "./ipfs_data/peer1:/data/ipfs"
+      - "./swarm.key:/data/ipfs/swarm.key"
+    healthcheck:
+      test: ["CMD", "ipfs", "id"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  postgres:
+    image: bitnami/postgresql:latest
+    container_name: postgres
+    environment:
+      - POSTGRESQL_REPLICATION_MODE=master
+      - POSTGRESQL_REPLICATION_USER=repl_user
+      - POSTGRESQL_REPLICATION_PASSWORD=repl_password
+      - POSTGRESQL_USERNAME=${POSTGRES_USER}
+      - POSTGRESQL_PASSWORD=${POSTGRES_PASS}
+      - POSTGRESQL_DATABASE=${POSTGRES_DB}
+    ports: ["5432:5432"]
+    networks: [registrar-net]
+    volumes:
+      - "pgdata:/bitnami/postgresql"
+      - "./init-db-schema.sql:/docker-entrypoint-initdb.d/init.sql:ro"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h 127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  postgres-migrations:
+    image: bitnami/postgresql:latest
+    container_name: blockgo-postgres-migrations
+    restart: "no"
+    environment:
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGUSER=${POSTGRES_USER}
+      - PGPASSWORD=${POSTGRES_PASS}
+      - PGDATABASE=${POSTGRES_DB}
+    entrypoint: ["/bin/bash", "-ec"]
+    command:
+      - |
+        shopt -s nullglob
+        migrations=(/migrations/[0-9][0-9][0-9]_*.sql)
+        if (( $${#migrations[@]} == 0 )); then
+          echo "No numbered database migrations were mounted." >&2
+          exit 1
+        fi
+        for migration in "$${migrations[@]}"; do
+          echo "Applying $$(basename "$$migration")"
+          psql --set ON_ERROR_STOP=1 --file "$$migration"
+        done
+    volumes:
+      - "../migrations:/migrations:ro"
+    networks: [registrar-net]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: blockgo-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    networks: [registrar-net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dotnet-container:
+    image: mcr.microsoft.com/dotnet/sdk:8.0
+    container_name: blockgo-backend
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    working_dir: /app
+    command: sh -c "dotnet add package Microsoft.AspNetCore.Authentication.JwtBearer --version 8.0.4 && dotnet restore && dotnet run --no-launch-profile"
+    ports:
+      - "5000:5000"
+      - "5051:5001"
+    volumes:
+      - ../client-app:/app
+    environment:
+      - ASPNETCORE_URLS=http://+:5000;http://+:5001
+      - ConnectionStrings__PostgresConnection=Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASS}
+      - ConnectionStrings__MasterConnection=Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASS}
+      - ConnectionStrings__ReplicaConnection=Host=postgres-annex;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASS}
+      - NUGET_CERT_REVOCATION_MODE=offline
+      - IPFS_HOST=ipfs0
+      - Smtp__Host=${EMAIL_HOST:-smtp.gmail.com}
+      - Smtp__Port=${EMAIL_PORT:-587}
+      - Smtp__Username=${EMAIL_USER}
+      - Smtp__Password=${EMAIL_PASS}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - InternalApiKey=${INTERNAL_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - DOTNET_RUNNING_IN_CONTAINER=true
+      - Middleware__Url=http://host.docker.internal:4000
+      - REDIS_CONNECTION_STRING=redis:6379,abortConnect=false
+    networks: [registrar-net]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres-migrations:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/5000' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  middleware-api:
+    <<: *middleware-common
+    container_name: blockgo-api-gateway
+    command: ["npm", "run", "start:gateway"]
+    ports: ["4000:4000"]
+    depends_on:
+      auth-service: { condition: service_started }
+      fabric-identity-service: { condition: service_started }
+      ledger-service: { condition: service_started }
+      grade-upload-service: { condition: service_started }
+      settings-service: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  auth-service:
+    <<: *middleware-common
+    container_name: blockgo-auth-service
+    command: ["npm", "run", "start:auth"]
+    depends_on:
+      postgres-migrations: { condition: service_completed_successfully }
+      fabric-identity-service: { condition: service_started }
+
+  fabric-identity-service:
+    <<: *middleware-common
+    container_name: blockgo-fabric-identity-service
+    command: ["npm", "run", "start:identity"]
+    volumes:
+      - ./fabric-ca:/network/fabric-ca:ro
+    depends_on:
+      couchdb_wallet_registrar: { condition: service_healthy }
+
+  ledger-service:
+    <<: *middleware-common
+    container_name: blockgo-ledger-service
+    command: ["npm", "run", "start:ledger"]
+    volumes:
+      - ./crypto-config-final-v2/peerOrganizations/registrar.capstone.com/peers/peer0.registrar.capstone.com/tls/ca.crt:/etc/hyperledger/fabric-gateway-tls/registrar-peer-ca.crt:ro
+      - ./crypto-config-final-v2/peerOrganizations/faculty.capstone.com/peers/peer0.faculty.capstone.com/tls/ca.crt:/etc/hyperledger/fabric-gateway-tls/faculty-peer-ca.crt:ro
+      - ./crypto-config-final-v2/peerOrganizations/department.capstone.com/peers/peer0.department.capstone.com/tls/ca.crt:/etc/hyperledger/fabric-gateway-tls/department-peer-ca.crt:ro
+      - ./crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer.capstone.com/tls/ca.crt:/etc/hyperledger/fabric-gateway-tls/orderer-ca.crt:ro
+    depends_on:
+      couchdb_wallet_registrar: { condition: service_healthy }
+
+  grade-upload-service:
+    <<: *middleware-common
+    container_name: blockgo-grade-upload-service
+    command: ["npm", "run", "start:upload"]
+    depends_on:
+      dotnet-container: { condition: service_healthy }
+
+  settings-service:
+    <<: *middleware-common
+    container_name: blockgo-settings-service
+    command: ["npm", "run", "start:settings"]
+    depends_on:
+      postgres-migrations: { condition: service_completed_successfully }
+
+  registrar-chaincode:
+    container_name: registrar-chaincode
+    build:
+      context: ../chaincode
+      dockerfile: Dockerfile
+    environment:
+      - CHAINCODE_SERVER_ADDRESS=0.0.0.0:9999
+      - CHAINCODE_ID=${CHAINCODE_ID_REGISTRAR}
+      - CHAINCODE_TLS_DISABLED=false
+      - CHAINCODE_TLS_KEY_FILE=/etc/hyperledger/fabric/crypto-config-final-v2/chaincode-tls/keystore/server.key
+      - CHAINCODE_TLS_CERT_FILE=/etc/hyperledger/fabric/crypto-config-final-v2/chaincode-tls/signcerts/server.crt
+      - CHAINCODE_CLIENT_CA_CERT_FILE=/etc/hyperledger/fabric/crypto-config-final-v2/chaincode-tls/ca-bundle/ca-bundle.pem
+    ports: ["9999:9999"]
+    networks: [registrar-net]
+    volumes:
+      - ./crypto-config-final-v2:/etc/hyperledger/fabric/crypto-config-final-v2
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9999"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  cli:
+    container_name: cli
+    image: hyperledger/fabric-tools:2.5.4
+    tty: true
+    stdin_open: true
+    environment:
+      - GOPATH=/opt/gopath
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - FABRIC_CFG_PATH=/opt/fabric-config/network/config
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_ID=cli
+      - CORE_PEER_ADDRESS=peer0.registrar.capstone.com:7051
+      - CORE_PEER_LOCALMSPID=RegistrarMSP
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/crypto-config-final-v2/peerOrganizations/registrar.capstone.com/peers/peer0.registrar.capstone.com/tls/ca.crt
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/crypto-config-final-v2/peerOrganizations/registrar.capstone.com/users/Admin@registrar.capstone.com/msp
+    working_dir: /opt/fabric-config/network
+    networks: [registrar-net]
+    extra_hosts:
+      - "peer0.faculty.capstone.com:${ANNEX_CAMPUS_IP}"
+      - "peer1.faculty.capstone.com:${ANNEX_CAMPUS_IP}"
+      - "peer0.department.capstone.com:${PUBAD_CAMPUS_IP}"
+      - "peer1.department.capstone.com:${PUBAD_CAMPUS_IP}"
+    volumes:
+      - ./bin:/usr/local/bin
+      - /var/run/:/host/var/run/
+      - ./crypto-config-final-v2:/etc/hyperledger/fabric/crypto-config-final-v2
+      - ./:/opt/fabric-config/network
+
+  nginx-shield-main:
+    image: nginx:stable-alpine
+    container_name: nginx-shield-main
+    restart: unless-stopped
+    ports: ["8080:80"]
+    volumes:
+      - "../middleware/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro"
+      - "../middleware/nginx/.htpasswd:/etc/nginx/.htpasswd:ro"
+      - "../frontend/build:/usr/share/nginx/html:ro"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "main.capstone.com:${MAIN_CAMPUS_IP}"
+      - "annex.capstone.com:${ANNEX_CAMPUS_IP}"
+      - "pubad.capstone.com:${PUBAD_CAMPUS_IP}"
+    networks: [registrar-net]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/nginx-health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  pgdata:

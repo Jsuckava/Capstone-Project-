@@ -1,0 +1,8 @@
+[15:39:14 INF] Application starting up...
+[15:55:27 INF] HSTS enabled (HTTPS Redirection disabled for Nginx)
+[15:39:17 INF] Application configured successfully
+[15:39:17 INF] Listening on 
+[15:39:18 INF] Now listening on: http://0.0.0.0:5000
+[15:39:18 INF] Application started. Press Ctrl+C to shut down.
+[15:39:18 INF] Hosting environment: Production
+[15:39:18 INF] Content root path: /mnt/c/Users/DELL/Downloads/Capstone-Project-BlockChain-BlockGo/client-app

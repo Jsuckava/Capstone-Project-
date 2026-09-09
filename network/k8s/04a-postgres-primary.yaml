@@ -1,0 +1,104 @@
+# PostgreSQL Primary (Master)
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: plv-main-campus
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+  selector:
+    app: postgres-primary
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-primary
+  namespace: plv-main-campus
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-primary
+  template:
+    metadata:
+      labels:
+        app: postgres-primary
+    spec:
+      serviceAccountName: fabric-sa
+      nodeSelector:
+        topology.kubernetes.io/zone: "__GKE_ZONE_A__"
+      initContainers:
+      - name: volume-permissions
+        image: busybox
+        command: ["sh", "-c", "mkdir -p /bitnami/postgresql && chown -R 1001:1001 /bitnami/postgresql && chmod -R u+rwX,g+rwX /bitnami/postgresql"]
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /bitnami/postgresql
+      containers:
+      - name: postgres
+        image: bitnami/postgresql:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRESQL_REPLICATION_MODE
+          value: master
+        - name: POSTGRESQL_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_USER
+        - name: POSTGRESQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_PASS
+        - name: POSTGRESQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_DB
+        - name: POSTGRESQL_REPLICATION_USER
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_REPL_USER
+        - name: POSTGRESQL_REPLICATION_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_REPL_PASS
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /bitnami/postgresql
+        - name: postgres-init-script
+          mountPath: /docker-entrypoint-initdb.d
+        startupProbe: &postgresPrimaryProbe
+          tcpSocket: {port: 5432}
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe: *postgresPrimaryProbe
+        readinessProbe: *postgresPrimaryProbe
+      volumes:
+      - name: postgres-init-script
+        projected:
+          sources:
+          - configMap:
+              name: postgres-init-script
+          - configMap:
+              name: postgres-runtime-migrations
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-storage
+    spec:
+      storageClassName: fabric-storage
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 100Gi

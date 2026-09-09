@@ -1,0 +1,163 @@
+Organizations:
+  - &OrdererOrg
+    Name: OrdererMSP
+    ID: OrdererMSP
+    MSPDir: ../crypto-config-final-v2/ordererOrganizations/capstone.com/msp
+    Policies:
+      Readers: { Type: Signature, Rule: "OR('OrdererMSP.member')" }
+      Writers: { Type: Signature, Rule: "OR('OrdererMSP.member')" }
+      Admins: { Type: Signature, Rule: "OR('OrdererMSP.admin')" }
+    OrdererEndpoints:
+      - orderer-1.plv-main-campus.svc.cluster.local:7050
+      - orderer-2.plv-main-campus.svc.cluster.local:7050
+      - orderer-3.plv-annex-campus.svc.cluster.local:7050
+      - orderer-4.plv-annex-campus.svc.cluster.local:7050
+      - orderer-5.plv-pubad-campus.svc.cluster.local:7050
+      - orderer-6.plv-pubad-campus.svc.cluster.local:7050
+
+  - &RegistrarOrg
+    Name: RegistrarMSP
+    ID: RegistrarMSP
+    MSPDir: ../crypto-config-final-v2/peerOrganizations/registrar.capstone.com/msp
+    Policies:
+      Readers: { Type: Signature, Rule: "OR('RegistrarMSP.admin', 'RegistrarMSP.peer', 'RegistrarMSP.client')" }
+      Writers: { Type: Signature, Rule: "OR('RegistrarMSP.admin', 'RegistrarMSP.client')" }
+      Admins: { Type: Signature, Rule: "OR('RegistrarMSP.admin')" }
+      Endorsement: { Type: Signature, Rule: "OR('RegistrarMSP.peer')" }
+    AnchorPeers:
+      - Host: peer-registrar.plv-main-campus.svc.cluster.local
+        Port: 7051
+
+  - &FacultyOrg
+    Name: FacultyMSP
+    ID: FacultyMSP
+    MSPDir: ../crypto-config-final-v2/peerOrganizations/faculty.capstone.com/msp
+    Policies:
+      Readers: { Type: Signature, Rule: "OR('FacultyMSP.admin', 'FacultyMSP.peer', 'FacultyMSP.client')" }
+      Writers: { Type: Signature, Rule: "OR('FacultyMSP.admin', 'FacultyMSP.client')" }
+      Admins: { Type: Signature, Rule: "OR('FacultyMSP.admin')" }
+      Endorsement: { Type: Signature, Rule: "OR('FacultyMSP.peer')" }
+    AnchorPeers:
+      - Host: peer-faculty.plv-annex-campus.svc.cluster.local
+        Port: 7051
+
+  - &DepartmentOrg
+    Name: DepartmentMSP
+    ID: DepartmentMSP
+    MSPDir: ../crypto-config-final-v2/peerOrganizations/department.capstone.com/msp
+    Policies:
+      Readers: { Type: Signature, Rule: "OR('DepartmentMSP.admin', 'DepartmentMSP.peer', 'DepartmentMSP.client')" }
+      Writers: { Type: Signature, Rule: "OR('DepartmentMSP.admin', 'DepartmentMSP.client')" }
+      Admins: { Type: Signature, Rule: "OR('DepartmentMSP.admin')" }
+      Endorsement: { Type: Signature, Rule: "OR('DepartmentMSP.peer')" }
+    AnchorPeers:
+      - Host: peer-department.plv-pubad-campus.svc.cluster.local
+        Port: 7051
+
+Capabilities:
+    Channel: &ChannelCapabilities
+        V2_0: true
+    Orderer: &OrdererCapabilities
+        V2_0: true
+    Application: &ApplicationCapabilities
+        V2_0: true
+
+Channel: &ChannelDefaults
+  Policies:
+    Readers: { Type: ImplicitMeta, Rule: "ANY Readers" }
+    Writers: { Type: ImplicitMeta, Rule: "ANY Writers" }
+    Admins: { Type: ImplicitMeta, Rule: "MAJORITY Admins" }
+  Capabilities:
+    <<: *ChannelCapabilities
+
+Application: &ApplicationDefaults
+  Organizations:
+  Policies:
+    Readers: { Type: ImplicitMeta, Rule: "ANY Readers" }
+    Writers: { Type: ImplicitMeta, Rule: "ANY Writers" }
+    Admins: { Type: ImplicitMeta, Rule: "MAJORITY Admins" }
+    LifecycleEndorsement: { Type: ImplicitMeta, Rule: "MAJORITY Endorsement" }
+    Endorsement: { Type: ImplicitMeta, Rule: "MAJORITY Endorsement" }
+  Capabilities:
+    <<: *ApplicationCapabilities
+
+Orderer: &OrdererDefaults
+    OrdererType: etcdraft
+    EtcdRaft:
+        Consenters:
+            - Host: orderer-1.plv-main-campus.svc.cluster.local
+              Port: 7050
+              ClientTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer.capstone.com/tls/server.crt
+              ServerTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer.capstone.com/tls/server.crt
+            - Host: orderer-2.plv-main-campus.svc.cluster.local
+              Port: 7050
+              ClientTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer2.capstone.com/tls/server.crt
+              ServerTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer2.capstone.com/tls/server.crt
+            - Host: orderer-3.plv-annex-campus.svc.cluster.local
+              Port: 7050
+              ClientTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer3.capstone.com/tls/server.crt
+              ServerTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer3.capstone.com/tls/server.crt
+            - Host: orderer-4.plv-annex-campus.svc.cluster.local
+              Port: 7050
+              ClientTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer4.capstone.com/tls/server.crt
+              ServerTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer4.capstone.com/tls/server.crt
+            - Host: orderer-5.plv-pubad-campus.svc.cluster.local
+              Port: 7050
+              ClientTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer5.capstone.com/tls/server.crt
+              ServerTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer5.capstone.com/tls/server.crt
+            - Host: orderer-6.plv-pubad-campus.svc.cluster.local
+              Port: 7050
+              ClientTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer6.capstone.com/tls/server.crt
+              ServerTLSCert: /etc/hyperledger/fabric/crypto-config-final-v2/ordererOrganizations/capstone.com/orderers/orderer6.capstone.com/tls/server.crt
+    Addresses:
+        - orderer-1.plv-main-campus.svc.cluster.local:7050
+        - orderer-2.plv-main-campus.svc.cluster.local:7050
+        - orderer-3.plv-annex-campus.svc.cluster.local:7050
+        - orderer-4.plv-annex-campus.svc.cluster.local:7050
+        - orderer-5.plv-pubad-campus.svc.cluster.local:7050
+        - orderer-6.plv-pubad-campus.svc.cluster.local:7050
+    BatchTimeout: 2s
+    BatchSize:
+        MaxMessageCount: 10
+        AbsoluteMaxBytes: 99 MB
+        PreferredMaxBytes: 512 KB
+    Organizations:
+    Policies:
+        Readers: { Type: ImplicitMeta, Rule: "ANY Readers" }
+        Writers: { Type: ImplicitMeta, Rule: "ANY Writers" }
+        Admins: { Type: ImplicitMeta, Rule: "MAJORITY Admins" }
+        BlockValidation: { Type: ImplicitMeta, Rule: "ANY Writers" }
+
+Profiles:
+  UniversityGenesis:
+    <<: *ChannelDefaults
+    Orderer:
+      <<: *OrdererDefaults
+      Organizations:
+        - *OrdererOrg
+      Capabilities:
+        <<: *OrdererCapabilities
+    Consortiums:
+      UniversityConsortium:
+        Organizations:
+          - *RegistrarOrg
+          - *FacultyOrg
+          - *DepartmentOrg
+
+  RegistrarChannel:
+    Consortium: UniversityConsortium
+    <<: *ChannelDefaults
+    Orderer:
+      <<: *OrdererDefaults
+      Organizations:
+        - *OrdererOrg
+      Capabilities:
+        <<: *OrdererCapabilities
+    Application:
+      <<: *ApplicationDefaults
+      Organizations:
+        - *RegistrarOrg
+        - *FacultyOrg
+        - *DepartmentOrg
+    Capabilities:
+        <<: *ApplicationCapabilities

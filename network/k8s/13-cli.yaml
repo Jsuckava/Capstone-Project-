@@ -1,0 +1,91 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fabric-cli
+  namespace: plv-main-campus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fabric-cli
+  template:
+    metadata:
+      labels:
+        app: fabric-cli
+    spec:
+      serviceAccountName: fabric-sa
+      containers:
+      - name: cli
+        image: hyperledger/fabric-tools:2.5.4
+        tty: true
+        stdin: true
+        workingDir: /opt/fabric-config/network
+        command: ["/bin/bash", "-c", "while true; do sleep 3600; done"]
+        env:
+        - name: GOPATH
+          value: /opt/gopath
+        - name: FABRIC_LOGGING_SPEC
+          value: INFO
+        - name: CORE_PEER_TLS_ENABLED
+          value: "true"
+        - name: CORE_PEER_LOCALMSPID
+          value: RegistrarMSP
+        - name: CORE_PEER_TLS_SERVERHOSTOVERRIDE
+          value: peer0.registrar.capstone.com
+        - name: CORE_PEER_MSPCONFIGPATH
+          value: /var/hyperledger/admin/msp
+        - name: CORE_PEER_ADDRESS
+          value: peer-registrar:7051
+        - name: CORE_PEER_TLS_ROOTCERT_FILE
+          value: /var/hyperledger/tls/ca.crt
+        - name: CORE_PEER_TLS_CERT_FILE
+          value: /var/hyperledger/tls/server.crt
+        - name: CORE_PEER_TLS_KEY_FILE
+          value: /var/hyperledger/tls/server.key
+        volumeMounts:
+        - name: admin-crypto
+          mountPath: /var/hyperledger/admin/msp/signcerts/cert.pem
+          subPath: msp-cert.pem
+        - name: admin-crypto
+          mountPath: /var/hyperledger/admin/msp/keystore/priv_sk
+          subPath: msp-key.pem
+        - name: admin-crypto
+          mountPath: /var/hyperledger/admin/msp/cacerts/ca.pem
+          subPath: msp-ca.pem
+        - name: admin-crypto
+          mountPath: /var/hyperledger/admin/msp/admincerts/admin-cert.pem
+          subPath: admin-cert.pem
+        - name: peer-crypto
+          mountPath: /var/hyperledger/tls/server.crt
+          subPath: server.crt
+        - name: peer-crypto
+          mountPath: /var/hyperledger/tls/server.key
+          subPath: server.key
+        - name: peer-crypto
+          mountPath: /var/hyperledger/tls/ca.crt
+          subPath: ca.crt
+        - name: orderer-tls
+          mountPath: /var/hyperledger/orderer/tls/server.crt
+          subPath: server.crt
+        - name: orderer-tls
+          mountPath: /var/hyperledger/orderer/tls/server.key
+          subPath: server.key
+        - name: orderer-tls
+          mountPath: /var/hyperledger/orderer/tls/ca.crt
+          subPath: ca.crt
+        - name: artifacts
+          mountPath: /opt/fabric-config/network/channel-artifacts
+      volumes:
+      - name: admin-crypto
+        secret:
+          secretName: admin-registrar-crypto
+      - name: peer-crypto
+        secret:
+          secretName: peer-registrar-crypto
+      - name: orderer-tls
+        secret:
+          secretName: orderer-1-crypto
+      - name: artifacts
+        secret:
+          secretName: fabric-artifacts
