@@ -1,14 +1,10 @@
-name: Develop-and-Integration — XP TDD/CI (failsafe)
+name: Develop-and-Integration — XP TDD/CI
 
 on:
   push:
-    branches:
-      - Develop-and-Integration
-
+    branches: [Develop-and-Integration]
   pull_request:
-    branches:
-      - Develop-and-Integration
-
+    branches: [Develop-and-Integration]
   workflow_dispatch:
     inputs:
       promote:
@@ -32,44 +28,41 @@ defaults:
     shell: bash
 
 jobs:
-
   frontend-tests:
-    name: Frontend — Lint, Unit, Audit & Build
+    name: Frontend — Unit, Audit & Build
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Set up Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Use npm 10
+        run: |
+          set -euo pipefail
+          npm install --global npm@10
+          node --version
+          npm --version
+
       - name: Install frontend dependencies
         working-directory: frontend
         run: |
           set -euo pipefail
-          npm ci --no-audit --fund=false
+          npm ci --include=dev --no-audit --fund=false
 
-      - name: Frontend lint
+      - name: Frontend lint if configured
         working-directory: frontend
         run: |
           set -euo pipefail
-
-          if node -e "
-            const p = require('./package.json');
-            process.exit(p.scripts && p.scripts.lint ? 0 : 1);
-          "; then
-            npm run lint
-          else
-            echo "::warning::Frontend lint script is not configured yet; skipping."
-          fi
+          npm run lint --if-present
 
       - name: Frontend unit tests
         working-directory: frontend
@@ -87,123 +80,77 @@ jobs:
         working-directory: frontend
         run: |
           set -euo pipefail
-
-          # Fail CI for HIGH or CRITICAL vulnerabilities
-          # in production dependencies.
-          npm audit \
-            --omit=dev \
-            --audit-level=high
+          npm audit --omit=dev --audit-level=high
 
   middleware-tests:
-    name: Middleware — Lint, Unit, Audit & Build
+    name: Middleware — Unit, Audit & Build
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Set up Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: middleware/package-lock.json
 
+      - name: Use npm 10
+        run: |
+          set -euo pipefail
+          npm install --global npm@10
+          node --version
+          npm --version
+
       - name: Install middleware dependencies
         working-directory: middleware
         run: |
           set -euo pipefail
-          npm ci --no-audit --fund=false
+          npm ci --include=dev --no-audit --fund=false
 
-      - name: Middleware lint
+      - name: Middleware lint if configured
         working-directory: middleware
         run: |
-            set -euo pipefail
-
-            if node -e "
-            const p = require('./package.json');
-            process.exit(
-                p.scripts && p.scripts.lint ? 0 : 1
-            );
-            "; then
-
-            echo "Running middleware lint..."
-            npm run lint
-
-            else
-
-            echo "::warning::Middleware has no lint script yet; skipping lint."
-
-            fi
+          set -euo pipefail
+          npm run lint --if-present
 
       - name: Middleware unit tests
         working-directory: middleware
         run: |
-            set -euo pipefail
-
-            TEST_SCRIPT="$(
-            node -e "
-                const p = require('./package.json');
-                process.stdout.write(
-                (p.scripts && p.scripts.test) || ''
-                );
-            "
-            )"
-
-            if [ -z "$TEST_SCRIPT" ]; then
-
-            echo "::warning::Middleware has no test script yet."
-            exit 0
-
-            fi
-
-            if [[ "$TEST_SCRIPT" == *"Error: no test specified"* ]]; then
-
-            echo "::warning::Middleware still has the default npm test placeholder."
-            exit 0
-
-            fi
-
-            echo "Running middleware unit tests..."
-
-            npm test
+          set -euo pipefail
+          npm test
 
       - name: Middleware production build
         working-directory: middleware
         run: |
           set -euo pipefail
-
-          # Runs if middleware has a build script.
           npm run build --if-present
 
       - name: Middleware dependency audit
         working-directory: middleware
         run: |
           set -euo pipefail
-
-          npm audit \
-            --omit=dev \
-            --audit-level=high
+          npm audit --omit=dev --audit-level=high
 
   chaincode-tests:
-    name: Chaincode — Vet, Unit & Race tests
+    name: Chaincode — Vet, Unit & Race Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: chaincode/go.mod
-          cache: true
+          cache: false
 
       - name: Download Go modules
         working-directory: chaincode
@@ -223,194 +170,195 @@ jobs:
           set -euo pipefail
           go vet ./...
 
-      - name: Run chaincode unit tests
+      - name: Run chaincode unit and race tests
         working-directory: chaincode
         run: |
           set -euo pipefail
-
-          # -race:
-          # Detect race conditions.
-          #
-          # -count=1:
-          # Prevent cached test results from hiding a failure.
-          go test \
-            -race \
-            -count=1 \
-            ./...
+          go test -race -count=1 ./...
 
   dotnet-tests:
     name: .NET — Enrollment Import Tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Set up .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
 
       - name: Run .NET tests if present
         run: |
           set -euo pipefail
-
           PROJECT="tests/EnrollmentImportChecks/EnrollmentImportChecks.csproj"
-
           if [ -f "$PROJECT" ]; then
-            echo "Running .NET test project: $PROJECT"
-
-            dotnet test "$PROJECT" \
-              --configuration Release \
-              --verbosity minimal
+            dotnet test "$PROJECT" --configuration Release --verbosity minimal
           else
-            echo "No EnrollmentImportChecks project found."
-            echo "Skipping optional .NET tests."
+            echo "No EnrollmentImportChecks project found; optional .NET test skipped."
           fi
 
   infra-preflight:
     name: Infrastructure — K8s Failsafe Preflight
     runs-on: ubuntu-latest
-
+    timeout-minutes: 30
     needs:
       - frontend-tests
       - middleware-tests
       - chaincode-tests
       - dotnet-tests
-
-    timeout-minutes: 30
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Install validation tools
         run: |
           set -euo pipefail
-
           sudo apt-get update -y
+          sudo apt-get install -y shellcheck python3-yaml
 
-          sudo apt-get install -y \
-            shellcheck \
-            python3-yaml
+          VERSION="0.8.0"
+          SHA256="9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883"
 
+          curl -fsSLo kubeconform.tar.gz             "https://github.com/yannh/kubeconform/releases/download/v${VERSION}/kubeconform-linux-amd64.tar.gz"
 
-      - name: Ensure kubectl is available
+          echo "${SHA256}  kubeconform.tar.gz" | sha256sum --check -
+          tar -xzf kubeconform.tar.gz kubeconform
+          chmod +x kubeconform
+          sudo mv kubeconform /usr/local/bin/kubeconform
+          rm -f kubeconform.tar.gz
+          kubeconform -v
+
+      - name: Parse Kubernetes YAML
         run: |
           set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import sys
+          import yaml
 
-          if command -v kubectl >/dev/null 2>&1; then
-            kubectl version --client
-            exit 0
-          fi
+          root = Path("network/k8s")
+          if not root.is_dir():
+              raise SystemExit("network/k8s directory is missing.")
 
-          echo "kubectl not found. Installing verified stable release."
+          files = sorted(
+              p for p in root.rglob("*")
+              if p.suffix.lower() in {".yaml", ".yml"}
+          )
 
-          VERSION="$(curl -fsSL \
-            https://dl.k8s.io/release/stable.txt)"
+          if not files:
+              raise SystemExit("No Kubernetes YAML manifests were found.")
 
-          curl -fsSLO \
-            "https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl"
+          errors = []
+          for path in files:
+              try:
+                  with path.open("r", encoding="utf-8") as f:
+                      list(yaml.safe_load_all(f))
+              except Exception as exc:
+                  errors.append(f"{path}: {exc}")
 
-          curl -fsSLO \
-            "https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl.sha256"
+          if errors:
+              for error in errors:
+                  print(f"ERROR: {error}")
+              sys.exit(1)
 
-          echo "$(cat kubectl.sha256)  kubectl" \
-            | sha256sum --check
+          print(f"Parsed {len(files)} Kubernetes YAML file(s).")
+          PY
 
-          chmod +x kubectl
-          sudo mv kubectl /usr/local/bin/kubectl
-
-          kubectl version --client
-
-      - name: Validate Kubernetes manifests
+      - name: Validate Kubernetes schemas offline
         run: |
           set -euo pipefail
+          mapfile -d '' MANIFESTS < <(
+            find network/k8s -type f               \( -name '*.yaml' -o -name '*.yml' \) -print0
+          )
 
-          if [ ! -d network/k8s ]; then
-            echo "::error::network/k8s directory is missing."
+          if [ "${#MANIFESTS[@]}" -eq 0 ]; then
+            echo "::error::No Kubernetes YAML manifests were found."
             exit 1
           fi
 
-          # Recursive so manifests inside subdirectories
-          # are also checked.
-          kubectl apply \
-            --dry-run=client \
-            --recursive \
-            -f network/k8s/
+          kubeconform             -strict             -summary             -ignore-missing-schemas             "${MANIFESTS[@]}"
+
+      - name: Validate CouchDB JSON patch
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("network/k8s/couchdb-health-probe-json-patch.json")
+          if not path.is_file():
+              raise SystemExit(f"{path} is missing.")
+
+          patch = json.loads(path.read_text(encoding="utf-8"))
+          if not isinstance(patch, list):
+              raise SystemExit("JSON patch must be an array.")
+
+          allowed = {"add", "remove", "replace", "move", "copy", "test"}
+
+          for i, operation in enumerate(patch):
+              if not isinstance(operation, dict):
+                  raise SystemExit(f"Patch operation {i} must be an object.")
+
+              op = operation.get("op")
+              pointer = operation.get("path")
+
+              if op not in allowed:
+                  raise SystemExit(f"Patch operation {i} has invalid op: {op!r}")
+
+              if not isinstance(pointer, str) or not pointer.startswith("/"):
+                  raise SystemExit(f"Patch operation {i} has invalid path.")
+
+              if op in {"add", "replace", "test"} and "value" not in operation:
+                  raise SystemExit(f"Patch operation {i} requires value.")
+
+              if op in {"move", "copy"} and "from" not in operation:
+                  raise SystemExit(f"Patch operation {i} requires from.")
+
+          print(f"Valid JSON patch with {len(patch)} operation(s).")
+          PY
 
       - name: Validate workload safety configuration
         run: |
           set -euo pipefail
-
           python3 <<'PY'
           from pathlib import Path
           import sys
           import yaml
 
           ROOT = Path("network/k8s")
-
-          WORKLOADS = {
-              "Deployment",
-              "StatefulSet",
-              "DaemonSet",
-          }
+          WORKLOADS = {"Deployment", "StatefulSet", "DaemonSet"}
 
           errors = []
-          warnings = []
+          notes = []
           pdb_count = 0
           workload_count = 0
 
-          manifest_files = sorted(
-              [
-                  p for p in ROOT.rglob("*")
-                  if p.suffix.lower() in {".yaml", ".yml"}
-              ]
+          files = sorted(
+              p for p in ROOT.rglob("*")
+              if p.suffix.lower() in {".yaml", ".yml"}
           )
 
-          if not manifest_files:
-              errors.append(
-                  "No YAML Kubernetes manifests found under network/k8s"
-              )
-
-          for path in manifest_files:
-
+          for path in files:
               try:
-                  documents = list(
-                      yaml.safe_load_all(
-                          path.read_text(
-                              encoding="utf-8"
-                          )
-                      )
-                  )
+                  docs = list(yaml.safe_load_all(path.read_text(encoding="utf-8")))
               except Exception as exc:
-                  errors.append(
-                      f"{path}: YAML parse failure: {exc}"
-                  )
+                  errors.append(f"{path}: YAML parse failure: {exc}")
                   continue
 
-              for index, document in enumerate(documents, start=1):
-
+              for index, document in enumerate(docs, start=1):
                   if not isinstance(document, dict):
                       continue
 
                   kind = document.get("kind")
                   metadata = document.get("metadata") or {}
-
-                  name = metadata.get(
-                      "name",
-                      f"document-{index}",
-                  )
-
-                  resource_id = (
-                      f"{path}: "
-                      f"{kind or 'Unknown'}/{name}"
-                  )
+                  name = metadata.get("name", f"document-{index}")
+                  rid = f"{path}: {kind or 'Unknown'}/{name}"
 
                   if kind == "PodDisruptionBudget":
                       pdb_count += 1
@@ -419,173 +367,69 @@ jobs:
                       continue
 
                   workload_count += 1
-
-                  template = (
-                      document
-                      .get("spec", {})
-                      .get("template", {})
-                  )
-
                   pod_spec = (
-                      template.get("spec") or {}
+                      document.get("spec", {})
+                      .get("template", {})
+                      .get("spec", {})
                   )
 
-                  # ------------------------------------------
-                  # Graceful termination
-                  # ------------------------------------------
-
-                  grace = pod_spec.get(
-                      "terminationGracePeriodSeconds"
-                  )
-
+                  grace = pod_spec.get("terminationGracePeriodSeconds")
                   if grace is None:
-                      errors.append(
-                          f"{resource_id}: missing "
-                          "terminationGracePeriodSeconds"
-                      )
-
+                      errors.append(f"{rid}: missing terminationGracePeriodSeconds")
                   elif not isinstance(grace, int) or grace <= 0:
-                      errors.append(
-                          f"{resource_id}: invalid "
-                          "terminationGracePeriodSeconds "
-                          f"value: {grace}"
-                      )
+                      errors.append(f"{rid}: invalid terminationGracePeriodSeconds: {grace}")
 
-                  # ------------------------------------------
-                  # Containers
-                  # ------------------------------------------
-
-                  containers = pod_spec.get(
-                      "containers"
-                  ) or []
-
+                  containers = pod_spec.get("containers") or []
                   if not containers:
-                      errors.append(
-                          f"{resource_id}: no containers defined"
-                      )
+                      errors.append(f"{rid}: no containers defined")
                       continue
 
                   for container in containers:
+                      cname = container.get("name", "<unnamed>")
+                      prefix = f"{rid}: container/{cname}"
 
-                      container_name = container.get(
-                          "name",
-                          "<unnamed>",
-                      )
+                      if not container.get("readinessProbe"):
+                          errors.append(f"{prefix}: missing readinessProbe")
 
-                      prefix = (
-                          f"{resource_id}: "
-                          f"container/{container_name}"
-                      )
+                      if not container.get("livenessProbe"):
+                          errors.append(f"{prefix}: missing livenessProbe")
 
-                      # Readiness
-                      if not container.get(
-                          "readinessProbe"
-                      ):
-                          errors.append(
-                              f"{prefix}: "
-                              "missing readinessProbe"
-                          )
-
-                      # Liveness
-                      if not container.get(
-                          "livenessProbe"
-                      ):
-                          errors.append(
-                              f"{prefix}: "
-                              "missing livenessProbe"
-                          )
-
-                      # Resource controls
-                      resources = (
-                          container.get("resources") or {}
-                      )
-
-                      requests = (
-                          resources.get("requests") or {}
-                      )
-
-                      limits = (
-                          resources.get("limits") or {}
-                      )
+                      resources = container.get("resources") or {}
+                      requests = resources.get("requests") or {}
+                      limits = resources.get("limits") or {}
 
                       for resource in ("cpu", "memory"):
-
                           if resource not in requests:
-                              errors.append(
-                                  f"{prefix}: "
-                                  f"missing resources.requests."
-                                  f"{resource}"
-                              )
-
+                              errors.append(f"{prefix}: missing resources.requests.{resource}")
                           if resource not in limits:
-                              errors.append(
-                                  f"{prefix}: "
-                                  f"missing resources.limits."
-                                  f"{resource}"
-                              )
+                              errors.append(f"{prefix}: missing resources.limits.{resource}")
 
-                      # Startup probe is especially useful for
-                      # stateful components, but don't make it
-                      # mandatory for every workload.
-                      if (
-                          kind == "StatefulSet"
-                          and not container.get("startupProbe")
-                      ):
-                          warnings.append(
-                              f"{prefix}: no startupProbe. "
-                              "Consider adding one for slow "
-                              "starting stateful services."
-                          )
+                      if kind == "StatefulSet" and not container.get("startupProbe"):
+                          notes.append(f"{prefix}: no startupProbe")
 
           if workload_count == 0:
-              errors.append(
-                  "No Deployment, StatefulSet, or DaemonSet "
-                  "resources were detected."
-              )
+              errors.append("No Deployment, StatefulSet, or DaemonSet resources detected.")
 
           if pdb_count == 0:
-              errors.append(
-                  "No PodDisruptionBudget resources detected."
-              )
+              errors.append("No PodDisruptionBudget resources detected.")
 
-          print()
-          print("==========================================")
-          print("Kubernetes workload validation")
-          print("==========================================")
           print(f"Workloads checked: {workload_count}")
-          print(f"PDBs detected:     {pdb_count}")
-          print()
+          print(f"PDBs detected: {pdb_count}")
 
-          if warnings:
-              print("WARNINGS:")
-              for warning in warnings:
-                  print(f"  - {warning}")
-              print()
+          for note in notes:
+              print(f"NOTE: {note}")
 
           if errors:
-              print("ERRORS:")
               for error in errors:
-                  print(f"  - {error}")
-
-              print()
-              print(
-                  f"Validation failed with "
-                  f"{len(errors)} error(s)."
-              )
-
+                  print(f"ERROR: {error}")
               sys.exit(1)
 
-          print(
-              "All Kubernetes workload "
-              "failsafe checks passed."
-          )
-
+          print("All Kubernetes workload failsafe checks passed.")
           PY
 
       - name: Validate deploy-k8s.sh
         run: |
           set -euo pipefail
-
           SCRIPT="network/k8s/deploy-k8s.sh"
 
           if [ ! -f "$SCRIPT" ]; then
@@ -593,41 +437,28 @@ jobs:
             exit 1
           fi
 
-          echo "Checking Bash syntax..."
           bash -n "$SCRIPT"
+          shellcheck --severity=warning "$SCRIPT"
 
-          echo "Running ShellCheck..."
-          shellcheck \
-            --severity=warning \
-            "$SCRIPT"
-
-
-      - name: Run local infrastructure verification
+      - name: Run offline infrastructure verification
         env:
           FABRIC_BOOTSTRAP: "false"
           KUBECTL_REMOTE_COMMAND_WEBSOCKETS: "false"
         run: |
           set -euo pipefail
-
-          bash network/k8s/deploy-k8s.sh \
-            local \
-            verify
+          bash network/k8s/deploy-k8s.sh local verify
 
   ci-gate:
     name: Required CI Gate
     runs-on: ubuntu-latest
-
+    timeout-minutes: 5
     if: always()
-
     needs:
       - frontend-tests
       - middleware-tests
       - chaincode-tests
       - dotnet-tests
       - infra-preflight
-
-    timeout-minutes: 5
-
     steps:
       - name: Evaluate all required CI jobs
         env:
@@ -638,7 +469,6 @@ jobs:
           INFRA_RESULT: ${{ needs.infra-preflight.result }}
         run: |
           set -euo pipefail
-
           FAILED=0
 
           check_result() {
@@ -653,46 +483,27 @@ jobs:
             fi
           }
 
-          check_result \
-            "Frontend" \
-            "$FRONTEND_RESULT"
-
-          check_result \
-            "Middleware" \
-            "$MIDDLEWARE_RESULT"
-
-          check_result \
-            "Chaincode" \
-            "$CHAINCODE_RESULT"
-
-          check_result \
-            ".NET" \
-            "$DOTNET_RESULT"
-
-          check_result \
-            "Infrastructure" \
-            "$INFRA_RESULT"
+          check_result "Frontend" "$FRONTEND_RESULT"
+          check_result "Middleware" "$MIDDLEWARE_RESULT"
+          check_result "Chaincode" "$CHAINCODE_RESULT"
+          check_result ".NET" "$DOTNET_RESULT"
+          check_result "Infrastructure" "$INFRA_RESULT"
 
           if [ "$FAILED" -ne 0 ]; then
-            echo
             echo "::error::Develop-and-Integration CI gate FAILED."
             exit 1
           fi
 
-          echo
           echo "=========================================="
           echo "DEVELOP-AND-INTEGRATION QUALITY GATE PASSED"
           echo "=========================================="
-          echo
-          echo "All required XP/TDD/CI checks passed."
 
   validate-promotion-token:
     name: Validate Promotion Token
     runs-on: ubuntu-latest
-
+    timeout-minutes: 5
     needs:
       - ci-gate
-
     if: >-
       (
         github.event_name == 'push' &&
@@ -704,12 +515,8 @@ jobs:
         github.ref == 'refs/heads/Develop-and-Integration' &&
         inputs.promote == true
       )
-
-    timeout-minutes: 5
-
     env:
       GH_TOKEN: ${{ secrets.PROMOTION_TOKEN }}
-
     steps:
       - name: Verify PROMOTION_TOKEN
         run: |
@@ -717,32 +524,21 @@ jobs:
 
           if [ -z "${GH_TOKEN:-}" ]; then
             echo "::error::PROMOTION_TOKEN is not configured."
-            echo "::error::Create it under:"
-            echo "::error::Repository Settings -> Secrets and variables -> Actions"
             exit 1
           fi
 
           if ! command -v gh >/dev/null 2>&1; then
-            echo "Installing GitHub CLI..."
             sudo apt-get update -y
             sudo apt-get install -y gh
           fi
 
-          gh --version
-
-          gh api \
-            "repos/${GITHUB_REPOSITORY}" \
-            >/dev/null
-
+          gh api "repos/${GITHUB_REPOSITORY}" >/dev/null
           echo "PROMOTION_TOKEN can access repository."
-
 
   promote:
     name: Promote → Feature/API Endpoint Testing
-
     needs:
       - validate-promotion-token
-
     if: >-
       success() &&
       (
@@ -757,16 +553,12 @@ jobs:
           inputs.promote == true
         )
       )
-
     permissions:
       contents: read
-
     uses: ./.github/workflows/promote.yml
-
     with:
       source_branch: Develop-and-Integration
       target_branch: feature/api-endpoints-Testing
       tested_sha: ${{ github.sha }}
-
     secrets:
       PROMOTION_TOKEN: ${{ secrets.PROMOTION_TOKEN }}
