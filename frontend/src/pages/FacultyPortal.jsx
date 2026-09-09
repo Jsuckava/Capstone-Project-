@@ -14,7 +14,6 @@ import {
   getSystemSetting,
   submitFacultySectionToChairperson,
 } from "../services/api";
-import { useRecoveredState } from "../utils/sessionRecovery";
 
 const notifyChairpersonReviewChanged = (reviewData) => {
   window.dispatchEvent(
@@ -57,9 +56,9 @@ const getOptionalAssignmentValue = (value) => {
 };
 
 const FacultyPortal = ({ onLogout, allGrades, setAllGrades }) => {
-  const [activeTab, setActiveTab] = useRecoveredState("pageFaculty:activeTab", "All Sections");
-  const [selectedProgram, setSelectedProgram] = useRecoveredState("pageFaculty:selectedProgram", "");
-  const [selectedSection, setSelectedSection] = useRecoveredState("pageFaculty:selectedSection", null);
+  const [activeTab, setActiveTab] = useState("All Sections");
+  const [selectedProgram, setSelectedProgram] = useState("");
+  const [selectedSection, setSelectedSection] = useState(null);
   const [sharedDataVersion, setSharedDataVersion] = useState(0);
 
   const [systemSettings, setSystemSettings] = useState({
@@ -78,40 +77,25 @@ const FacultyPortal = ({ onLogout, allGrades, setAllGrades }) => {
   const facultyFullName = `${facultyData.firstName} ${facultyData.lastName}`;
 
   const [reviewData, setReviewData] = useState(() => {
-    try {
-      const saved = localStorage.getItem(CHAIRPERSON_REVIEW_KEY);
-      const parsed = saved ? JSON.parse(saved) : {};
-      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-        ? parsed
-        : {};
-    } catch {
-      return {};
-    }
+    const saved = localStorage.getItem(CHAIRPERSON_REVIEW_KEY);
+    return saved ? JSON.parse(saved) : {};
   });
 
   const [encodingData, setEncodingData] = useState(() => {
-    try {
-      const saved = localStorage.getItem("encodingPeriod");
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
+    const saved = localStorage.getItem("encodingPeriod");
+    return saved ? JSON.parse(saved) : null;
   });
 
   useEffect(() => {
     const applyEncodingPeriod = (value) => {
       if (!value) return;
-      try {
-        const parsed = typeof value === "string" ? JSON.parse(value) : value;
-        localStorage.setItem("encodingPeriod", JSON.stringify(parsed));
-        setEncodingData(parsed);
-        setSystemSettings((current) => ({
-          ...current,
-          semester: parsed?.semester || "2nd Semester",
-        }));
-      } catch (error) {
-        console.error("Failed to parse encoding period:", error);
-      }
+      const parsed = typeof value === "string" ? JSON.parse(value) : value;
+      localStorage.setItem("encodingPeriod", JSON.stringify(parsed));
+      setEncodingData(parsed);
+      setSystemSettings((current) => ({
+        ...current,
+        semester: parsed?.semester || "2nd Semester",
+      }));
     };
 
     const loadEncodingPeriod = async () => {
@@ -170,36 +154,18 @@ const FacultyPortal = ({ onLogout, allGrades, setAllGrades }) => {
       : "midterm";
 
   const assignments = useMemo(() => {
-    try {
-      const saved = localStorage.getItem("registrarAssignments");
-      const parsed = saved ? JSON.parse(saved) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (error) {
-      console.warn("Failed to parse registrarAssignments:", error);
-      return [];
-    }
+    const saved = localStorage.getItem("registrarAssignments");
+    return saved ? JSON.parse(saved) : [];
   }, [sharedDataVersion]);
 
   const studentSections = useMemo(() => {
-    try {
-      const saved = localStorage.getItem("studentSections");
-      const parsed = saved ? JSON.parse(saved) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (error) {
-      console.warn("Failed to parse studentSections:", error);
-      return [];
-    }
+    const saved = localStorage.getItem("studentSections");
+    return saved ? JSON.parse(saved) : [];
   }, [sharedDataVersion]);
 
   const irregularSubjectAssignments = useMemo(() => {
-    try {
-      const saved = localStorage.getItem("irregularSubjectAssignments");
-      const parsed = saved ? JSON.parse(saved) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (error) {
-      console.warn("Failed to parse irregularSubjectAssignments:", error);
-      return [];
-    }
+    const saved = localStorage.getItem("irregularSubjectAssignments");
+    return saved ? JSON.parse(saved) : [];
   }, [sharedDataVersion]);
 
   const myAssignments = useMemo(() => {

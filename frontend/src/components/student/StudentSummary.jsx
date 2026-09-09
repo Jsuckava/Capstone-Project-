@@ -1,6 +1,4 @@
 const StudentSummary = ({ totalUnits, gwa, isDeansLister, failedSubjectsCount, semesterLabel = "Semester Grades" }) => {
-  console.log("StudentSummary - failedSubjectsCount:", failedSubjectsCount);
-
   return (
     <div className="mx-4 mt-5 md:mx-6">
       {failedSubjectsCount === 2 && (

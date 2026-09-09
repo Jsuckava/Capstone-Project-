@@ -65,51 +65,6 @@ spec:
         - name: peer-crypto
           mountPath: /var/hyperledger/tls/ca.crt
           subPath: ca.crt
-        - name: admin-crypto
-          mountPath: /var/hyperledger/crypto/registrar/admin/msp/signcerts/cert.pem
-          subPath: msp-cert.pem
-        - name: admin-crypto
-          mountPath: /var/hyperledger/crypto/registrar/admin/msp/keystore/priv_sk
-          subPath: msp-key.pem
-        - name: admin-crypto
-          mountPath: /var/hyperledger/crypto/registrar/admin/msp/cacerts/ca.pem
-          subPath: msp-ca.pem
-        - name: admin-crypto
-          mountPath: /var/hyperledger/crypto/registrar/admin/msp/admincerts/admin-cert.pem
-          subPath: admin-cert.pem
-        - name: peer-crypto
-          mountPath: /var/hyperledger/crypto/registrar/peer/tls/ca.crt
-          subPath: ca.crt
-        - name: admin-faculty-crypto
-          mountPath: /var/hyperledger/crypto/faculty/admin/msp/signcerts/cert.pem
-          subPath: msp-cert.pem
-        - name: admin-faculty-crypto
-          mountPath: /var/hyperledger/crypto/faculty/admin/msp/keystore/priv_sk
-          subPath: msp-key.pem
-        - name: admin-faculty-crypto
-          mountPath: /var/hyperledger/crypto/faculty/admin/msp/cacerts/ca.pem
-          subPath: msp-ca.pem
-        - name: admin-faculty-crypto
-          mountPath: /var/hyperledger/crypto/faculty/admin/msp/admincerts/admin-cert.pem
-          subPath: admin-cert.pem
-        - name: peer-faculty-crypto
-          mountPath: /var/hyperledger/crypto/faculty/peer/tls/ca.crt
-          subPath: ca.crt
-        - name: admin-department-crypto
-          mountPath: /var/hyperledger/crypto/department/admin/msp/signcerts/cert.pem
-          subPath: msp-cert.pem
-        - name: admin-department-crypto
-          mountPath: /var/hyperledger/crypto/department/admin/msp/keystore/priv_sk
-          subPath: msp-key.pem
-        - name: admin-department-crypto
-          mountPath: /var/hyperledger/crypto/department/admin/msp/cacerts/ca.pem
-          subPath: msp-ca.pem
-        - name: admin-department-crypto
-          mountPath: /var/hyperledger/crypto/department/admin/msp/admincerts/admin-cert.pem
-          subPath: admin-cert.pem
-        - name: peer-department-crypto
-          mountPath: /var/hyperledger/crypto/department/peer/tls/ca.crt
-          subPath: ca.crt
         - name: orderer-tls
           mountPath: /var/hyperledger/orderer/tls/server.crt
           subPath: server.crt
@@ -118,9 +73,6 @@ spec:
           subPath: server.key
         - name: orderer-tls
           mountPath: /var/hyperledger/orderer/tls/ca.crt
-          subPath: ca.crt
-        - name: orderer-tls
-          mountPath: /var/hyperledger/crypto/orderer/tls/ca.crt
           subPath: ca.crt
         - name: artifacts
           mountPath: /opt/fabric-config/network/channel-artifacts
@@ -131,18 +83,6 @@ spec:
       - name: peer-crypto
         secret:
           secretName: peer-registrar-crypto
-      - name: admin-faculty-crypto
-        secret:
-          secretName: admin-faculty-crypto
-      - name: admin-department-crypto
-        secret:
-          secretName: admin-department-crypto
-      - name: peer-faculty-crypto
-        secret:
-          secretName: peer-faculty-crypto
-      - name: peer-department-crypto
-        secret:
-          secretName: peer-department-crypto
       - name: orderer-tls
         secret:
           secretName: orderer-1-crypto

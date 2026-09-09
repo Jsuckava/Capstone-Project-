@@ -1,6 +1,5 @@
 import React from "react";
 import ReviewStatusBanner from "../chairperson/ReviewStatusBanner";
-import { getDisplaySectionName } from "../../utils/studentSectioningHelpers";
 
 const ProgramCard = ({
   sectionName,
@@ -17,17 +16,14 @@ const ProgramCard = ({
   const isStarted = progress > 0;
   const isCompleted = progress >= 100;
   const isReturned = reviewStatus === "returned";
-  const isRegistrarRejected = reviewStatus === "registrar_rejected";
   const isSubmitted = reviewStatus === "submitted";
   const isApproved = reviewStatus === "approved";
   const isForwarded = reviewStatus === "forwarded";
-  const displaySectionName = getDisplaySectionName(sectionName, sectionName);
 
   const getSubmitLabel = () => {
-    if (isForwarded) return "Submitted to Registrar";
+    if (isForwarded) return "Sent to Registrar";
     if (isApproved) return "Approved by Chairperson";
     if (isSubmitted) return "Submitted to Chairperson";
-    if (isRegistrarRejected) return "Resubmit to Chairperson";
     if (isReturned) return "Resubmit to Chairperson";
     return "Submit to Chairperson";
   };
@@ -68,7 +64,7 @@ const ProgramCard = ({
       </h2>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="font-bold text-[#003366]">{displaySectionName}</span>
+        <span className="font-bold text-[#003366]">{sectionName}</span>
         <span className="rounded-lg bg-violet-50 px-3 py-1 text-xs text-violet-700">
           {sectionData.sectionCourse}
         </span>
@@ -133,7 +129,7 @@ const ProgramCard = ({
             e.stopPropagation();
             onSubmit?.();
           }}
-          disabled={isSubmitted || isApproved || isForwarded}
+          disabled={!isCompleted || isSubmitted || isApproved || isForwarded}
           className="h-12 rounded-xl border border-green-200 bg-green-50 font-bold text-green-700 transition hover:bg-green-500 hover:text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
         >
           {getSubmitLabel()}

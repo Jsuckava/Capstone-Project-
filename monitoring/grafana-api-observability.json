@@ -1,0 +1,362 @@
+{
+    "annotations":  {
+                        "list":  [
+
+                                 ]
+                    },
+    "editable":  false,
+    "fiscalYearStartMonth":  0,
+    "graphTooltip":  1,
+    "links":  [
+
+              ],
+    "panels":  [
+                   {
+                       "id":  1,
+                       "title":  "Request Rate",
+                       "type":  "timeseries",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  8,
+                                       "x":  0,
+                                       "y":  0
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "reqps",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "legend":  {
+                                                      "displayMode":  "table",
+                                                      "placement":  "bottom",
+                                                      "calcs":  [
+                                                                    "lastNotNull",
+                                                                    "max"
+                                                                ]
+                                                  },
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   }
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum by (service) (rate(http_requests_total[5m]))",
+                                           "legendFormat":  "{{service}}",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  2,
+                       "title":  "5xx Error Rate",
+                       "type":  "timeseries",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  8,
+                                       "x":  8,
+                                       "y":  0
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "reqps",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "legend":  {
+                                                      "displayMode":  "table",
+                                                      "placement":  "bottom",
+                                                      "calcs":  [
+                                                                    "lastNotNull",
+                                                                    "max"
+                                                                ]
+                                                  },
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   }
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum by (service) (rate(http_requests_total{status=~\"5..\"}[5m]))",
+                                           "legendFormat":  "{{service}}",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  3,
+                       "title":  "Error Percentage",
+                       "type":  "timeseries",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  8,
+                                       "x":  16,
+                                       "y":  0
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "percentunit",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "legend":  {
+                                                      "displayMode":  "table",
+                                                      "placement":  "bottom",
+                                                      "calcs":  [
+                                                                    "lastNotNull",
+                                                                    "max"
+                                                                ]
+                                                  },
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   }
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum by (service) (rate(http_requests_total{status=~\"4..|5..\"}[5m])) / clamp_min(sum by (service) (rate(http_requests_total[5m])), 0.000001)",
+                                           "legendFormat":  "{{service}}",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  4,
+                       "title":  "API Latency Percentiles",
+                       "type":  "timeseries",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  12,
+                                       "x":  0,
+                                       "y":  8
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "s",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "legend":  {
+                                                      "displayMode":  "table",
+                                                      "placement":  "bottom",
+                                                      "calcs":  [
+                                                                    "lastNotNull",
+                                                                    "max"
+                                                                ]
+                                                  },
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   }
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "histogram_quantile(0.50, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m])))",
+                                           "legendFormat":  "{{service}} p50",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "expr":  "histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m])))",
+                                           "legendFormat":  "{{service}} p95",
+                                           "refId":  "B"
+                                       },
+                                       {
+                                           "expr":  "histogram_quantile(0.99, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m])))",
+                                           "legendFormat":  "{{service}} p99",
+                                           "refId":  "C"
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  5,
+                       "title":  "Slow Routes (p95)",
+                       "type":  "timeseries",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  12,
+                                       "x":  12,
+                                       "y":  8
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "s",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "legend":  {
+                                                      "displayMode":  "table",
+                                                      "placement":  "bottom",
+                                                      "calcs":  [
+                                                                    "lastNotNull",
+                                                                    "max"
+                                                                ]
+                                                  },
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   }
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "topk(15, histogram_quantile(0.95, sum by (le, service, route) (rate(http_request_duration_seconds_bucket[5m]))))",
+                                           "legendFormat":  "{{service}} {{route}}",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  6,
+                       "title":  "Errors by Route and Status (1h)",
+                       "type":  "table",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  9,
+                                       "w":  24,
+                                       "x":  0,
+                                       "y":  16
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "short",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "showHeader":  true,
+                                       "cellHeight":  "sm"
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sort_desc(sum by (service, route, status) (increase(http_requests_total{status=~\"4..|5..\"}[1h])))",
+                                           "legendFormat":  "{{service}} {{route}} {{status}}",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   }
+               ],
+    "refresh":  "15s",
+    "schemaVersion":  41,
+    "tags":  [
+                 "blockgo",
+                 "api",
+                 "errors",
+                 "latency",
+                 "system-admin"
+             ],
+    "templating":  {
+                       "list":  [
+
+                                ]
+                   },
+    "time":  {
+                 "from":  "now-6h",
+                 "to":  "now"
+             },
+    "timezone":  "browser",
+    "title":  "BlockGO / API Errors \u0026 Latency",
+    "uid":  "blockgo-api-observability",
+    "version":  1,
+    "weekStart":  ""
+}

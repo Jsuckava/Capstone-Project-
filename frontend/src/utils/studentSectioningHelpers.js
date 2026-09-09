@@ -26,6 +26,43 @@ export const YEAR_LEVEL_PREFIXES = {
   "4th Year": "4",
 };
 
+// ECMAScript Date uses the proleptic Gregorian calendar. UTC avoids a local
+// timezone rollover changing the year near midnight on January 1.
+export const getGregorianCalendarYear = (date = new Date()) =>
+  date.getUTCFullYear();
+
+const getStudentIdYearPrefix = (year = "") => {
+  const match = String(year).trim().match(/^(\d{4})(?:\D|$)/);
+  return match ? match[1].slice(-2) : "";
+};
+
+export const getNextStudentId = (
+  year = "",
+  batches = [],
+  persistedHighestSequence = 0
+) => {
+  const yearPrefix = getStudentIdYearPrefix(year);
+  if (!yearPrefix) return "";
+
+  const studentIdPattern = new RegExp(`^${yearPrefix}-(\\d{4})$`);
+  let highestSequence = Math.max(Number(persistedHighestSequence) || 0, 0);
+
+  batches.forEach((batch) => {
+    [...(batch.students || []), ...(batch.removedStudents || [])].forEach(
+      (student) => {
+        const match = String(student?.studentId || "").trim().match(studentIdPattern);
+        if (!match) return;
+        highestSequence = Math.max(highestSequence, Number(match[1]));
+      }
+    );
+  });
+
+  const nextSequence = highestSequence + 1;
+  return nextSequence <= 9999
+    ? `${yearPrefix}-${String(nextSequence).padStart(4, "0")}`
+    : "";
+};
+
 const PROGRAM_SECTION_PREFIXES = {
   "Bachelor of Early Childhood Education": "BECEd",
   "Bachelor of Secondary Education major in English": "BSEd English",
@@ -60,13 +97,6 @@ export const getProgramSectionPrefix = (program = "") =>
 
 export const getDefaultSectionName = (program = "", sectionCode = "") =>
   `${getProgramSectionPrefix(program)} ${sectionCode}`.trim();
-
-export const getDisplaySectionName = (sectionName = "", fallbackName = "") => {
-  const rawName = String(sectionName || "").trim();
-  const cleanedName = rawName.replace(/\s*\([A-Za-z]{2,}\s*\d+[A-Za-z0-9-]*\)\s*$/i, "");
-
-  return cleanedName || fallbackName;
-};
 
 const normalizeHeader = (value = "") =>
   String(value)

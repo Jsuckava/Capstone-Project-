@@ -1,3 +1,5 @@
+import { getAuthToken } from './authSession';
+
 const getBaseUrl = (endpoint) => {
     if (process.env.REACT_APP_API_BASE_URL) {
         return process.env.REACT_APP_API_BASE_URL.replace(/\/$/, '');
@@ -20,7 +22,7 @@ export const getChatHubUrl = () => {
 };
 
 const fetchWithAuth = async (endpoint, options = {}) => {
-    const token = localStorage.getItem('token');
+    const token = getAuthToken();
     const baseUrl = getBaseUrl(endpoint);
     
     const headers = { ...options.headers };
@@ -63,7 +65,48 @@ const fetchPublic = async (endpoint, options = {}) => {
     return await response.json();
 };
 
+const fetchPublicUrl = async (url, options = {}) => {
+    const headers = { ...options.headers };
+    if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
+        headers['Content-Type'] = 'application/json';
+    }
+
+    const response = await fetch(url, {
+        ...options,
+        headers,
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || 'API Request Failed');
+    }
+    return await response.json();
+};
+
+const getBackendHealthUrl = () => {
+    const configuredBaseUrl = process.env.REACT_APP_BACKEND_BASE_URL;
+    if (configuredBaseUrl) {
+        const baseUrl = configuredBaseUrl.replace(/\/$/, '');
+        return baseUrl.endsWith('/api')
+            ? `${baseUrl}/backend/health`
+            : `${baseUrl}/api/backend/health`;
+    }
+
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port === '3000') {
+        return 'http://localhost:5000/api/backend/health';
+    }
+
+    return `${getBaseUrl('/backend/health')}/backend/health`;
+};
+
+// ==================== MIDDLEWARE API - LOGIN & AUTH ====================
+// These endpoints point to middleware.js running on port 4000
+// Middleware uses role-based wallet routing (registrar/5990, faculty/6990, department/7990)
+
 export const login = (credentials) => {
+    // Middleware expects: { username: string, password: string }
+    // Frontend passes: { username: email, password: password }
+    // /api/login is served by middleware on port 4000
     const loginPayload = {
         username: credentials.username || credentials.email,
         password: credentials.password
@@ -82,12 +125,14 @@ export const forgotPassword = (email) => {
     });
 };
 
-export const resetPassword = (token, newPassword) => {
+export const resetPassword = ({ email, otp, newPassword }) => {
     return fetchPublic('/reset-password', { 
         method: 'POST', 
-        body: JSON.stringify({ token, newPassword }) 
+        body: JSON.stringify({ email, otp, newPassword })
     });
 };
+
+export const fetchPasswordResetRequests = async () => fetchWithAuth('/password-reset-requests');
 
 export const hashPassword = async (password) => {
     return await fetchPublic('/crypto/hash-password', {
@@ -100,6 +145,7 @@ export const bootstrapSystem = async () => {
     return await fetchPublic('/bootstrap');
 };
 
+// ==================== MIDDLEWARE API - STUDENT PROFILE ====================
 export const getStudentProfile = async () => {
     return await fetchWithAuth('/student/profile');
 };
@@ -111,6 +157,58 @@ export const updateStudentProfile = async (profileData) => {
     });
 };
 
+export const fetchStudentHistoricalGrades = async () => fetchWithAuth('/Student/grades');
+export const fetchStudentBlockchainTransactions = async () => fetchWithAuth('/Student/blockchain-transactions');
+
+// ==================== MANAGED ACCOUNTS ====================
+export const createStaffAccount = async (account) => fetchWithAuth('/AccountManagement/staff', {
+    method: 'POST',
+    body: JSON.stringify(account),
+});
+export const fetchRegistrarAccounts = async () => fetchWithAuth('/AccountManagement/registrars');
+export const createRegistrarAccount = async (account) => fetchWithAuth('/AccountManagement/registrars', {
+    method: 'POST',
+    body: JSON.stringify(account),
+});
+export const updateRegistrarAccount = async (userId, changes) => fetchWithAuth(`/AccountManagement/registrars/${encodeURIComponent(userId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(changes),
+});
+export const deleteRegistrarAccount = async (userId) => fetchWithAuth(`/AccountManagement/registrars/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+});
+export const resetManagedAccountPassword = async (userId, newPassword) => fetchWithAuth(`/AccountManagement/users/${encodeURIComponent(userId)}/password`, {
+    method: 'PUT',
+    body: JSON.stringify({ newPassword }),
+});
+
+// ==================== CURRICULUM CHECKLISTS ====================
+export const fetchAcademicPrograms = async () => fetchWithAuth('/Curriculums/programs');
+export const fetchCurriculums = async (status = '') => fetchWithAuth(`/Curriculums${status ? `?status=${encodeURIComponent(status)}` : ''}`);
+export const fetchCurriculum = async (id) => fetchWithAuth(`/Curriculums/${encodeURIComponent(id)}`);
+export const createCurriculum = async (curriculum) => fetchWithAuth('/Curriculums', { method: 'POST', body: JSON.stringify(curriculum) });
+export const updateCurriculum = async (id, curriculum) => fetchWithAuth(`/Curriculums/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(curriculum) });
+export const addCurriculumSubject = async (id, subject) => fetchWithAuth(`/Curriculums/${encodeURIComponent(id)}/subjects`, { method: 'POST', body: JSON.stringify(subject) });
+export const updateCurriculumSubject = async (id, subjectId, subject) => fetchWithAuth(`/Curriculums/${encodeURIComponent(id)}/subjects/${encodeURIComponent(subjectId)}`, { method: 'PUT', body: JSON.stringify(subject) });
+export const removeCurriculumSubject = async (id, subjectId) => fetchWithAuth(`/Curriculums/${encodeURIComponent(id)}/subjects/${encodeURIComponent(subjectId)}`, { method: 'DELETE' });
+export const submitCurriculum = async (id) => fetchWithAuth(`/Curriculums/${encodeURIComponent(id)}/submit`, { method: 'POST' });
+export const approveCurriculum = async (id) => fetchWithAuth(`/Curriculums/${encodeURIComponent(id)}/approve`, { method: 'POST' });
+export const returnCurriculum = async (id, reason) => fetchWithAuth(`/Curriculums/${encodeURIComponent(id)}/return`, { method: 'POST', body: JSON.stringify({ reason }) });
+export const publishCurriculum = async (id) => fetchWithAuth(`/Curriculums/${encodeURIComponent(id)}/publish`, { method: 'POST' });
+export const archiveCurriculum = async (id) => fetchWithAuth(`/Curriculums/${encodeURIComponent(id)}/archive`, { method: 'POST' });
+export const assignStudentCurriculum = async (id, studentEmail) => fetchWithAuth(`/Curriculums/${encodeURIComponent(id)}/students`, { method: 'PUT', body: JSON.stringify({ studentEmail }) });
+export const fetchStudentCurriculum = async () => fetchWithAuth('/Curriculums/student');
+export const fetchFacultyCurriculums = async () => fetchWithAuth('/Curriculums/faculty');
+
+// ==================== REGISTRAR SUPPORT TICKETS ====================
+export const fetchSupportTickets = async () => fetchWithAuth('/SupportTickets');
+export const fetchSupportSpecialists = async () => fetchWithAuth('/SupportTickets/specialists');
+export const createSupportTicket = async (ticket) => fetchWithAuth('/SupportTickets', { method: 'POST', body: JSON.stringify(ticket) });
+export const updateSupportTicket = async (id, update) => fetchWithAuth(`/SupportTickets/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(update) });
+export const broadcastSupportNotice = async (message) => fetchWithAuth('/SupportTickets/broadcast', { method: 'POST', body: JSON.stringify({ message }) });
+export const resolveSecurityEvent = async (id) => fetchWithAuth(`/SystemMonitoring/security-events/${encodeURIComponent(id)}/resolve`, { method: 'POST' });
+
+// ==================== GRADES API - C# STAGING + BLOCKCHAIN LEDGER ====================
 export const getAllGrades = async (invokerId = 'system') => {
     return await fetchWithAuth(`/Grades/all?invokerId=${encodeURIComponent(invokerId)}`);
 };
@@ -245,6 +343,50 @@ export const getHealthStatus = async () => {
     return await fetchPublic('/health');
 };
 
+export const getBackendHealthStatus = async () => {
+    return await fetchPublicUrl(getBackendHealthUrl());
+};
+
+export const fetchSystemMonitoringSummary = async ({ signal } = {}) => {
+    return await fetchWithAuth('/SystemMonitoring/summary', {
+        method: 'GET',
+        cache: 'no-store',
+        signal,
+    });
+};
+
+export const createSystemAdminGrafanaSession = async () => {
+    return await fetchWithAuth('/SystemMonitoring/grafana/session', {
+        method: 'POST',
+        cache: 'no-store',
+    });
+};
+
+export const getFrontendHealthStatus = async () => {
+    if (typeof window === 'undefined') {
+        throw new Error('Frontend health is only available in the browser.');
+    }
+
+    const response = await fetch(`/nginx-health?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+            Accept: 'text/plain, text/html, application/json',
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(`Frontend health returned HTTP ${response.status}`);
+    }
+
+    const body = await response.text().catch(() => '');
+    return {
+        status: 'healthy',
+        service: 'blockgo-frontend',
+        path: '/nginx-health',
+        response: body.trim().slice(0, 120),
+    };
+};
+
 export const registerFabricUser = async ({ email, role, password }) => {
     return await fetchWithAuth('/fabric/register-user', {
         method: 'POST',
@@ -282,12 +424,52 @@ export const approveGrade = async (recordId, invokerId) => {
     });
 };
 
+export const submitRegistrationRequest = async (userData) => {
+    return await fetchPublic(`/Auth/request`, {
+        method: 'POST',
+        body: JSON.stringify(userData)
+    });
+};
+
+export const sendVerificationCode = async (email) => {
+    return await fetchPublic(`/Auth/send-verification`, {
+        method: 'POST',
+        body: JSON.stringify({ email })
+    });
+};
+
+export const fetchPendingRequests = async () => {
+    return await fetchWithAuth(`/Auth/requests/pending`);
+};
+
+export const approveRegistrationRequest = async (id, type) => {
+    return await fetchWithAuth(`/Auth/requests/approve/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, {
+        method: 'PUT'
+    });
+};
+
+export const denyRegistrationRequest = async (id) => {
+    return await fetchWithAuth(`/Auth/requests/deny/${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+    });
+};
+
+export const cleanupPendingRequests = async () => {
+    return await fetchWithAuth('/Auth/requests/cleanup-pending', {
+        method: 'DELETE'
+    });
+};
+
 export const fetchUserProfile = async (email, role) => {
     return await fetchWithAuth(`/Auth/user-profile?email=${encodeURIComponent(email)}&role=${encodeURIComponent(role)}`);
 };
 
 export const fetchApprovedStudents = async () => {
     return await fetchWithAuth(`/Auth/students/approved`);
+};
+
+export const fetchNextStudentId = async (year) => {
+    return await fetchWithAuth(`/Auth/students/next-id?year=${encodeURIComponent(year)}`);
 };
 
 export const assignStudent = async (id, assignmentData) => {
@@ -398,6 +580,18 @@ export const fetchDepartmentSections = async (department) => {
     return await fetchWithAuth(`/Auth/sections/department/${encodeURIComponent(department)}`);
 };
 
+export const fetchUnassignedEnrolledStudents = async (filters = {}) => {
+    const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== '' && value != null));
+    return await fetchWithAuth(`/Auth/students/unassigned-enrolled?${query}`);
+};
+
+export const assignStudentsToSection = async (sectionId, studentIds, period) => {
+    return await fetchWithAuth(`/Auth/sections/${encodeURIComponent(sectionId)}/assign-students`, {
+        method: 'POST',
+        body: JSON.stringify({ studentIds, ...period }),
+    });
+};
+
 export const deleteAcademicSection = async (id) => {
     return await fetchWithAuth(`/Auth/sections/${encodeURIComponent(id)}`, {
         method: 'DELETE'
@@ -420,10 +614,16 @@ export const batchEnrollStudentsToSection = async (file, sectionId) => {
     });
 };
 
-export const batchUploadStudents = async (file, mode = 'enroll') => {
+export const batchUploadStudents = async (file, defaultDepartment = '', mode = 'enroll', enrollment = {}) => {
     const formData = new FormData();
     formData.append('file', file);
+    if (defaultDepartment) formData.append('defaultDepartment', defaultDepartment);
     formData.append('mode', mode);
+    if (enrollment.curriculumId) formData.append('curriculumId', String(enrollment.curriculumId));
+    if (enrollment.schoolYear) formData.append('schoolYear', enrollment.schoolYear);
+    if (enrollment.semester) formData.append('semester', enrollment.semester);
+    if (enrollment.yearLevel) formData.append('yearLevel', String(enrollment.yearLevel));
+    if (enrollment.section) formData.append('section', enrollment.section);
 
     return await fetchWithAuth(`/Auth/students/bulk-upload`, {
         method: 'POST',
@@ -431,49 +631,20 @@ export const batchUploadStudents = async (file, mode = 'enroll') => {
     });
 };
 
-export const bulkEnrollStudents = async (file) => {
-    return await batchUploadStudents(file, 'enroll');
+export const bulkEnrollStudents = async (file, defaultDepartment = '', enrollment = {}) => {
+    return await batchUploadStudents(file, defaultDepartment, 'enroll', enrollment);
 };
 
-export const registrarBulkEnrollStudents = async (file) => {
-    return await bulkEnrollStudents(file);
+export const registrarBulkEnrollStudents = async (file, department = '', enrollment = {}) => {
+    return await bulkEnrollStudents(file, department, enrollment);
 };
 
-export const bulkUpdateStudents = async (file) => {
-    return await batchUploadStudents(file, 'update');
+export const bulkUpdateStudents = async (file, defaultDepartment = '', enrollment = {}) => {
+    return await batchUploadStudents(file, defaultDepartment, 'update', enrollment);
 };
 
-export const registrarBulkUpdateStudents = async (file) => {
-    return await bulkUpdateStudents(file);
-};
-
-export const registrarAddTemporaryStudent = async (studentData) => {
-    return await fetchWithAuth(`/Auth/students/temporary`, {
-        method: 'POST',
-        body: JSON.stringify(studentData)
-    });
-};
-
-export const registrarBulkUploadFaculty = async (file, mode = 'enroll') => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('mode', mode);
-
-    return await fetchWithAuth(`/Auth/faculty/bulk-upload`, {
-        method: 'POST',
-        body: formData
-    });
-};
-
-export const registrarBulkUploadChairperson = async (file, mode = 'enroll') => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('mode', mode);
-
-    return await fetchWithAuth(`/Auth/admins/department/bulk-upload`, {
-        method: 'POST',
-        body: formData
-    });
+export const registrarBulkUpdateStudents = async (file, department = '', enrollment = {}) => {
+    return await bulkUpdateStudents(file, department, enrollment);
 };
 
 export const bulkUploadMasterlist = async (file, department = '') => {
@@ -487,12 +658,41 @@ export const bulkUploadMasterlist = async (file, department = '') => {
     });
 };
 
-export const getDecryptedIpfsUrl = (cid, vaultPassword = '') => {
-    if (!cid) return "#";
-    const token = localStorage.getItem('token');
-    let url = `/api/Grades/view-ipfs/${cid}?vaultPassword=${encodeURIComponent(vaultPassword)}&access_token=${token}`;
-    console.log("Constructed IPFS URL:", url);
+export const openDecryptedIpfsFile = async (cid, vaultPassword = '', targetWindow = null) => {
+    if (!cid) throw new Error('CID is required.');
+
+    const token = getAuthToken();
+    const baseUrl = getBaseUrl('/Grades');
+    const viewerWindow = targetWindow || window.open('', '_blank');
+
+    if (!viewerWindow) {
+        throw new Error('Unable to open the IPFS viewer window.');
+    }
+
+    const response = await fetch(`${baseUrl}/Grades/view-ipfs/${encodeURIComponent(cid)}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : '',
+        },
+        body: JSON.stringify({ vaultPassword }),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || 'Failed to decrypt IPFS file.');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    viewerWindow.location.href = url;
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 60 * 1000);
     return url;
+};
+
+export const getDecryptedIpfsUrl = (cid) => {
+    if (!cid) return "#";
+    return `/api/Grades/view-ipfs/${encodeURIComponent(cid)}`;
 };
 
 export const uploadToIpfs = async (file) => {
@@ -519,6 +719,11 @@ export const correctGrade = async (payload) => {
         body: JSON.stringify(payload)
     });
 };
+
+export const correctFinalizedGradeAsRegistrar = async (recordId, payload) => fetchWithAuth(`/Grades/registrar-correct/${encodeURIComponent(recordId)}`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+});
 
 export const flagGrade = async (recordId, payload = {}) => {
     return await fetchWithAuth(`/Grades/flag/${encodeURIComponent(recordId)}`, {
@@ -618,7 +823,7 @@ export const searchRegistrarRecords = async (params = {}) => {
 
 export const downloadGradingSheet = async (department, section) => {
     const baseUrl = getBaseUrl('/GradeTemplate');
-    const token = localStorage.getItem('token');
+    const token = getAuthToken();
     const endpoint = `/GradeTemplate/department/${encodeURIComponent(department)}/section/${encodeURIComponent(section)}/download`;
     
     const response = await fetch(`${baseUrl}${endpoint}`, {

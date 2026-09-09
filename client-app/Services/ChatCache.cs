@@ -12,17 +12,17 @@ namespace Client_app.Services
     public class ChatCache : IChatCache
     {
         private readonly IMemoryCache _cache;
-        private readonly MemoryCacheEntryOptions _oneWeekOptions;
+        private readonly MemoryCacheEntryOptions _historyOptions;
         private const string HistoryKeyPrefix = "chat_history_";
         private const string OnlineStatusesKey = "online_statuses";
         private const string ConnectionCountsKey = "online_connection_counts";
         private const string ConnectionIdsKey = "online_connection_ids";
-        private static readonly TimeSpan CacheDuration = TimeSpan.FromDays(7);
+        private static readonly TimeSpan CacheDuration = TimeSpan.FromDays(30);
 
         public ChatCache(IMemoryCache cache)
         {
             _cache = cache;
-            _oneWeekOptions = new MemoryCacheEntryOptions()
+            _historyOptions = new MemoryCacheEntryOptions()
             {
                 AbsoluteExpirationRelativeToNow = CacheDuration,
                 Priority = CacheItemPriority.Low
@@ -38,7 +38,7 @@ namespace Client_app.Services
             var cutoff = DateTime.UtcNow.Subtract(CacheDuration);
             list = list.Where(m => GetMessageTime(m) >= cutoff).ToList();
 
-            _cache.Set(key, list, _oneWeekOptions);
+            _cache.Set(key, list, _historyOptions);
             return Task.CompletedTask;
         }
 
@@ -51,6 +51,12 @@ namespace Client_app.Services
                 .OrderBy(m => GetMessageTime(m))
                 .ToList();
             return Task.FromResult(history);
+        }
+
+        public Task DeleteHistoryAsync(string user1, string user2)
+        {
+            _cache.Remove(GetHistoryKey(user1, user2));
+            return Task.CompletedTask;
         }
 
         public Task UpdateOnlineStatusAsync(string email, bool isOnline, string role = "", string fullName = "", string connectionId = "")
@@ -109,9 +115,9 @@ namespace Client_app.Services
                 }
             }
 
-            _cache.Set(OnlineStatusesKey, statuses, _oneWeekOptions);
-            _cache.Set(ConnectionCountsKey, connectionCounts, _oneWeekOptions);
-            _cache.Set(ConnectionIdsKey, connectionIds, _oneWeekOptions);
+            _cache.Set(OnlineStatusesKey, statuses, _historyOptions);
+            _cache.Set(ConnectionCountsKey, connectionCounts, _historyOptions);
+            _cache.Set(ConnectionIdsKey, connectionIds, _historyOptions);
             return Task.CompletedTask;
         }
 

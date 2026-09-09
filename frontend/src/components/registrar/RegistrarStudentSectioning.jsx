@@ -6,17 +6,20 @@ import {
   buildStudentCsvContent,
   downloadCsvFile,
   downloadStudentCsvFile,
-  getDisplaySectionName,
   getDefaultSectionName,
+  getGregorianCalendarYear,
+  getNextStudentId,
   getStudentMiddleName,
   parseStudentIdSpreadsheet,
   syncSectionedStudentsToStorage,
 } from "../../utils/studentSectioningHelpers";
 import { downloadTemplateButtonClass } from "../shared/downloadButtonStyles";
+import { fetchNextStudentId, fetchUnassignedEnrolledStudents } from "../../services/api";
 import { syncSectioningBatchToBackend } from "../../utils/registrarSectioningBackendSync";
 import { pushSectioningSharedState } from "../../utils/sharedClientState";
 
 const buildStudentName = (student) => {
+  if (student.fullName) return student.fullName;
   const firstAndMiddle = [
     student.firstName,
     getStudentMiddleName(student),
@@ -47,9 +50,6 @@ const compareStudentsByName = (left, right) => {
 
   return leftName.localeCompare(rightName);
 };
-
-const getCleanSectionLabel = (sectionName = "", fallbackName = "Unassigned") =>
-  getDisplaySectionName(sectionName, fallbackName);
 
 const buildGeneratedSections = ({
   program,
@@ -156,7 +156,7 @@ const getCurrentRolloverBatches = (workspaces = []) => {
 
 const buildIrregularSubjectKey = () =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_YEAR = getGregorianCalendarYear();
 
 function RegistrarStudentSectioning({
   chairpersonDepartment,
@@ -168,12 +168,18 @@ function RegistrarStudentSectioning({
     const saved = localStorage.getItem(STUDENT_BATCHES_KEY);
     return saved ? JSON.parse(saved) : [];
   });
-  const batchesRef = useRef(batches);
-  const [activeWorkspace, setActiveWorkspace] = useState("sectioning");
+  const [activeWorkspace] = useState("sectioning");
   const [selectedBatchKey, setSelectedBatchKey] = useState("");
   const [sectioningBatchYear, setSectioningBatchYear] = useState(() =>
-    String(new Date().getFullYear())
+    String(new Date().getMonth() >= 5 ? CURRENT_YEAR : CURRENT_YEAR - 1)
   );
+  const [sectioningSemester, setSectioningSemester] = useState(() => new Date().getMonth() >= 5 ? "FIRST" : "SECOND");
+  const schoolYear = `${sectioningBatchYear}-${Number(sectioningBatchYear) + 1}`;
+  const [enrolledCount, setEnrolledCount] = useState(0);
+  const [enrolledLoading, setEnrolledLoading] = useState(true);
+  const [enrolledError, setEnrolledError] = useState("");
+  const [enrollmentRefresh, setEnrollmentRefresh] = useState(0);
+  const [savingSections, setSavingSections] = useState(false);
   const [targetSemester] = useState("1st Semester");
   const [promotionSummary, setPromotionSummary] = useState(null);
   const [graduatingStudents, setGraduatingStudents] = useState(() =>
@@ -206,29 +212,33 @@ function RegistrarStudentSectioning({
     useState(CURRENT_YEAR);
   const batchYearPickerRef = useRef(null);
   const rosterRef = useRef(null);
+  const addStudentRef = useRef(null);
   const [selectedSectionCode, setSelectedSectionCode] = useState("");
+  const [isRosterView, setIsRosterView] = useState(false);
   const [studentSearch, setStudentSearch] = useState("");
   const [pendingRemoval, setPendingRemoval] = useState(null);
   const [studentForm, setStudentForm] = useState({
-    studentId: "",
     sex: "",
     lastName: "",
     firstName: "",
     middleName: "",
   });
-  const [isEditingRoster, setIsEditingRoster] = useState(false);
-  const [editingStudents, setEditingStudents] = useState({});
+  const [persistedSequences, setPersistedSequences] = useState({});
+  const [studentIdLoading, setStudentIdLoading] = useState(false);
+  const [studentIdError, setStudentIdError] = useState("");
 
   const syncBatchToBackend = async (batch, successMessage = "") => {
-    if (!batch || !isRegistrarMode) return;
+    if (!batch || !isRegistrarMode) return false;
 
     try {
       await syncSectioningBatchToBackend(batch);
       if (successMessage) alert(successMessage);
+      return true;
     } catch (error) {
       alert(
         `Saved locally, but backend sync failed: ${error.message || "Please try saving again."}`
       );
+      return false;
     }
   };
 
@@ -237,9 +247,10 @@ function RegistrarStudentSectioning({
       batches.filter(
         (batch) =>
           batch.program === chairpersonDepartment &&
+          batch.schoolYear === schoolYear && batch.semester === sectioningSemester &&
           batch.status !== "Promoted"
       ),
-    [batches, chairpersonDepartment]
+    [batches, chairpersonDepartment, schoolYear, sectioningSemester]
   );
   const rolloverWorkspaces = isRegistrarMode
     ? batches.filter((batch) => batch.status !== "Promoted")
@@ -264,13 +275,29 @@ function RegistrarStudentSectioning({
   const fallbackSectioningWorkspace =
     savedSectioningWorkspace ||
     departmentWorkspaces.find((batch) => (batch.sectionPlans || []).length > 0) ||
-    null;
+    departmentWorkspaces[0] || null;
   const selectedBatch =
     departmentWorkspaces.find((batch) => batch.key === selectedBatchKey) ||
     (!selectedBatchKey ? fallbackSectioningWorkspace : null) ||
     null;
   const activeBatchKey = selectedBatchKey || selectedBatch?.key || "";
   const displayedBatchYear = selectedBatch?.batchYear || sectioningBatchYear;
+  const studentIdYear = String(displayedBatchYear || "").match(/^\d{4}/)?.[0] || "";
+  const hasPersistedSequence = Object.prototype.hasOwnProperty.call(
+    persistedSequences,
+    studentIdYear
+  );
+  const automaticStudentId = useMemo(
+    () => hasPersistedSequence
+      ? getNextStudentId(
+          displayedBatchYear,
+          batches,
+          persistedSequences[studentIdYear]
+        )
+      : "",
+    [batches, displayedBatchYear, hasPersistedSequence, persistedSequences, studentIdYear]
+  );
+  const studentIdLimitReached = hasPersistedSequence && !automaticStudentId;
 
   const sectionPlans = selectedBatch?.sectionPlans || [];
   const yearSectionPlans = sectionPlans.filter(
@@ -285,6 +312,7 @@ function RegistrarStudentSectioning({
 
   const viewSectionRoster = (sectionCode) => {
     setSelectedSectionCode(sectionCode);
+    setIsRosterView(true);
     window.requestAnimationFrame(() => {
       rosterRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -301,10 +329,9 @@ function RegistrarStudentSectioning({
       .sort(compareStudentsByName);
     return {
       ...section,
-      sectionName: getDisplaySectionName(
-        section.sectionName,
-        getDefaultSectionName(selectedBatch?.program, section.sectionCode)
-      ),
+      sectionName:
+        section.sectionName ||
+        getDefaultSectionName(selectedBatch?.program, section.sectionCode),
       assigned: sectionStudents.length,
       students: sectionStudents,
     };
@@ -345,18 +372,6 @@ function RegistrarStudentSectioning({
           );
         })
     : [];
-  const sectionRosterStudents = selectedSection
-    ? students
-        .filter((student) => {
-          const sectionYearLevel = selectedSection.yearLevel || selectedYearLevel;
-
-          return (
-            student.sectionCode === selectedSection.sectionCode &&
-            (student.yearLevel || sectionYearLevel) === sectionYearLevel
-          );
-        })
-        .sort(compareStudentsByName)
-    : [];
   const departmentGraduatingStudents = useMemo(
     () =>
       graduatingStudents
@@ -367,7 +382,7 @@ function RegistrarStudentSectioning({
           return (
             student.studentId.toLowerCase().includes(searchValue) ||
             buildStudentName(student).toLowerCase().includes(searchValue) ||
-            getCleanSectionLabel(student.sectionName, student.sectionCode || "")
+            (student.sectionName || student.sectionCode || "")
               .toLowerCase()
               .includes(searchValue)
           );
@@ -494,10 +509,9 @@ function RegistrarStudentSectioning({
           ...section,
           batchKey: batch.key,
           batchYear: batch.batchYear,
-          label: getCleanSectionLabel(
-            section.sectionName,
-            getDefaultSectionName(batch.program, section.sectionCode)
-          ),
+          label:
+            section.sectionName ||
+            getDefaultSectionName(batch.program, section.sectionCode),
         }))
       ),
     [departmentWorkspaces]
@@ -527,10 +541,7 @@ function RegistrarStudentSectioning({
             originBatchYear: batch.batchYear,
             sourceYearLevel: student.yearLevel || "Unassigned",
             sourceSection:
-              getCleanSectionLabel(
-                student.sectionName,
-                student.sectionCode || "Unassigned"
-              ),
+              student.sectionName || student.sectionCode || "Unassigned",
             targetYearLevel: nextYearLevel || "Graduating Review",
             targetSection: nextSectionCode
               ? getDefaultSectionName(batch.program, nextSectionCode)
@@ -555,9 +566,77 @@ function RegistrarStudentSectioning({
   })();
 
   useEffect(() => {
-    batchesRef.current = batches;
     localStorage.setItem(STUDENT_BATCHES_KEY, JSON.stringify(batches));
   }, [batches]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setEnrolledLoading(true);
+    setEnrolledError("");
+    setEnrolledCount(0);
+    setSelectedBatchKey("");
+    if (!chairpersonDepartment || !/^\d{4}$/.test(sectioningBatchYear)) {
+      setEnrolledLoading(false);
+      return;
+    }
+    fetchUnassignedEnrolledStudents({ department: chairpersonDepartment, schoolYear,
+      semester: sectioningSemester, yearLevel: YEAR_LEVEL_PREFIXES[selectedYearLevel] })
+      .then((response) => {
+        if (cancelled) return;
+        const enrolled = response.data || [];
+        setEnrolledCount(enrolled.length);
+        const key = [chairpersonDepartment, schoolYear, sectioningSemester, "sectioning"].join("|");
+        setBatches((current) => {
+          const existing = current.find((batch) => batch.key === key);
+          if (!existing && !enrolled.length) return current;
+          const retained = (existing?.students || []).filter((student) =>
+            student.sectionCode || student.yearLevel !== selectedYearLevel);
+          const retainedIds = new Set(retained.map((student) => student.studentId));
+          const nextStudents = enrolled.filter((student) => !retainedIds.has(student.studentNo)).map((student) => ({
+            ...student, studentId: student.studentNo,
+            // Preserve the official full name; do not guess its component parts.
+            firstName: student.fullName, lastName: "", middleName: "",
+            yearLevel: AVAILABLE_YEAR_LEVELS[Number(student.yearLevel) - 1], sectionCode: "",
+          }));
+          const workspace = { id: Date.now(), status: "Sectioning", sectionPlans: [], removedStudents: [],
+            ...existing, key, program: chairpersonDepartment, batchYear: sectioningBatchYear,
+            schoolYear, semester: sectioningSemester, students: [...retained, ...nextStudents] };
+          return [...current.filter((batch) => batch.key !== key), workspace];
+        });
+        setSelectedBatchKey(key);
+      })
+      .catch((error) => { if (!cancelled) setEnrolledError(error.message || "Could not load enrolled students."); })
+      .finally(() => { if (!cancelled) setEnrolledLoading(false); });
+    return () => { cancelled = true; };
+  }, [chairpersonDepartment, schoolYear, sectioningBatchYear, sectioningSemester, selectedYearLevel, enrollmentRefresh]);
+
+  useEffect(() => {
+    if (!studentIdYear || Object.prototype.hasOwnProperty.call(persistedSequences, studentIdYear)) {
+      return;
+    }
+
+    let cancelled = false;
+    setStudentIdError("");
+    setStudentIdLoading(true);
+    fetchNextStudentId(studentIdYear)
+      .then((response) => {
+        if (cancelled) return;
+        setPersistedSequences((current) => ({
+          ...current,
+          [studentIdYear]: Number(response?.highestSequence) || 0,
+        }));
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.warn("Could not load the persisted student ID sequence.", error);
+        setStudentIdError("Automatic Student ID is unavailable. Please retry after the server connection is restored.");
+      })
+      .finally(() => {
+        if (!cancelled) setStudentIdLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [persistedSequences, studentIdYear]);
 
   useEffect(() => {
     const handleSharedStateChanged = (event) => {
@@ -602,15 +681,14 @@ function RegistrarStudentSectioning({
   const updateSelectedBatch = (updater) => {
     if (!activeBatchKey) return;
 
-    const nextBatches = batchesRef.current.map((batch) =>
-      batch.key === activeBatchKey ? updater(batch) : batch
+    setBatches((previousBatches) =>
+      previousBatches.map((batch) =>
+        batch.key === activeBatchKey ? updater(batch) : batch
+      )
     );
-    batchesRef.current = nextBatches;
-    setBatches(nextBatches);
   };
 
   const persistBatches = (nextBatches) => {
-    batchesRef.current = nextBatches;
     setBatches(nextBatches);
     localStorage.setItem(STUDENT_BATCHES_KEY, JSON.stringify(nextBatches));
     syncSectionedStudentsToStorage(nextBatches);
@@ -623,19 +701,7 @@ function RegistrarStudentSectioning({
 
     setSectioningBatchYear(nextBatchYear);
 
-    if (!isRegistrarMode || !activeBatchKey) return;
-
-    const nextBatches = batches.map((batch) =>
-      batch.key === activeBatchKey
-        ? {
-            ...batch,
-            batchYear: nextBatchYear,
-            lastSectionedAt: new Date().toISOString(),
-          }
-        : batch
-    );
-
-    persistBatches(nextBatches);
+    setSelectedBatchKey("");
   };
 
   const openBatchYearPicker = () => {
@@ -653,7 +719,8 @@ function RegistrarStudentSectioning({
     setIsBatchYearPickerOpen(false);
   };
 
-  const handleGenerateSections = () => {
+  const handleGenerateSections = async () => {
+    if (enrolledLoading || enrolledError || savingSections) return;
     if (!chairpersonDepartment) {
       alert("Please choose a department first.");
       return;
@@ -685,6 +752,8 @@ function RegistrarStudentSectioning({
         key: workspaceKey,
         program: chairpersonDepartment,
         batchYear: resolvedBatchYear,
+        schoolYear,
+        semester: sectioningSemester,
         submittedTo: isRegistrarMode
           ? "Registrar Sectioning Office"
           : `${chairpersonDepartment} Chairperson`,
@@ -771,8 +840,17 @@ function RegistrarStudentSectioning({
       nextWorkspace,
     ];
 
+    setSavingSections(true);
+    try {
+      await syncSectioningBatchToBackend(nextWorkspace);
+    } catch (error) {
+      alert(`Section assignment failed: ${error.message}`);
+      setSavingSections(false);
+      return;
+    }
+    setSavingSections(false);
     persistBatches(nextBatches);
-    syncBatchToBackend(nextWorkspace);
+    setEnrolledCount((count) => Math.max(0, count - studentsNeedingSection.length));
     setSelectedBatchKey(workspaceKey);
     setSectioningBatchYear(workspace.batchYear || sectioningBatchYear);
     setSelectedYearLevel(targetYearLevel);
@@ -859,130 +937,6 @@ function RegistrarStudentSectioning({
       ),
       lastSectionedAt: new Date().toISOString(),
     }));
-  };
-
-  const buildEditableRoster = () =>
-    Object.fromEntries(
-      sectionRosterStudents.map((student) => [
-        student.studentId,
-        {
-          studentId: student.studentId || "",
-          sex: student.sex || "",
-          lastName: student.lastName || "",
-          firstName: student.firstName || "",
-          middleName: getStudentMiddleName(student) || "",
-          sectionCode: student.sectionCode || "",
-        },
-      ])
-    );
-
-  const handleStartRosterEdit = () => {
-    if (!selectedSection) return;
-    setEditingStudents(buildEditableRoster());
-    setIsEditingRoster(true);
-  };
-
-  const handleCancelRosterEdit = () => {
-    setIsEditingRoster(false);
-    setEditingStudents({});
-  };
-
-  const handleRosterFieldChange = (studentId, field, value) => {
-    setEditingStudents((current) => ({
-      ...current,
-      [studentId]: {
-        ...(current[studentId] || {}),
-        [field]: value,
-      },
-    }));
-  };
-
-  const handleSaveRosterEdit = () => {
-    if (!selectedSection || !selectedBatch) return;
-
-    const drafts = Object.values(editingStudents);
-    if (!drafts.length) {
-      handleCancelRosterEdit();
-      return;
-    }
-
-    const selectedSectionStudentIds = new Set(
-      sectionRosterStudents.map((student) => String(student.studentId || "").toLowerCase())
-    );
-    const otherStudentIds = new Set(
-      students
-        .filter(
-          (student) =>
-            !selectedSectionStudentIds.has(String(student.studentId || "").toLowerCase())
-        )
-        .map((student) => String(student.studentId || "").toLowerCase())
-    );
-    const seenDraftIds = new Set();
-
-    for (const draft of drafts) {
-      const trimmedStudentId = String(draft.studentId || "").trim();
-      const trimmedLastName = String(draft.lastName || "").trim();
-      const trimmedFirstName = String(draft.firstName || "").trim();
-      const trimmedMiddleName = String(draft.middleName || "").trim();
-
-      if (
-        !trimmedStudentId ||
-        !draft.sex ||
-        !trimmedLastName ||
-        !trimmedFirstName ||
-        !trimmedMiddleName
-      ) {
-        alert("Complete student ID, sex, and name fields before saving.");
-        return;
-      }
-
-      const normalizedStudentId = trimmedStudentId.toLowerCase();
-      if (seenDraftIds.has(normalizedStudentId)) {
-        alert("Duplicate student IDs found in the edited roster.");
-        return;
-      }
-      if (otherStudentIds.has(normalizedStudentId)) {
-        alert("A student ID in this edit already exists in another section.");
-        return;
-      }
-      seenDraftIds.add(normalizedStudentId);
-    }
-
-    updateSelectedBatch((batch) => ({
-      ...batch,
-      students: (batch.students || []).map((student) => {
-        const normalizedStudentId = String(student.studentId || "").toLowerCase();
-        if (!selectedSectionStudentIds.has(normalizedStudentId)) return student;
-
-        const draft = editingStudents[student.studentId];
-        if (!draft) return student;
-
-        const targetSection = sectionPlans.find(
-          (section) => section.sectionCode === draft.sectionCode
-        );
-
-        return {
-          ...student,
-          studentId: String(draft.studentId || "").trim(),
-          sex: draft.sex,
-          lastName: String(draft.lastName || "").trim(),
-          firstName: String(draft.firstName || "").trim(),
-          middleName: String(draft.middleName || "").trim(),
-          middleInitial: String(draft.middleName || "").trim(),
-          yearLevel: draft.sectionCode
-            ? targetSection?.yearLevel || selectedYearLevel
-            : "",
-          sectionCode: draft.sectionCode || "",
-          sectionName: draft.sectionCode
-            ? targetSection?.sectionName ||
-              getDefaultSectionName(batch.program, draft.sectionCode)
-            : "",
-        };
-      }),
-      lastSectionedAt: new Date().toISOString(),
-    }));
-
-    handleCancelRosterEdit();
   };
 
   const handleStartRemoveStudent = (student) => {
@@ -1092,7 +1046,7 @@ function RegistrarStudentSectioning({
   const handleAddStudent = () => {
     if (!selectedBatch) return;
 
-    const studentId = studentForm.studentId.trim();
+    const studentId = automaticStudentId;
 
     if (
       !studentId ||
@@ -1137,7 +1091,6 @@ function RegistrarStudentSectioning({
     }));
 
     setStudentForm({
-      studentId: "",
       sex: "",
       lastName: "",
       firstName: "",
@@ -1289,7 +1242,8 @@ function RegistrarStudentSectioning({
   };
 
   const handleSaveSectioning = async () => {
-    const nextBatches = batchesRef.current.map((batch) =>
+    if (savingSections) return;
+    const nextBatches = batches.map((batch) =>
       batch.key === activeBatchKey && (batch.sectionPlans || []).length > 0
         ? {
             ...batch,
@@ -1298,13 +1252,14 @@ function RegistrarStudentSectioning({
         : batch
     );
 
-    setBatches(nextBatches);
-    localStorage.setItem(STUDENT_BATCHES_KEY, JSON.stringify(nextBatches));
-    syncSectionedStudentsToStorage(nextBatches);
-    pushSectioningSharedState();
-    onSectioningSaved?.();
     const batchToSync = nextBatches.find((batch) => batch.key === activeBatchKey);
-    await syncBatchToBackend(batchToSync, "Sections saved and synced successfully.");
+    setSavingSections(true);
+    const synced = await syncBatchToBackend(batchToSync);
+    setSavingSections(false);
+    if (synced) {
+      persistBatches(nextBatches);
+      alert("Sections saved and synced successfully.");
+    }
   };
 
   const handleShuffleSections = () => {
@@ -1892,10 +1847,7 @@ function RegistrarStudentSectioning({
               <h3 className="text-xl font-bold text-[#003366]">
                 Academic Year Promotion
               </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Promote all current section lists across available departments
-                in one rollover. Batch year stays visible as the student origin.
-              </p>
+              
             </div>
             <span className="rounded-full bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-700">
               Chairperson Rollover
@@ -1914,10 +1866,7 @@ function RegistrarStudentSectioning({
                 {currentRolloverBatches.length === 1 ? "" : "es"} ready for
                 rollover
               </p>
-              <p className="mt-1 text-sm text-slate-500">
-                1st Year to 3rd Year advance automatically; 4th Year moves to
-                the graduating review list.
-              </p>
+              
             </div>
             <button
               type="button"
@@ -1970,10 +1919,7 @@ function RegistrarStudentSectioning({
               <h3 className="text-xl font-bold text-[#003366]">
                 Graduating Review List
               </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Review by section. Mark a whole section at once, then open the
-                student list only for exceptions.
-              </p>
+              
             </div>
             <input
               type="text"
@@ -2233,10 +2179,7 @@ function RegistrarStudentSectioning({
               <h3 className="text-xl font-bold text-[#003366]">
                 Irregular Subject Assignment
               </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Keep the student in their official year level and main section,
-                then attach only the repeated subject to a lower-year class.
-              </p>
+              
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
               <select
@@ -2256,12 +2199,7 @@ function RegistrarStudentSectioning({
                     value={`${student.batchKey}|${student.studentId}`}
                   >
                     {student.studentId} - {buildStudentName(student)} (
-                    {student.yearLevel},{" "}
-                    {getCleanSectionLabel(
-                      student.sectionName,
-                      student.sectionCode || "Unassigned"
-                    )}
-                    )
+                    {student.yearLevel}, {student.sectionName || "Unassigned"})
                   </option>
                 ))}
               </select>
@@ -2274,10 +2212,7 @@ function RegistrarStudentSectioning({
                   setIrregularSubjectForm((current) => ({
                     ...current,
                     subjectAssignmentId: event.target.value,
-                    assignedSection: getCleanSectionLabel(
-                      assignment?.sectionName,
-                      assignment?.sectionCode || ""
-                    ),
+                    assignedSection: assignment?.sectionName || "",
                     faculty: assignment?.facultyName || "",
                   }));
                 }}
@@ -2287,10 +2222,7 @@ function RegistrarStudentSectioning({
                 {departmentAssignments.map((assignment) => (
                   <option key={assignment.id} value={assignment.id}>
                     {assignment.subjectCode} - {assignment.subjectTitle} /{" "}
-                    {getCleanSectionLabel(
-                      assignment.sectionName,
-                      assignment.sectionCode || ""
-                    )}
+                    {assignment.sectionName}
                   </option>
                 ))}
               </select>
@@ -2389,11 +2321,7 @@ function RegistrarStudentSectioning({
                   .filter((subject) => (subject.status || "Pending") !== "Completed")
                   .map((subject) => (
                     <option key={subject.id} value={subject.id}>
-                      {subject.subjectCode} -{" "}
-                      {getCleanSectionLabel(
-                        subject.assignedSection,
-                        subject.assignedSectionCode || ""
-                      )}
+                      {subject.subjectCode} - {subject.assignedSection}
                     </option>
                   ))}
               </select>
@@ -2464,10 +2392,7 @@ function RegistrarStudentSectioning({
                 <h3 className="text-xl font-bold text-[#003366]">
                   Active Irregular Subject Records
                 </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Official section stays unchanged. Only the repeated subject
-                  assignment moves.
-                </p>
+                
               </div>
               <input
                 type="text"
@@ -2530,10 +2455,7 @@ function RegistrarStudentSectioning({
                           </span>
                         </td>
                         <td className="px-4 py-3 text-slate-700">
-                          {getCleanSectionLabel(
-                            assignment.assignedSection,
-                            assignment.assignedSectionCode || ""
-                          )}
+                          {assignment.assignedSection}
                         </td>
                         <td className="px-4 py-3 text-slate-700">
                           {assignment.faculty}
@@ -2574,19 +2496,40 @@ function RegistrarStudentSectioning({
         </section>
       ) : null}
 
-      <div className="space-y-6">
-        <main className="space-y-6">
+      <div className="space-y-3">
+        <main className="space-y-3">
+          {!isRosterView ? (
+            <>
           {isRegistrarMode ? (
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
               <div>
-                <h3 className="text-xl font-bold text-[#003366]">
+                <h3 className="text-sm font-bold text-[#003366]">
                   Section Generator
                 </h3>
               </div>
 
-              <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[170px_170px_170px_auto_auto_auto] lg:items-end">
+              <div className="mt-3 flex flex-wrap items-end gap-3">
+                <label className="text-xs font-medium text-slate-700">Enrollment semester
+                  <select aria-label="Enrollment semester" value={sectioningSemester}
+                    onChange={(event) => { setSectioningSemester(event.target.value); setSelectedBatchKey(""); }}
+                    className="ml-2 rounded-md border border-slate-300 px-2 py-2">
+                    <option value="FIRST">First Semester</option>
+                    <option value="SECOND">Second Semester</option>
+                    <option value="MIDYEAR">Midyear</option>
+                  </select>
+                </label>
+                <button type="button" disabled={enrolledLoading || savingSections}
+                  onClick={() => setEnrollmentRefresh((value) => value + 1)}
+                  className="rounded-md border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 disabled:opacity-50">
+                  {enrolledLoading ? "Loading enrolled students..." : `Auto-Populate Enrolled (${enrolledCount})`}
+                </button>
+                <span className="text-xs text-slate-600">School year {schoolYear}. Enrolled students load automatically; no upload is needed.</span>
+              </div>
+              {enrolledError ? <p role="alert" className="mt-2 text-sm text-red-700">{enrolledError}</p> : null}
+
+              <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-[135px_135px_135px_auto_auto_auto_auto] xl:items-end">
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-700">
+                  <span className="mb-1 block text-xs font-medium text-slate-700">
                     Year level
                   </span>
                   <select
@@ -2618,7 +2561,7 @@ function RegistrarStudentSectioning({
                       }
                       setSelectedSectionCode(nextYearSection?.sectionCode || "");
                     }}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#003366]"
+                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[11px] outline-none focus:border-[#003366]"
                   >
                     {AVAILABLE_YEAR_LEVELS.map((yearLevel) => (
                       <option key={yearLevel} value={yearLevel}>
@@ -2629,8 +2572,8 @@ function RegistrarStudentSectioning({
                 </label>
 
                 <div className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-700">
-                    Batch year
+                  <span className="mb-1 block text-xs font-medium text-slate-700">
+                    School year starting
                   </span>
                   <div ref={batchYearPickerRef} className="relative">
                     <input
@@ -2640,7 +2583,7 @@ function RegistrarStudentSectioning({
                       onFocus={openBatchYearPicker}
                       onClick={openBatchYearPicker}
                       onChange={(event) => handleBatchYearChange(event.target.value)}
-                      className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#003366]"
+                      className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[11px] outline-none focus:border-[#003366]"
                       placeholder="Select Year"
                     />
 
@@ -2701,7 +2644,7 @@ function RegistrarStudentSectioning({
                 </div>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-700">
+                  <span className="mb-1 block text-xs font-medium text-slate-700">
                     Number of sections
                   </span>
                   <input
@@ -2709,16 +2652,25 @@ function RegistrarStudentSectioning({
                     min="1"
                     value={manualSectionCount}
                     onChange={(event) => setManualSectionCount(event.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#003366]"
+                    className="h-8 w-full rounded-md border border-slate-300 px-2 text-[11px] outline-none focus:border-[#003366]"
                   />
                 </label>
 
                 <button
                   type="button"
                   onClick={handleGenerateSections}
-                  className="rounded-xl bg-[#003366] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#00264d]"
+                  disabled={enrolledLoading || !!enrolledError || savingSections}
+                  className="h-8 whitespace-nowrap rounded-md bg-[#003366] px-3 text-[11px] font-semibold text-white transition hover:bg-[#00264d]"
                 >
                   Generate Sections
+                </button>
+                <button
+                  type="button"
+                  onClick={handleShuffleSections}
+                  disabled={!selectedBatch || yearSectionPlans.length < 2}
+                  className="h-8 whitespace-nowrap rounded-md border border-blue-200 px-3 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
+                >
+                  Shuffle Students
                 </button>
                 <button
                   type="button"
@@ -2730,8 +2682,8 @@ function RegistrarStudentSectioning({
                 <button
                   type="button"
                   onClick={handleSaveSectioning}
-                  disabled={!selectedBatch || !sectionPlans.length}
-                  className="rounded-xl border border-[#003366] px-5 py-3 text-sm font-semibold text-[#003366] transition hover:bg-[#003366] hover:text-white disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
+                  disabled={!selectedBatch || !sectionPlans.length || savingSections}
+                  className="h-8 whitespace-nowrap rounded-md border border-[#003366] px-3 text-[11px] font-semibold text-[#003366] transition hover:bg-[#003366] hover:text-white disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
                 >
                   Save Sections
                 </button>
@@ -2740,11 +2692,11 @@ function RegistrarStudentSectioning({
             </section>
           ) : null}
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="mb-3 flex flex-col gap-2 border-b border-slate-200 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h3 className="text-xl font-bold text-[#003366]">
-                    Sections Preview
+                  <h3 className="border-b-2 border-blue-700 px-2 pb-3 text-xs font-semibold text-blue-700">
+                    All Sections <span className="ml-1 rounded-full bg-blue-50 px-2 py-0.5">{sectionSummaries.length}</span>
                   </h3>
                 </div>
                 {isChairpersonMode ? (
@@ -2794,11 +2746,11 @@ function RegistrarStudentSectioning({
               </div>
 
               {sectionSummaries.length ? (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
                   {sectionSummaries.map((section) => (
                     <article
                       key={section.sectionCode}
-                      className={`rounded-xl border p-4 transition ${
+                      className={`rounded-md border p-2.5 transition ${
                         selectedSection?.sectionCode === section.sectionCode
                           ? "border-[#003366] bg-[#003366]/5"
                           : "border-slate-200 bg-white"
@@ -2810,18 +2762,15 @@ function RegistrarStudentSectioning({
                           onClick={() => viewSectionRoster(section.sectionCode)}
                           className="text-left"
                         >
-                          <p className="text-sm font-semibold text-slate-500">
-                            Section {section.sectionCode}
-                          </p>
-                          <p className="mt-1 text-xs font-semibold uppercase text-slate-400">
-                            Batch {displayedBatchYear}
-                          </p>
-                          <p className="mt-1 text-xl font-bold text-[#003366]">
+                          <p className="text-sm font-bold text-[#003366]">
                             {section.sectionName}
+                          </p>
+                          <p className="mt-1 text-[10px] text-slate-500">
+                            Section {section.sectionCode} &nbsp;•&nbsp; Batch {displayedBatchYear} &nbsp;•&nbsp; {selectedYearLevel}
                           </p>
                         </button>
 
-                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                        <span className="whitespace-nowrap rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-600">
                           {section.assigned} student
                           {section.assigned === 1 ? "" : "s"}
                         </span>
@@ -2837,30 +2786,30 @@ function RegistrarStudentSectioning({
                               event.target.value
                             )
                           }
-                          className="mt-4 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#003366]"
+                          className="mt-2 w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-[11px] outline-none focus:border-[#003366]"
                           aria-label={`Edit ${section.sectionCode} section name`}
                         />
                       ) : null}
 
-                      <div className="mt-4 flex flex-wrap gap-2">
+                      <div className="mt-2 flex flex-wrap gap-1.5 border-t border-slate-100 pt-2">
                         <button
                           type="button"
                           onClick={() => viewSectionRoster(section.sectionCode)}
-                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                          className="rounded-md border border-blue-100 px-3 py-1.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-50"
                         >
-                          View Students
+                          View Roster
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDownloadSectionCsv(section.sectionCode)}
-                          className="rounded-lg border border-[#003366] px-3 py-2 text-sm font-semibold text-[#003366] hover:bg-[#003366] hover:text-white"
+                          className="rounded-md border border-blue-100 px-3 py-1.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-50"
                         >
                           Export CSV
                         </button>
                         <button
                           type="button"
                           onClick={() => handleImportSectionCsv(section.sectionCode)}
-                          className="rounded-lg border border-emerald-300 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+                          className="rounded-md border border-emerald-200 px-3 py-1.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-50"
                         >
                           Upload CSV
                         </button>
@@ -2868,7 +2817,7 @@ function RegistrarStudentSectioning({
                           <button
                             type="button"
                             onClick={() => handleDeleteSection(section.sectionCode)}
-                            className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+                            className="rounded-md border border-red-200 px-3 py-1.5 text-[10px] font-semibold text-red-600 hover:bg-red-50"
                           >
                             Delete Section
                           </button>
@@ -2878,79 +2827,63 @@ function RegistrarStudentSectioning({
                   ))}
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
+                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-xs text-slate-500">
                   {isRegistrarMode
                     ? "Generate sections to preview students by section."
                     : "No registrar-created sections are available yet."}
                 </div>
               )}
             </section>
+            </>
+          ) : null}
 
+            {isRosterView ? (
             <section ref={rosterRef} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="mb-5 flex flex-row flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-xl font-bold text-[#003366]">
+              <div className="mb-5 flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex items-center gap-4">
+                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-700">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-7 w-7"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2"/><path d="M3 20v-2a6 6 0 0 1 12 0v2m0-5a4 4 0 0 1 6 3v2"/></svg>
+                  </span>
+                  <div>
+                    <button type="button" onClick={() => setIsRosterView(false)} className="mb-2 text-xs font-medium text-blue-700 hover:underline">Department Sections &nbsp;›</button>
+                    <h3 className="text-2xl font-bold text-[#003366]">
                     {selectedSection
-                      ? getDisplaySectionName(
-                          selectedSection.sectionName,
-                          getDefaultSectionName(
-                            selectedBatch.program,
-                            selectedSection.sectionCode
-                          )
+                      ? selectedSection.sectionName ||
+                        getDefaultSectionName(
+                          selectedBatch.program,
+                          selectedSection.sectionCode
                         )
                       : "Section Students"}
-                  </h3>
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500">{chairpersonDepartment} &nbsp;•&nbsp; Batch {displayedBatchYear} &nbsp;•&nbsp; {selectedYearLevel} &nbsp; <span className="rounded-full bg-emerald-50 px-2 py-1 font-semibold text-emerald-700">{visibleSectionStudents.length} Students</span></p>
+                  </div>
                 </div>
 
-                <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-center">
-                  {isRegistrarMode ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      {isEditingRoster ? (
-                        <div className="flex flex-nowrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={handleSaveRosterEdit}
-                            className="whitespace-nowrap rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-                          >
-                            Save Changes
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleCancelRosterEdit}
-                            className="whitespace-nowrap rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                          >
-                            Cancel Edit
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handleStartRosterEdit}
-                          disabled={!selectedSection}
-                          className="whitespace-nowrap rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
-                        >
-                          Edit Students
-                        </button>
-                      )}
-                    </div>
-                  ) : null}
+                <button type="button" onClick={() => setIsRosterView(false)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-[#003366] hover:bg-slate-50">
+                  <span aria-hidden="true">←</span> Back to Department Sections
+                </button>
+              </div>
 
-                  <input
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <input
                     type="text"
                     value={studentSearch}
                     onChange={(event) => setStudentSearch(event.target.value)}
-                    placeholder="Search Student"
-                    disabled={isEditingRoster}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#003366] disabled:bg-slate-100 lg:min-w-[260px] lg:max-w-xs"
+                    placeholder="Search by ID or name..."
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-[#003366] lg:max-w-sm"
                   />
-                </div>
+                {isRegistrarMode ? (
+                  <button
+                    type="button"
+                    onClick={() => addStudentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                    className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#003366] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#00264d]"
+                  >
+                    <span className="text-lg leading-none">+</span> Add Student
+                  </button>
+                ) : null}
+                <button type="button" onClick={() => handleDownloadSectionCsv(selectedSection?.sectionCode)} className="rounded-lg border border-blue-200 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50">Export CSV</button>
+                {isRegistrarMode ? <button type="button" onClick={() => handleImportSectionCsv(selectedSection?.sectionCode)} className="rounded-lg border border-blue-200 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50">Upload CSV</button> : null}
               </div>
-
-              {isEditingRoster ? (
-                <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  Edit mode is on. You can update student ID, full name, sex, and section assignment before saving.
-                </div>
-              ) : null}
 
               {pendingRemoval ? (
                 <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4">
@@ -3026,115 +2959,22 @@ function RegistrarStudentSectioning({
                   </thead>
                   <tbody>
                     {visibleSectionStudents.length > 0 ? (
-                      visibleSectionStudents.map((student) => {
-                        const draft = editingStudents[student.studentId] || {
-                          studentId: student.studentId || "",
-                          sex: student.sex || "",
-                          lastName: student.lastName || "",
-                          firstName: student.firstName || "",
-                          middleName: getStudentMiddleName(student) || "",
-                          sectionCode: student.sectionCode || "",
-                        };
-
-                        return (
+                      visibleSectionStudents.map((student) => (
                         <tr key={student.studentId} className="border-b bg-white">
                           <td className="px-4 py-3 font-semibold text-slate-800">
-                            {isEditingRoster ? (
-                              <input
-                                type="text"
-                                value={draft.studentId}
-                                onChange={(event) =>
-                                  handleRosterFieldChange(
-                                    student.studentId,
-                                    "studentId",
-                                    event.target.value
-                                  )
-                                }
-                                className="w-full min-w-28 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#003366]"
-                              />
-                            ) : (
-                              student.studentId
-                            )}
+                            {student.studentId}
                           </td>
                           <td className="px-4 py-3 text-slate-700">
-                            {isEditingRoster ? (
-                              <div className="grid gap-2">
-                                <input
-                                  type="text"
-                                  value={draft.lastName}
-                                  onChange={(event) =>
-                                    handleRosterFieldChange(
-                                      student.studentId,
-                                      "lastName",
-                                      event.target.value
-                                    )
-                                  }
-                                  placeholder="Last name"
-                                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#003366]"
-                                />
-                                <input
-                                  type="text"
-                                  value={draft.firstName}
-                                  onChange={(event) =>
-                                    handleRosterFieldChange(
-                                      student.studentId,
-                                      "firstName",
-                                      event.target.value
-                                    )
-                                  }
-                                  placeholder="First name"
-                                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#003366]"
-                                />
-                                <input
-                                  type="text"
-                                  value={draft.middleName}
-                                  onChange={(event) =>
-                                    handleRosterFieldChange(
-                                      student.studentId,
-                                      "middleName",
-                                      event.target.value
-                                    )
-                                  }
-                                  placeholder="Middle name"
-                                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#003366]"
-                                />
-                              </div>
-                            ) : (
-                              buildStudentName(student)
-                            )}
+                            {buildStudentName(student)}
                           </td>
                           <td className="px-4 py-3 text-slate-600">
-                            {isEditingRoster ? (
-                              <select
-                                value={draft.sex}
-                                onChange={(event) =>
-                                  handleRosterFieldChange(
-                                    student.studentId,
-                                    "sex",
-                                    event.target.value
-                                  )
-                                }
-                                className="w-full min-w-28 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#003366]"
-                              >
-                                <option value="">Sex</option>
-                                <option value="Male">Male</option>
-                                <option value="Female">Female</option>
-                              </select>
-                            ) : (
-                              student.sex || "--"
-                            )}
+                            {student.sex || "--"}
                           </td>
                           <td className="px-4 py-3">
                             <select
-                              value={isEditingRoster ? draft.sectionCode : student.sectionCode || ""}
+                              value={student.sectionCode || ""}
                               onChange={(event) =>
-                                isEditingRoster
-                                  ? handleRosterFieldChange(
-                                      student.studentId,
-                                      "sectionCode",
-                                      event.target.value
-                                    )
-                                  : isRegistrarMode
+                                isRegistrarMode
                                   ? handleMoveStudent(
                                       student.studentId,
                                       event.target.value
@@ -3156,9 +2996,7 @@ function RegistrarStudentSectioning({
                             </select>
                           </td>
                           <td className="px-4 py-3">
-                            {isEditingRoster ? (
-                              <span className="text-sm text-slate-400">Editing</span>
-                            ) : isRegistrarMode ? (
+                            {isRegistrarMode ? (
                               <button
                                 type="button"
                                 onClick={() => handleStartRemoveStudent(student)}
@@ -3171,8 +3009,7 @@ function RegistrarStudentSectioning({
                             )}
                           </td>
                         </tr>
-                      );
-                      })
+                      ))
                     ) : (
                       <tr>
                         <td colSpan="5" className="py-8 text-center text-slate-500">
@@ -3186,21 +3023,26 @@ function RegistrarStudentSectioning({
                 </table>
               </div>
             </section>
+            ) : null}
 
             {isRegistrarMode ? (
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <section ref={addStudentRef} className="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <h3 className="text-xl font-bold text-[#003366]">
                 Add Student
               </h3>
               <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
                 <input
                   type="text"
-                  value={studentForm.studentId}
-                  onChange={(event) =>
-                    handleStudentFormChange("studentId", event.target.value)
-                  }
-                  placeholder="Student ID"
-                  className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#003366]"
+                  value={automaticStudentId}
+                  readOnly
+                  aria-label="Student ID (automatic)"
+                  title="Student ID is assigned automatically from the batch year"
+                  placeholder={studentIdLoading
+                    ? "Loading Student ID…"
+                    : studentIdError || (studentIdLimitReached
+                        ? `${studentIdYear}-year ID limit (9999) reached`
+                        : "Select a valid batch year")}
+                  className="cursor-not-allowed rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-700 outline-none"
                 />
                 <select
                   value={studentForm.sex}
@@ -3243,7 +3085,7 @@ function RegistrarStudentSectioning({
                 <button
                   type="button"
                   onClick={handleAddStudent}
-                  disabled={!sectionPlans.length}
+                  disabled={!sectionPlans.length || studentIdLoading || !automaticStudentId}
                   className="rounded-xl bg-[#003366] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#00264d] disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   Add Student

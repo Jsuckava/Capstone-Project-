@@ -30,6 +30,7 @@ temp/
 # =========================
 node_modules/
 **/node_modules/
+frontend/package-lock.json
 *.dll
 *.exe
 *.pdb
@@ -48,6 +49,10 @@ __pycache__/
 *.bak
 appsettings.*.json
 .fake
+network/.local-frontend-port-forward*.log
+network/.local-frontend-port-forward*.pid
+network/.local-couchdb-*-port-forward*.log
+network/.local-couchdb-*-port-forward*.pid
 
 # =========================
 # GLOBAL DATABASES
@@ -69,6 +74,16 @@ network/k8s/.tmp-k8s/
 fabric_deploy_*/
 network/postgres-data/
 network/ipfs/
+network/fabric-k8s-data/
+network/crypto-config*/
+network/channel-artifacts*/
+network/organizations/
+network/swarm.key
+network/swarm-clean.key
+**/msp/keystore/
+**/msp/signcerts/
+**/tls/*.key
+**/tls/*.crt
 
 # Dynamic Chaincode Env
 chaincode/.env

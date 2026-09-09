@@ -48,5 +48,41 @@ namespace Client_app.Models
         public string FullName { get; set; } = string.Empty;
         public bool HasConversation { get; set; }
     }
-}
 
+    public class ChatConversationState
+    {
+        public string OtherUserEmail { get; set; } = string.Empty;
+        public bool IsArchived { get; set; }
+        public DateTime? DeletedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
+    }
+
+    public class ChatGroupSummary
+    {
+        public long Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string CreatedBy { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public int MemberCount { get; set; }
+        public bool IsOwner { get; set; }
+    }
+
+    public class ChatGroupInvitation
+    {
+        public long GroupId { get; set; }
+        public string GroupName { get; set; } = string.Empty;
+        public string InvitedBy { get; set; } = string.Empty;
+        public DateTime InvitedAt { get; set; }
+        public int MemberCount { get; set; }
+    }
+
+    public class ChatGroupMessage
+    {
+        public long Id { get; set; }
+        public long GroupId { get; set; }
+        public string SenderEmail { get; set; } = string.Empty;
+        public string SenderName { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public DateTime SentAt { get; set; }
+    }
+}

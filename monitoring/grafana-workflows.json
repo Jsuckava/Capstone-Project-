@@ -1,0 +1,424 @@
+{
+    "annotations":  {
+                        "list":  [
+
+                                 ]
+                    },
+    "editable":  false,
+    "fiscalYearStartMonth":  0,
+    "graphTooltip":  1,
+    "links":  [
+
+              ],
+    "panels":  [
+                   {
+                       "id":  1,
+                       "title":  "Workflow Operations (1h)",
+                       "type":  "stat",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  7,
+                                       "w":  8,
+                                       "x":  0,
+                                       "y":  0
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "short",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "colorMode":  "value",
+                                       "graphMode":  "area",
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto",
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "textMode":  "auto"
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum(increase(http_requests_total{route=~\".*(register|enroll|revoke|wallet|batch-upload|upload-grades|issue-grade|batch-issue-grade|audit-event|all-grades|student-transactions).*\"}[1h]))",
+                                           "legendFormat":  "operations",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  2,
+                       "title":  "Workflow Success Rate",
+                       "type":  "gauge",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  7,
+                                       "w":  8,
+                                       "x":  8,
+                                       "y":  0
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "percentunit",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "orientation":  "auto",
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "showThresholdLabels":  false,
+                                       "showThresholdMarkers":  true
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum(rate(http_requests_total{route=~\".*(register|enroll|revoke|wallet|batch-upload|upload-grades|issue-grade|batch-issue-grade|audit-event|all-grades|student-transactions).*\",status=~\"2..|3..\"}[5m])) / clamp_min(sum(rate(http_requests_total{route=~\".*(register|enroll|revoke|wallet|batch-upload|upload-grades|issue-grade|batch-issue-grade|audit-event|all-grades|student-transactions).*\"}[5m])), 0.000001)",
+                                           "legendFormat":  "success",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  3,
+                       "title":  "Workflow Failures (1h)",
+                       "type":  "stat",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  7,
+                                       "w":  8,
+                                       "x":  16,
+                                       "y":  0
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "short",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "colorMode":  "value",
+                                       "graphMode":  "area",
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto",
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "textMode":  "auto"
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum(increase(http_requests_total{route=~\".*(register|enroll|revoke|wallet|batch-upload|upload-grades|issue-grade|batch-issue-grade|audit-event|all-grades|student-transactions).*\",status=~\"4..|5..\"}[1h]))",
+                                           "legendFormat":  "failures",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  4,
+                       "title":  "Identity Lifecycle Workflows",
+                       "type":  "timeseries",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  12,
+                                       "x":  0,
+                                       "y":  7
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "ops",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "legend":  {
+                                                      "displayMode":  "table",
+                                                      "placement":  "bottom",
+                                                      "calcs":  [
+                                                                    "lastNotNull",
+                                                                    "max"
+                                                                ]
+                                                  },
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   }
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum by (route, status) (rate(http_requests_total{service=\"fabric-identity-service\",route=~\".*(register|enroll|revoke|wallet|identities).*\"}[5m]))",
+                                           "legendFormat":  "{{route}} / {{status}}",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  5,
+                       "title":  "Grade \u0026 Ledger Workflows",
+                       "type":  "timeseries",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  12,
+                                       "x":  12,
+                                       "y":  7
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "ops",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "legend":  {
+                                                      "displayMode":  "table",
+                                                      "placement":  "bottom",
+                                                      "calcs":  [
+                                                                    "lastNotNull",
+                                                                    "max"
+                                                                ]
+                                                  },
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   }
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum by (service, route, status) (rate(http_requests_total{route=~\".*(batch-upload|upload-grades|issue-grade|batch-issue-grade|audit-event).*\"}[5m]))",
+                                           "legendFormat":  "{{service}} / {{route}} / {{status}}",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  6,
+                       "title":  "Workflow p95 Latency",
+                       "type":  "timeseries",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  12,
+                                       "x":  0,
+                                       "y":  15
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "s",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "legend":  {
+                                                      "displayMode":  "table",
+                                                      "placement":  "bottom",
+                                                      "calcs":  [
+                                                                    "lastNotNull",
+                                                                    "max"
+                                                                ]
+                                                  },
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   }
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "histogram_quantile(0.95, sum by (le, service, route) (rate(http_request_duration_seconds_bucket{route=~\".*(register|enroll|revoke|wallet|batch-upload|upload-grades|issue-grade|batch-issue-grade|audit-event|all-grades|student-transactions).*\"}[5m])))",
+                                           "legendFormat":  "{{service}} / {{route}}",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  7,
+                       "title":  "Fabric Client Caches",
+                       "type":  "timeseries",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  12,
+                                       "x":  12,
+                                       "y":  15
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "short",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "legend":  {
+                                                      "displayMode":  "table",
+                                                      "placement":  "bottom",
+                                                      "calcs":  [
+                                                                    "lastNotNull",
+                                                                    "max"
+                                                                ]
+                                                  },
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   }
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "blockgo_gateway_cache_entries",
+                                           "legendFormat":  "gateway entries",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "expr":  "blockgo_gateway_cache_max_entries",
+                                           "legendFormat":  "gateway capacity",
+                                           "refId":  "B"
+                                       },
+                                       {
+                                           "expr":  "blockgo_ca_config_cache_entries",
+                                           "legendFormat":  "CA config entries",
+                                           "refId":  "C"
+                                       }
+                                   ]
+                   }
+               ],
+    "refresh":  "15s",
+    "schemaVersion":  41,
+    "tags":  [
+                 "blockgo",
+                 "workflow",
+                 "grades",
+                 "identity",
+                 "system-admin"
+             ],
+    "templating":  {
+                       "list":  [
+
+                                ]
+                   },
+    "time":  {
+                 "from":  "now-6h",
+                 "to":  "now"
+             },
+    "timezone":  "browser",
+    "title":  "BlockGO / Workflow Metrics",
+    "uid":  "blockgo-workflows",
+    "version":  1,
+    "weekStart":  ""
+}

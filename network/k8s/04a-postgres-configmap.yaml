@@ -1,288 +1,71 @@
-apiVersion: v1
-kind: ConfigMap
+# Numbered PostgreSQL migrations run as a deployment gate. The ConfigMap is
+# generated from ../migrations by deploy-k8s.sh so this Job has no duplicated
+# SQL and upgrades both new and existing persistent database volumes.
+apiVersion: batch/v1
+kind: Job
 metadata:
-  name: postgres-init-script
+  name: postgres-schema-migrations
   namespace: plv-main-campus
-data:
-  01-init.sql: |
-    CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-    -- Standard BlockGO Schema
-    -- This script runs automatically inside the "ActivityLogs" database
-    CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(100) UNIQUE,
-        email VARCHAR(100) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
-        role VARCHAR(50) NOT NULL,
-        organization VARCHAR(100),
-        status VARCHAR(20) DEFAULT 'pending',
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        password_reset_token VARCHAR(255),
-        password_reset_expires BIGINT
-    );
-    CREATE TABLE IF NOT EXISTS studentprofiles (
-        user_id SERIAL PRIMARY KEY,
-        full_name VARCHAR(100),
-        student_no VARCHAR(50),
-        department VARCHAR(100),
-        section VARCHAR(50),
-        year_level VARCHAR(50),
-        assignment_status VARCHAR(50) DEFAULT 'Unassigned',
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-    CREATE TABLE IF NOT EXISTS facultyprofiles (
-        user_id SERIAL PRIMARY KEY,
-        full_name VARCHAR(100),
-        department VARCHAR(100),
-        section VARCHAR(50),
-        year_level VARCHAR(50),
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-    CREATE TABLE IF NOT EXISTS adminprofiles (
-        user_id SERIAL PRIMARY KEY,
-        full_name VARCHAR(100),
-        admin_level VARCHAR(50),
-        department VARCHAR(100),
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-    CREATE TABLE IF NOT EXISTS userrequests (
-        requestid SERIAL PRIMARY KEY,
-        email VARCHAR(100) UNIQUE NOT NULL,
-        fullname VARCHAR(100) NOT NULL,
-        role VARCHAR(20) NOT NULL,
-        department VARCHAR(50),
-        requeststatus VARCHAR(20) DEFAULT 'PENDING',
-        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS grade_records (
-        grade_id SERIAL PRIMARY KEY,
-        student_id VARCHAR(50),
-        subject_code VARCHAR(50),
-        grade VARCHAR(10),
-        recorded_by VARCHAR(100),
-        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS audit_logs (
-        audit_id SERIAL PRIMARY KEY,
-        user_id INTEGER,
-        action VARCHAR(255),
-        details TEXT,
-        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS pending_grade_records (
-        id SERIAL PRIMARY KEY,
-        faculty_id VARCHAR(100),
-        student_id VARCHAR(100),
-        student_hash VARCHAR(255),
-        department VARCHAR(100),
-        section VARCHAR(50),
-        subject_code VARCHAR(50),
-        course VARCHAR(100),
-        year_level VARCHAR(20),
-        semester VARCHAR(50),
-        school_year VARCHAR(50),
-        grade TEXT,
-        status VARCHAR(50) DEFAULT 'Pending',
-        submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS systemsettings (
-        key VARCHAR(100) PRIMARY KEY,
-        value TEXT NOT NULL
-    );
-    -- Insert default admin if needed
-    INSERT INTO users (username, email, password_hash, role, organization, status)
-    VALUES ('admin', 'registrar@plv.edu.ph', '$2b$10$YourHashedPasswordHere', 'admin', 'Registrar', 'active')
-    ON CONFLICT (email) DO NOTHING;
-  02-runtime_schema_hardening.sql: |
-    -- Migration: Move request-time schema creation into database migrations
-    -- Purpose: Auth, sectioning, settings, chat, and staged-grade controllers assume this schema exists.
-
-    CREATE TABLE IF NOT EXISTS academicsections (
-        id SERIAL PRIMARY KEY,
-        department VARCHAR(50) NOT NULL,
-        year_level INT NOT NULL,
-        section_num INT NOT NULL,
-        UNIQUE(department, year_level, section_num)
-    );
-
-    ALTER TABLE facultyprofiles ADD COLUMN IF NOT EXISTS faculty_type VARCHAR(20);
-    ALTER TABLE facultysections ADD COLUMN IF NOT EXISTS subject VARCHAR(100);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_faculty_section
-        ON facultysections(user_id, department, section, subject);
-
-    CREATE TABLE IF NOT EXISTS systemsettings (
-        key VARCHAR(255) PRIMARY KEY,
-        value TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS sectioningstate (
-        key VARCHAR(100) PRIMARY KEY,
-        data_json JSONB NOT NULL,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS pending_grade_records (
-        id VARCHAR(255) PRIMARY KEY,
-        student_hash VARCHAR(255),
-        section VARCHAR(100),
-        course VARCHAR(255),
-        subject_code VARCHAR(100),
-        grade TEXT,
-        semester VARCHAR(50),
-        school_year VARCHAR(50),
-        faculty_id VARCHAR(255),
-        date VARCHAR(50),
-        ipfs_cid VARCHAR(255),
-        status VARCHAR(50),
-        note TEXT
-    );
-
-    ALTER TABLE pending_grade_records ADD COLUMN IF NOT EXISTS id VARCHAR(255);
-    ALTER TABLE pending_grade_records ADD COLUMN IF NOT EXISTS student_hash VARCHAR(255);
-    ALTER TABLE pending_grade_records ADD COLUMN IF NOT EXISTS section VARCHAR(100);
-    ALTER TABLE pending_grade_records ADD COLUMN IF NOT EXISTS course VARCHAR(255);
-    ALTER TABLE pending_grade_records ADD COLUMN IF NOT EXISTS subject_code VARCHAR(100);
-    ALTER TABLE pending_grade_records ADD COLUMN IF NOT EXISTS grade TEXT;
-    ALTER TABLE pending_grade_records ADD COLUMN IF NOT EXISTS semester VARCHAR(50);
-    ALTER TABLE pending_grade_records ADD COLUMN IF NOT EXISTS school_year VARCHAR(50);
-    ALTER TABLE pending_grade_records ADD COLUMN IF NOT EXISTS faculty_id VARCHAR(255);
-    ALTER TABLE pending_grade_records ADD COLUMN IF NOT EXISTS date VARCHAR(50);
-    ALTER TABLE pending_grade_records ADD COLUMN IF NOT EXISTS ipfs_cid VARCHAR(255);
-    ALTER TABLE pending_grade_records ADD COLUMN IF NOT EXISTS status VARCHAR(50);
-    ALTER TABLE pending_grade_records ADD COLUMN IF NOT EXISTS note TEXT;
-    ALTER TABLE pending_grade_records ALTER COLUMN grade TYPE TEXT;
-
-    DO $$
-    BEGIN
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'pending_grade_records' AND column_name = 'batch_id') THEN
-            ALTER TABLE pending_grade_records ALTER COLUMN batch_id DROP NOT NULL;
-        END IF;
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'pending_grade_records' AND column_name = 'student_id') THEN
-            ALTER TABLE pending_grade_records ALTER COLUMN student_id DROP NOT NULL;
-        END IF;
-    END $$;
-
-    DO $$
-    DECLARE
-        constraint_name text;
-    BEGIN
-        FOR constraint_name IN
-            SELECT conname
-            FROM pg_constraint
-            WHERE conrelid = 'pending_grade_records'::regclass
-              AND contype = 'c'
-        LOOP
-            EXECUTE format('ALTER TABLE pending_grade_records DROP CONSTRAINT IF EXISTS %I', constraint_name);
-        END LOOP;
-    END $$;
-
-    DO $$
-    BEGIN
-        IF EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_name = 'pending_grade_records' AND column_name = 'blockchain_record_id'
-        ) AND EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_name = 'pending_grade_records' AND column_name = 'record_id'
-        ) THEN
-            UPDATE pending_grade_records
-            SET id = COALESCE(NULLIF(id, ''), NULLIF(blockchain_record_id, ''), record_id::text)
-            WHERE id IS NULL OR id = '';
-        ELSIF EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_name = 'pending_grade_records' AND column_name = 'record_id'
-        ) THEN
-            UPDATE pending_grade_records
-            SET id = COALESCE(NULLIF(id, ''), record_id::text)
-            WHERE id IS NULL OR id = '';
-        END IF;
-    END $$;
-
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_grade_records_id
-        ON pending_grade_records(id);
-
-    CREATE UNIQUE INDEX IF NOT EXISTS unique_grade_entry
-        ON pending_grade_records(student_hash, subject_code, school_year, semester);
-
-    CREATE TABLE IF NOT EXISTS chat_messages (
-        id SERIAL PRIMARY KEY,
-        sender_email VARCHAR(100) NOT NULL,
-        receiver_email VARCHAR(100) NOT NULL,
-        message TEXT NOT NULL,
-        timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        is_read BOOLEAN DEFAULT false
-    );
-
-    ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
-    ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT false;
-    ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS attachment_name VARCHAR(255);
-    ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS attachment_mime VARCHAR(100);
-    ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS attachment_size_bytes BIGINT;
-    ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS attachment_data BYTEA;
-    ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
-    ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP WITH TIME ZONE;
-    ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS seen_at TIMESTAMP WITH TIME ZONE;
-
-    UPDATE chat_messages
-    SET sent_at = COALESCE(sent_at, timestamp, CURRENT_TIMESTAMP)
-    WHERE sent_at IS NULL;
-
-    UPDATE chat_messages
-    SET timestamp = COALESCE(timestamp, sent_at, CURRENT_TIMESTAMP)
-    WHERE timestamp IS NULL;
-
-    CREATE INDEX IF NOT EXISTS idx_chat_messages_sender ON chat_messages(sender_email);
-    CREATE INDEX IF NOT EXISTS idx_chat_messages_receiver ON chat_messages(receiver_email);
-    CREATE INDEX IF NOT EXISTS idx_chat_messages_sent_at ON chat_messages(sent_at);
-    CREATE INDEX IF NOT EXISTS idx_chat_messages_pair_sent_at
-        ON chat_messages(LOWER(sender_email), LOWER(receiver_email), sent_at);
-  03-add_bulk_upload_workflow.sql: |
-    -- Migration: Add Bulk Upload Approval Workflow
-    -- Purpose: Implement 3-stage approval for bulk grade uploads (Faculty -> DeptAdmin -> Registrar)
-
-    CREATE TABLE IF NOT EXISTS bulk_grade_uploads (
-        upload_id SERIAL PRIMARY KEY,
-        batch_id UUID UNIQUE DEFAULT gen_random_uuid(),
-        faculty_email VARCHAR(255) NOT NULL,
-        faculty_department VARCHAR(255) NOT NULL,
-        total_records INTEGER DEFAULT 0,
-        successful_records INTEGER DEFAULT 0,
-        failed_records INTEGER DEFAULT 0,
-        status VARCHAR(50) DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'APPROVED_BY_DEPT', 'FINALIZED_BY_REGISTRAR', 'REJECTED')),
-        ipfs_cid VARCHAR(255),
-        semester VARCHAR(50),
-        school_year VARCHAR(10),
-        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        approved_by_dept_email VARCHAR(255),
-        approved_by_dept_at TIMESTAMP,
-        finalized_by_registrar_email VARCHAR(255),
-        finalized_by_registrar_at TIMESTAMP,
-        rejection_reason TEXT,
-        rejected_at TIMESTAMP,
-        rejected_by_email VARCHAR(255),
-        FOREIGN KEY (faculty_email) REFERENCES Users(email) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS pending_grade_records (
-        record_id SERIAL PRIMARY KEY,
-        batch_id UUID NOT NULL,
-        student_id VARCHAR(255) NOT NULL,
-        student_email VARCHAR(255),
-        grade VARCHAR(10) NOT NULL,
-        subject_code VARCHAR(50),
-        subject_name VARCHAR(255),
-        course VARCHAR(255),
-        status VARCHAR(50) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'FINALIZED', 'REJECTED')),
-        blockchain_record_id VARCHAR(255),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (batch_id) REFERENCES bulk_grade_uploads(batch_id) ON DELETE CASCADE,
-        FOREIGN KEY (student_email) REFERENCES Users(email) ON DELETE CASCADE
-    );
-
-    -- Indexes for performance
-    CREATE INDEX idx_bulk_uploads_status ON bulk_grade_uploads(status);
-    CREATE INDEX idx_bulk_uploads_faculty ON bulk_grade_uploads(faculty_email);
-    CREATE INDEX idx_pending_grades_batch ON pending_grade_records(batch_id);
-    CREATE INDEX idx_pending_grades_status ON pending_grade_records(status);
+  labels:
+    app: postgres-schema-migrations
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app: postgres-schema-migrations
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: migrate
+        image: bitnami/postgresql:latest
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 5m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        env:
+        - name: PGHOST
+          value: postgres.plv-main-campus.svc.cluster.local
+        - name: PGPORT
+          value: "5432"
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_USER
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_PASS
+        - name: PGDATABASE
+          valueFrom:
+            secretKeyRef:
+              name: blockgo-secrets
+              key: POSTGRES_DB
+        command: ["/bin/bash", "-ec"]
+        args:
+        - |
+          shopt -s nullglob
+          migrations=(/migrations/[0-9][0-9][0-9]_*.sql)
+          if (( ${#migrations[@]} == 0 )); then
+            echo "No numbered database migrations were mounted." >&2
+            exit 1
+          fi
+          for migration in "${migrations[@]}"; do
+            echo "Applying $(basename "$migration")"
+            psql --set ON_ERROR_STOP=1 --file "$migration"
+          done
+        volumeMounts:
+        - name: migrations
+          mountPath: /migrations
+          readOnly: true
+      volumes:
+      - name: migrations
+        configMap:
+          name: postgres-runtime-migrations

@@ -5,6 +5,6 @@ metadata:
 provisioner: pd.csi.storage.gke.io
 parameters:
   type: pd-balanced
-  replication-type: none
+  replication-type: regional-pd
 allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer

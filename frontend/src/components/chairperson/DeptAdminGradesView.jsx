@@ -1,28 +1,16 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { fetchAllGrades, finalizeGrade, returnGrade, batchUploadGrades, fetchFacultySections, fetchFacultyStudents, createSection, fetchDepartmentSections, batchEnrollStudentsToSection, dropStudent, fetchApprovedFaculties, unassignFacultySection, getDecryptedIpfsUrl, getSystemSetting, issueGrade, bulkUploadMasterlist, deleteAcademicSection, deleteDepartmentAcademicSections } from '../../services/api';
+import { fetchAllGrades, approveGrade, finalizeGrade, returnGrade, batchUploadGrades, fetchFacultySections, fetchFacultyStudents, fetchDepartmentSections, batchEnrollStudentsToSection, dropStudent, fetchApprovedFaculties, unassignFacultySection, openDecryptedIpfsFile, getSystemSetting, issueGrade } from '../../services/api';
 import { useNotification } from '../../services/NotificationContext';
 import ChairpersonHeader from './ChairpersonHeader';
 import ChairpersonSidebar from './ChairpersonSidebar';
+import CurriculumBuilder from './CurriculumBuilder';
 import ChairpersonOverview from './ChairpersonOverview';
 import FacultyStatusTable from '../faculty/FacultyStatusTable';
 import SectionReviewPanel from './SectionReviewPanel';
 import Modal from '../../services/Modal';
 import StudentSectioning from './StudentSectioning';
 import AcademicAssignment from './AcademicAssignment';
-
-const getGradeEquivalent = (grade) => {
-    const n = parseFloat(grade);
-    if (isNaN(n) || n === 0) return '5.00';
-    if (n >= 98.5) return '1.00';
-    if (n >= 94) return '1.25';
-    if (n >= 91) return '1.50';
-    if (n >= 88) return '1.75';
-    if (n >= 85) return '2.00';
-    if (n >= 82) return '2.25';
-    if (n >= 79) return '2.50';
-    if (n >= 75) return '3.00';
-    return '5.00';
-};
+import { getGradeEquivalent } from '../../utils/gradingHelpers';
 
 const getRecordGrade = (record) => record?.grade || record?.Grade || '';
 
@@ -213,7 +201,8 @@ const SECTION_STATUS_PRIORITY = {
     pending: 0,
     returned: 1,
     submitted: 2,
-    forwarded: 3,
+    approved: 3,
+    forwarded: 4,
 };
 const hasEncodedValue = (value) => String(value ?? '').trim() !== '';
 const getRecordStudentNumber = (record) => (
@@ -477,36 +466,12 @@ const getDepartmentSectionSnapshot = (department = '') => {
     }
 };
 
-const HoverableID = ({ fullId, isAuthorized }) => {
-    const [isRevealed, setIsRevealed] = useState(false);
-    const displayValue = fullId || 'Unknown';
-    const isShort = displayValue.length <= 12;
-    const maxWidthClass = (isRevealed && isAuthorized) || isShort ? 'max-w-[350px]' : 'max-w-[90px]';
-
-    return (
-        <span 
-            onMouseEnter={() => setIsRevealed(true)}
-            onMouseLeave={() => setIsRevealed(false)}
-            onClick={() => setIsRevealed(!isRevealed)}
-            className={`inline-block truncate align-bottom transition-[max-width] duration-300 ease-in-out ${isAuthorized ? 'cursor-pointer' : 'cursor-default'} ${maxWidthClass}`}
-            title={displayValue}
-        >
-            {displayValue}
-        </span>
-    );
-};
-
-const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole = '', department = '' }) => {
+const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole = '', department = '', onLogout }) => {
     const [grades, setGrades] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [errorMsg, setErrorMsg] = useState(null); 
     
     const { addNotification } = useNotification();
     const [mainTab, setMainTab] = useState('grades'); 
     const [selectedReviewSection, setSelectedReviewSection] = useState(null);
-    const handleSelectReviewSection = useCallback((section) => {
-        setSelectedReviewSection(section ? { ...section } : null);
-    }, []);
     const [uploadFile, setUploadFile] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
     const [mySections, setMySections] = useState([]);
@@ -514,15 +479,9 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
     const [selectedMySection, setSelectedMySection] = useState(null);
 
     const [academicSections, setAcademicSections] = useState([]);
-    const [newSectionData, setNewSectionData] = useState({ yearLevel: '', sectionNum: '', subjectCode: '' });
     const [enrollFile, setEnrollFile] = useState(null);
-    const [enrollSectionId, setEnrollSectionId] = useState('');
-    const [isCreatingSection, setIsCreatingSection] = useState(false);
     const [isEnrolling, setIsEnrolling] = useState(false);
-    const [assignToFaculty, setAssignToFaculty] = useState('self');
     const [departmentFaculties, setDepartmentFaculties] = useState([]);
-    const [masterlistFile, setMasterlistFile] = useState(null);
-    const [isUploadingMasterlist, setIsUploadingMasterlist] = useState(false);
     const [classGrades, setClassGrades] = useState({});
     const [classValidationErrors, setClassValidationErrors] = useState({});
     const [isSavingGrades, setIsSavingGrades] = useState(false);
@@ -617,20 +576,17 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
                 const current = sectionMap[sectionKey].toLowerCase();
                 const next = status.toLowerCase();
                 // Escalate status if mixed
-                if (
-                    next === 'finalized' ||
-                    next.includes('forwarded') ||
-                    (next.includes('returned') && !current.includes('finalized'))
-                ) {
+                if (next === 'finalized' || (next.includes('approved') && current.includes('issued'))) {
                     sectionMap[sectionKey] = status;
                 }
             }
         });
 
-        let submitted = 0, forwarded = 0, returned = 0;
+        let submitted = 0, approved = 0, forwarded = 0, returned = 0;
         Object.values(sectionMap).forEach(st => {
             const s = st.toLowerCase();
             if (s.includes('issued') || s.includes('submitted')) submitted++;
+            if (s.includes('approved')) approved++;
             if (s.includes('finalized') || s.includes('forwarded')) forwarded++;
             if (s.includes('returned') || s.includes('rejected')) returned++;
         });
@@ -639,6 +595,7 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
             totalFaculty: facultySet.size,
             totalSections: Object.keys(sectionMap).length,
             submittedSections: submitted,
+            approvedSections: approved,
             returnedSections: returned,
             forwardedSections: forwarded
         };
@@ -737,7 +694,6 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
                     grades: {},
                     students: [],
                     rawStudentEntries: [],
-                    gradeRecordIds: [],
                     ipfsCid: g.ipfs_cid || g.IpfsCID || g.ipfsCid || null,
                     earliestEncodedAt: g.date || g.Date || null,
                     latestStatusTimestamp: 0,
@@ -804,17 +760,10 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
                 studentName,
                 grade: groups[key].grades[studentKey],
             });
-            if (g.id && !groups[key].gradeRecordIds.includes(g.id)) {
-                groups[key].gradeRecordIds.push(g.id);
-            }
             
             let normalizedReviewStatus = 'pending';
-            if (
-                status.includes('finalized') ||
-                status.includes('forwarded') ||
-                status.includes('departmentapproved') ||
-                status.includes('approved')
-            ) normalizedReviewStatus = 'forwarded';
+            if (status.includes('finalized') || status.includes('forwarded')) normalizedReviewStatus = 'forwarded';
+            else if (status.includes('approved')) normalizedReviewStatus = 'approved';
             else if (status.includes('issued') || status.includes('submitted') || status === '') normalizedReviewStatus = 'submitted';
             else if (status.includes('returned') || status.includes('rejected')) normalizedReviewStatus = 'returned';
 
@@ -1003,15 +952,13 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
         }
     }, [facultyRows, grades, selectedReviewSection]);
 
-    const loadGrades = useCallback(async (isBackground = false) => {
-        if (!isBackground) setLoading(true);
+    const loadGrades = useCallback(async () => {
         try {
             const response = await fetchAllGrades(loggedInEmail);
             setGrades(Array.isArray(response) ? response : (response.data || []));
         } catch (error) {
-            if (!isBackground) setErrorMsg(`Could not fetch blockchain data: ${error.message}`);
+            console.error(`Could not fetch blockchain data: ${error.message}`);
         }
-        if (!isBackground) setLoading(false);
     }, [loggedInEmail]);
 
     useEffect(() => { loadGrades(); }, [loadGrades]);
@@ -1109,7 +1056,7 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
                 }
             }
 
-            loadGrades(true);
+            loadGrades();
             loadMyClasses();
             loadAcademicSections();
             loadDepartmentFaculties();
@@ -1142,7 +1089,7 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
         if (mainTab === 'assignment' || mainTab === 'myClasses') {
             loadAcademicSections();
         }
-        if (['assignment', 'forReview', 'returned', 'forwarded', 'flagged'].includes(mainTab)) {
+        if (['assignment', 'forReview', 'returned', 'approved', 'forwarded', 'flagged'].includes(mainTab)) {
             loadDepartmentFaculties();
         }
     }, [mainTab, loadAcademicSections, loadDepartmentFaculties]);
@@ -1218,79 +1165,74 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
         });
     };
 
-    const handleDownloadMasterlistTemplate = () => {
-        const csvContent = "Student No,Last Name,First Name,MI,Sex,Year Level,Section,Subject Code,Faculty Name,Faculty Email\n23-0001,Dela Cruz,Juan,A,Male,3,1,IT-101,Prof. Smith,smith@plv.edu.ph\n";
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", `Masterlist_Template_${department}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    const getMatchingReviewRecords = useCallback((allowedStatusMatcher) => {
-        if (!selectedReviewSection) return [];
-
-        const selectedRecordIds = new Set(
-            (selectedReviewSection.gradeRecordIds || [])
-                .map((value) => String(value || '').trim())
-                .filter(Boolean)
-        );
-
-        if (selectedRecordIds.size > 0) {
-            return grades.filter((g) => {
-                const recordId = String(g.id || '').trim();
+    const handleBulkApprove = async () => {
+        if (!selectedReviewSection) return;
+        try {
+            const recordsToApprove = grades.filter(g => {
+                const facId = g.facultyId || g.faculty_id || g.FacultyId || 'Unknown';
                 const status = (g.status || g.Status || '').toLowerCase();
-                return selectedRecordIds.has(recordId) && allowedStatusMatcher(status);
+                const normalizedFacultyId = normalizeFacultyIdentity(facId) || facId;
+                const subjectCode = g.subject_code || g.subjectCode || g.SubjectCode || '';
+                const departmentName = g.department || g.course || g.Course || '';
+                const sectionName =
+                    getRecordSectionKey(g) ||
+                    g.record_section ||
+                    buildSectionDisplayName({
+                        departmentName,
+                        sectionValue: g.student_section || g.studentSection || '',
+                        subjectCode,
+                    }) ||
+                    departmentName;
+                const schoolYear = g.schoolYear || g.SchoolYear || '2024';
+                const semester = g.semester || g.Semester || '2nd Semester';
+
+                return (
+                    normalizeText(normalizedFacultyId) === normalizeText(selectedReviewSection.facultyId) &&
+                    normalizeText(sectionName) === normalizeText(selectedReviewSection.sectionName) &&
+                    normalizeText(subjectCode) === normalizeText(selectedReviewSection.subjectCode) &&
+                    normalizeText(schoolYear) === normalizeText(selectedReviewSection.schoolYear) &&
+                    normalizeText(semester) === normalizeText(selectedReviewSection.semester) &&
+                    (status.includes('issued') || status.includes('submitted') || status === '')
+                );
             });
-        }
-
-        return grades.filter((g) => {
-            const facId = g.facultyId || g.faculty_id || g.FacultyId || 'Unknown';
-            const status = (g.status || g.Status || '').toLowerCase();
-            const normalizedFacultyId = normalizeFacultyIdentity(facId) || facId;
-            const subjectCode = g.subject_code || g.subjectCode || g.SubjectCode || '';
-            const departmentName = g.department || g.course || g.Course || '';
-            const sectionName =
-                getRecordSectionKey(g) ||
-                g.record_section ||
-                buildSectionDisplayName({
-                    departmentName,
-                    sectionValue: g.student_section || g.studentSection || '',
-                    subjectCode,
-                }) ||
-                departmentName;
-            const schoolYear = g.schoolYear || g.SchoolYear || '2024';
-            const semester = g.semester || g.Semester || '2nd Semester';
-
-            return (
-                normalizeText(normalizedFacultyId) === normalizeText(selectedReviewSection.facultyId) &&
-                sectionsMatch(sectionName, selectedReviewSection.sectionName) &&
-                normalizeText(subjectCode) === normalizeText(selectedReviewSection.subjectCode) &&
-                normalizeText(schoolYear) === normalizeText(selectedReviewSection.schoolYear) &&
-                normalizeText(semester) === normalizeText(selectedReviewSection.semester) &&
-                allowedStatusMatcher(status)
-            );
-        });
-    }, [grades, selectedReviewSection]);
+            
+            for (const g of recordsToApprove) await approveGrade(g.id, loggedInEmail);
+            addNotification("Section approved successfully!", "success");
+            setSelectedReviewSection(null);
+            loadGrades();
+        } catch(e) { addNotification(`Error approving section: ${e.message}`, "error"); }
+    };
 
     const handleBulkForward = async () => {
         if (!selectedReviewSection) return;
         try {
-            const recordsToForward = getMatchingReviewRecords(
-                (status) =>
-                    status === '' ||
-                    status.includes('issued') ||
-                    status.includes('submitted') ||
-                    status.includes('approve')
-            );
+            const recordsToForward = grades.filter(g => {
+                const facId = g.facultyId || g.faculty_id || g.FacultyId || 'Unknown';
+                const status = (g.status || g.Status || '').toLowerCase();
+                const normalizedFacultyId = normalizeFacultyIdentity(facId) || facId;
+                const subjectCode = g.subject_code || g.subjectCode || g.SubjectCode || '';
+                const departmentName = g.department || g.course || g.Course || '';
+                const sectionName =
+                    getRecordSectionKey(g) ||
+                    g.record_section ||
+                    buildSectionDisplayName({
+                        departmentName,
+                        sectionValue: g.student_section || g.studentSection || '',
+                        subjectCode,
+                    }) ||
+                    departmentName;
+                const schoolYear = g.schoolYear || g.SchoolYear || '2024';
+                const semester = g.semester || g.Semester || '2nd Semester';
 
-            if (!recordsToForward.length) {
-                addNotification("No section records were found to forward.", "error");
-                return;
-            }
+                return (
+                    normalizeText(normalizedFacultyId) === normalizeText(selectedReviewSection.facultyId) &&
+                    normalizeText(sectionName) === normalizeText(selectedReviewSection.sectionName) &&
+                    normalizeText(subjectCode) === normalizeText(selectedReviewSection.subjectCode) &&
+                    normalizeText(schoolYear) === normalizeText(selectedReviewSection.schoolYear) &&
+                    normalizeText(semester) === normalizeText(selectedReviewSection.semester) &&
+                    (status.includes('issued') || status.includes('submitted') || status.includes('approve'))
+                );
+            });
 
             for (const g of recordsToForward) await finalizeGrade(g.id, loggedInEmail);
             addNotification("Section forwarded to Registrar successfully!", "success");
@@ -1301,24 +1243,38 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
 
     const handleBulkReturn = async (notes) => {
         if (!selectedReviewSection) return;
-        const trimmedNotes = String(notes || '').trim();
-        if (!trimmedNotes) {
-            addNotification("A return note is required before sending grades back to faculty.", "error");
-            return;
-        }
         try {
-            const recordsToReturn = getMatchingReviewRecords((status) =>
-                canChairpersonReturnStatus(status)
-            );
+            const recordsToReturn = grades.filter(g => {
+                const facId = g.facultyId || g.faculty_id || g.FacultyId || 'Unknown';
+                const status = (g.status || g.Status || '').toLowerCase();
+                const normalizedFacultyId = normalizeFacultyIdentity(facId) || facId;
+                const subjectCode = g.subject_code || g.subjectCode || g.SubjectCode || '';
+                const departmentName = g.department || g.course || g.Course || '';
+                const sectionName =
+                    getRecordSectionKey(g) ||
+                    g.record_section ||
+                    buildSectionDisplayName({
+                        departmentName,
+                        sectionValue: g.student_section || g.studentSection || '',
+                        subjectCode,
+                    }) ||
+                    departmentName;
+                const schoolYear = g.schoolYear || g.SchoolYear || '2024';
+                const semester = g.semester || g.Semester || '2nd Semester';
 
-            if (!recordsToReturn.length) {
-                addNotification("No section records were found to return.", "error");
-                return;
-            }
+                return (
+                    normalizeText(normalizedFacultyId) === normalizeText(selectedReviewSection.facultyId) &&
+                    normalizeText(sectionName) === normalizeText(selectedReviewSection.sectionName) &&
+                    normalizeText(subjectCode) === normalizeText(selectedReviewSection.subjectCode) &&
+                    normalizeText(schoolYear) === normalizeText(selectedReviewSection.schoolYear) &&
+                    normalizeText(semester) === normalizeText(selectedReviewSection.semester) &&
+                    canChairpersonReturnStatus(status)
+                );
+            });
             
             for (const g of recordsToReturn) {
                 if (typeof returnGrade === 'function') {
-                    await returnGrade(g.id, trimmedNotes, loggedInEmail);
+                    await returnGrade(g.id, notes, loggedInEmail);
                 }
             }
             addNotification("Section returned to faculty successfully!", "success");
@@ -1383,6 +1339,10 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
                     faculty_id: loggedInEmail,
                     subject_code: selectedMySection.subject || 'Unknown',
                     subject_name: selectedMySection.subject || 'Unknown',
+                    professor_name: loggedInName || loggedInEmail,
+                    program: selectedMySection.department || '',
+                    term: activeEncodingTerm || 'midterm',
+                    units: Number(selectedMySection.units) || 3,
                     course: selectedMySection.department,
                     semester: selectedMySection.semester || activeSemester || "2nd Semester",
                     school_year: selectedMySection.schoolYear || "2024",
@@ -1419,64 +1379,6 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
         link.click();
     };
 
-    const handleCreateSection = async (e) => {
-        e.preventDefault();
-        if (!newSectionData.yearLevel || !newSectionData.sectionNum || !department) {
-            addNotification('Year Level and Section Number are required.', 'error');
-            return;
-        }
-        setIsCreatingSection(true);
-        try {
-            let assignEmail = null;
-            if (assignToFaculty === 'self') assignEmail = loggedInEmail;
-            else if (assignToFaculty !== 'none') assignEmail = assignToFaculty;
-
-            const payload = { ...newSectionData, department, assignToEmail: assignEmail, subject: newSectionData.subjectCode };
-            const res = await createSection(payload);
-            if (res.status === 'Success') {
-                addNotification(`Section ${department} ${newSectionData.yearLevel}-${newSectionData.sectionNum} (${newSectionData.subjectCode}) created successfully!`, 'success');
-                
-                if (res.id) {
-                    setEnrollSectionId(res.id.toString());
-                }
-                
-                setNewSectionData({ yearLevel: '', sectionNum: '', subjectCode: '' });
-                if (assignEmail === loggedInEmail) loadMyClasses(); // Instantly refresh the "My Classes" tab
-                loadAcademicSections(); // Refresh the list
-            } else {
-                addNotification(res.message || 'Failed to create section.', 'error');
-            }
-        } catch (err) {
-            addNotification(err.message, 'error');
-        }
-        setIsCreatingSection(false);
-    };
-
-    const handleBulkEnroll = async () => {
-        if (!enrollFile || !enrollSectionId) {
-            addNotification('Please select a section and a file to upload.', 'error');
-            return;
-        }
-        setIsEnrolling(true);
-        try {
-            const res = await batchEnrollStudentsToSection(enrollFile, enrollSectionId);
-            if (res.status === 'Success') {
-                addNotification(res.message || 'Students enrolled successfully!', 'success');
-                setEnrollFile(null);
-                setEnrollSectionId('');
-                const fileInput = document.getElementById('student-enroll-upload');
-                if (fileInput) fileInput.value = '';
-                loadAcademicSections();
-                loadMyClasses();
-            } else {
-                addNotification(res.message || 'Enrollment failed.', 'error');
-            }
-        } catch (err) {
-            addNotification(err.message, 'error');
-        }
-        setIsEnrolling(false);
-    };
-
     const handleBulkEnrollMyClass = async () => {
         if (!enrollFile || !selectedMySection) return;
         
@@ -1507,31 +1409,6 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
             addNotification(err.message, 'error');
         }
         setIsEnrolling(false);
-    };
-
-    const handleMasterlistUpload = async () => {
-        if (!masterlistFile) {
-            addNotification('Please select a CSV or Excel file to upload.', 'error');
-            return;
-        }
-        setIsUploadingMasterlist(true);
-        try {
-            const data = await bulkUploadMasterlist(masterlistFile, department);
-            if (data.status === 'Success' || data.status === 'Partial Success') {
-                addNotification(data.message || 'Masterlist processed successfully. Accounts and sections created.', 'success');
-                setMasterlistFile(null);
-                const fileInput = document.getElementById('masterlist-upload');
-                if (fileInput) fileInput.value = '';
-                loadMyClasses();
-                loadAcademicSections();
-                    loadDepartmentFaculties();
-            } else {
-                addNotification(data.message || 'Masterlist upload failed.', 'error');
-            }
-        } catch (err) {
-            addNotification(err.message, 'error');
-        }
-        setIsUploadingMasterlist(false);
     };
 
     const handleUnassignSection = async () => {
@@ -1579,90 +1456,55 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
         setIpfsModalOpen(true);
     };
 
-    const submitIpfsPassword = () => {
+    const submitIpfsPassword = async () => {
         if (vaultPassword) {
-            const url = getDecryptedIpfsUrl(ipfsCid, vaultPassword);
-            window.open(url, "_blank");
-            setIpfsModalOpen(false);
+            const viewerWindow = window.open('', "_blank");
+            try {
+                await openDecryptedIpfsFile(ipfsCid, vaultPassword, viewerWindow);
+                setIpfsModalOpen(false);
+            } catch (error) {
+                if (viewerWindow) viewerWindow.close();
+                addNotification(error.message, "error");
+            }
         } else {
             addNotification("Vault Password is required", "error");
         }
     };
 
-    const handleDeleteSection = async (id, sectionName) => {
-        setConfirmModal({
-            isOpen: true,
-            title: "Delete Section",
-            message: `Are you sure you want to delete Section ${sectionName}? This will also remove the faculty assignment for this section.`,
-            onConfirm: async () => {
-                try {
-                    await deleteAcademicSection(id);
-                    addNotification(`Section ${sectionName} deleted successfully.`, "success");
-                    loadAcademicSections();
-                    loadMyClasses();
-                } catch (e) { addNotification(e.message, "error"); }
-                setConfirmModal({ isOpen: false, title: "", message: "", onConfirm: null });
-            }
-        });
-    };
-
-    const handleDeleteAllSections = async () => {
-        setConfirmModal({
-            isOpen: true,
-            title: "Clear All Sections",
-            message: `Are you sure you want to delete ALL academic sections for ${department}? This is typically done at the end of the school year.`,
-            onConfirm: async () => {
-                try {
-                    await deleteDepartmentAcademicSections(department);
-                    addNotification(`All sections for ${department} cleared.`, "success");
-                    loadAcademicSections();
-                    loadMyClasses();
-                } catch (e) { addNotification(e.message, "error"); }
-                setConfirmModal({ isOpen: false, title: "", message: "", onConfirm: null });
-            }
-        });
-    };
-
     const activeChairTab = mainTab;
-    const visibleReviewRows = facultyRows.filter((row) => {
-        if (activeChairTab === 'forReview') return row.reviewStatus === 'submitted' || row.reviewStatus === 'pending';
-        if (activeChairTab === 'returned') return row.reviewStatus === 'returned';
-        if (activeChairTab === 'forwarded') return row.reviewStatus === 'forwarded';
-        if (activeChairTab === 'flagged') return Object.values(row.grades).some((grade) => grade.flagged);
-        return true;
-    });
-    const activeSelectedReviewSection =
-        selectedReviewSection &&
-        visibleReviewRows.some((row) => row.reviewKey === selectedReviewSection.reviewKey)
-            ? selectedReviewSection
-            : null;
 
     return (
         <div className="flex h-screen w-full flex-col bg-slate-50 font-sans fixed inset-0 z-[100] overflow-auto">
-            <ChairpersonHeader chairpersonData={{ name: loggedInName, department, semester: activeSemester }} departmentCount={deptMetrics.totalFaculty} onLogout={() => { localStorage.removeItem('token'); window.location.reload(); }} />
+            <ChairpersonHeader chairpersonData={{ name: loggedInName, department, semester: activeSemester }} departmentCount={deptMetrics.totalFaculty} onLogout={onLogout} />
             <div className="flex flex-col md:flex-row flex-1 overflow-hidden p-4 md:p-6 gap-6">
                 <ChairpersonSidebar activeTab={activeChairTab === 'grades' ? 'dashboard' : activeChairTab} setActiveTab={setMainTab} />
                 <main className="flex-1 overflow-y-auto pr-2">
                     {(activeChairTab === 'dashboard' || activeChairTab === 'grades') && <ChairpersonOverview metrics={deptMetrics} />}
-                        {['forReview', 'returned', 'forwarded', 'flagged'].includes(activeChairTab) && (
+                        {['forReview', 'returned', 'approved', 'forwarded', 'flagged'].includes(activeChairTab) && (
                         <div className="flex flex-col gap-6">
                             <FacultyStatusTable 
-                                rows={visibleReviewRows}
+                                rows={facultyRows.filter(r => {
+                                    if (activeChairTab === 'forReview') return r.reviewStatus === 'submitted' || r.reviewStatus === 'pending';
+                                    if (activeChairTab === 'returned') return r.reviewStatus === 'returned';
+                                    if (activeChairTab === 'approved') return r.reviewStatus === 'approved';
+                                    if (activeChairTab === 'forwarded') return r.reviewStatus === 'forwarded';
+                                        if (activeChairTab === 'flagged') return Object.values(r.grades).some(g => g.flagged);
+                                    return true;
+                                })}
                                 allRows={facultyRows}
-                                selectedReviewSection={activeSelectedReviewSection}
-                                onSelectSection={handleSelectReviewSection}
+                                selectedReviewKey={selectedReviewSection?.reviewKey} 
+                                onSelectSection={setSelectedReviewSection}
                                 onViewIpfs={handleViewIpfs}
                                 viewMode={activeChairTab}
                             />
-                            {activeSelectedReviewSection && (
+                            {selectedReviewSection && (
                                 <SectionReviewPanel 
-                                    key={activeSelectedReviewSection.reviewKey}
-                                    selectedSection={activeSelectedReviewSection} 
+                                    selectedSection={selectedReviewSection} 
                                     activeTerm={activeEncodingTerm}
+                                    onApprove={handleBulkApprove} 
                                     onSubmitToRegistrar={handleBulkForward} 
                                     onSendBack={(notes) => handleBulkReturn(notes)} 
                                     onViewIpfs={handleViewIpfs}
-                                    viewMode={activeChairTab}
                                 />
                             )}
                         </div>
@@ -1671,6 +1513,9 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
                         <div className="flex flex-col gap-6">
                             <StudentSectioning chairpersonDepartment={department} />
                         </div>
+                    )}
+                    {activeChairTab === 'curriculum' && (
+                        <CurriculumBuilder department={department} />
                     )}
                     {activeChairTab === 'myClasses' && (
                         <div className="flex flex-col gap-6">
@@ -1706,7 +1551,7 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
                                     <div className="mb-6 rounded-xl bg-slate-50 p-5 border border-slate-200 flex flex-col md:flex-row md:items-end gap-4">
                                         <div className="flex-1">
                                             <h3 className="font-bold text-emerald-700 mb-2">Enroll Missing Students</h3>
-                                            <p className="text-sm text-slate-500 mb-4">Upload a CSV/Excel file to add students to this section.</p>
+                                            
                                             <input 
                                                 id="myclass-student-enroll-upload"
                                                 type="file" 
@@ -1866,7 +1711,7 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
                         </div>
                     )}
                     {activeChairTab === 'assignment' && (
-                        <AcademicAssignment chairpersonDepartment={department} />
+                        <AcademicAssignment key={department} chairpersonDepartment={department} />
                     )}
                 </main>
             </div>

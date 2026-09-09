@@ -304,7 +304,6 @@ function StudentSectioning({
     const saved = localStorage.getItem(STUDENT_BATCHES_KEY);
     return saved ? JSON.parse(saved) : [];
   });
-  const batchesRef = useRef(batches);
   const [activeWorkspace, setActiveWorkspace] = useState("sectioning");
   const [selectedBatchKey, setSelectedBatchKey] = useState("");
   const [sectioningBatchYear, setSectioningBatchYear] = useState(() =>
@@ -710,7 +709,6 @@ function StudentSectioning({
   })();
 
   useEffect(() => {
-    batchesRef.current = batches;
     localStorage.setItem(STUDENT_BATCHES_KEY, JSON.stringify(batches));
   }, [batches]);
 
@@ -742,15 +740,14 @@ function StudentSectioning({
   const updateSelectedBatch = (updater) => {
     if (!activeBatchKey) return;
 
-    const nextBatches = batchesRef.current.map((batch) =>
-      batch.key === activeBatchKey ? updater(batch) : batch
+    setBatches((previousBatches) =>
+      previousBatches.map((batch) =>
+        batch.key === activeBatchKey ? updater(batch) : batch
+      )
     );
-    batchesRef.current = nextBatches;
-    setBatches(nextBatches);
   };
 
   const persistBatches = (nextBatches) => {
-    batchesRef.current = nextBatches;
     setBatches(nextBatches);
     localStorage.setItem(STUDENT_BATCHES_KEY, JSON.stringify(nextBatches));
     syncSectionedStudentsToStorage(nextBatches);
@@ -1311,10 +1308,8 @@ function StudentSectioning({
   };
 
   const handleSaveSectioning = () => {
-    const latestBatches = batchesRef.current;
-    localStorage.setItem(STUDENT_BATCHES_KEY, JSON.stringify(latestBatches));
-    syncSectionedStudentsToStorage(latestBatches);
-    pushSectioningSharedState();
+    localStorage.setItem(STUDENT_BATCHES_KEY, JSON.stringify(batches));
+    syncSectionedStudentsToStorage(batches);
     onSectioningSaved?.();
     alert("Sections saved successfully.");
   };
@@ -1882,10 +1877,7 @@ function StudentSectioning({
               <h3 className="text-xl font-bold text-[#003366]">
                 Academic Year Promotion
               </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Promote all current section lists across available departments
-                in one rollover. Batch year stays visible as the student origin.
-              </p>
+              
             </div>
             <span className="rounded-full bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-700">
               Chairperson Rollover
@@ -1904,10 +1896,7 @@ function StudentSectioning({
                 {currentRolloverBatches.length === 1 ? "" : "es"} ready for
                 rollover
               </p>
-              <p className="mt-1 text-sm text-slate-500">
-                1st Year to 3rd Year advance automatically; 4th Year moves to
-                the graduating review list.
-              </p>
+              
             </div>
             <button
               type="button"
@@ -1960,10 +1949,7 @@ function StudentSectioning({
               <h3 className="text-xl font-bold text-[#003366]">
                 Graduating Review List
               </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Review by section. Mark a whole section at once, then open the
-                student list only for exceptions.
-              </p>
+              
             </div>
             <input
               type="text"
@@ -2223,10 +2209,7 @@ function StudentSectioning({
               <h3 className="text-xl font-bold text-[#003366]">
                 Irregular Subject Assignment
               </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Keep the student in their official year level and main section,
-                then attach only the repeated subject to a lower-year class.
-              </p>
+              
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
               <select
@@ -2439,10 +2422,7 @@ function StudentSectioning({
                 <h3 className="text-xl font-bold text-[#003366]">
                   Active Irregular Subject Records
                 </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Official section stays unchanged. Only the repeated subject
-                  assignment moves.
-                </p>
+                
               </div>
               <input
                 type="text"
@@ -2550,10 +2530,7 @@ function StudentSectioning({
         {isRegistrarMode ? (
           <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="text-lg font-bold text-[#003366]">Imported Lists</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Use the registrar-forwarded list as the source. Generated sections
-            now assign students automatically.
-          </p>
+          
 
           <div className="mt-4 space-y-3">
             {departmentBatches.length > 0 ? (

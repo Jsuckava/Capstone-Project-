@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as signalR from '@microsoft/signalr';
 import { getChatHubUrl } from '../../services/api';
+import { getAuthToken } from '../../services/authSession';
 import { pullSharedClientState } from '../../utils/sharedClientState';
 
 const roleKeyFromRoleString = (role) => {
   const r = (role || '').toLowerCase();
+  if (r.includes('system_admin') || r.includes('system admin') || r.includes('systemadmin')) return 'system_admin';
   if (r.includes('registrar')) return 'registrar';
   if (r.includes('faculty')) return 'faculty';
   if (
@@ -54,6 +56,39 @@ const normalizeUser = (user) => ({
   lastName: valueOf(user, 'lastName', 'LastName') || '',
   isOnline: Boolean(valueOf(user, 'isOnline', 'IsOnline')),
   hasConversation: Boolean(valueOf(user, 'hasConversation', 'HasConversation')),
+});
+
+const normalizeConversationState = (state) => ({
+  otherUserEmail: valueOf(state, 'otherUserEmail', 'OtherUserEmail') || '',
+  isArchived: Boolean(valueOf(state, 'isArchived', 'IsArchived')),
+  deletedAt: valueOf(state, 'deletedAt', 'DeletedAt') || null,
+  updatedAt: valueOf(state, 'updatedAt', 'UpdatedAt') || null,
+});
+
+const normalizeGroup = (group) => ({
+  id: Number(valueOf(group, 'id', 'Id')),
+  name: valueOf(group, 'name', 'Name') || 'Group chat',
+  createdBy: valueOf(group, 'createdBy', 'CreatedBy') || '',
+  createdAt: valueOf(group, 'createdAt', 'CreatedAt') || null,
+  memberCount: Number(valueOf(group, 'memberCount', 'MemberCount') || 0),
+  isOwner: Boolean(valueOf(group, 'isOwner', 'IsOwner')),
+});
+
+const normalizeGroupInvitation = (invitation) => ({
+  groupId: Number(valueOf(invitation, 'groupId', 'GroupId')),
+  groupName: valueOf(invitation, 'groupName', 'GroupName') || 'Group chat',
+  invitedBy: valueOf(invitation, 'invitedBy', 'InvitedBy') || '',
+  invitedAt: valueOf(invitation, 'invitedAt', 'InvitedAt') || null,
+  memberCount: Number(valueOf(invitation, 'memberCount', 'MemberCount') || 0),
+});
+
+const normalizeGroupMessage = (message) => ({
+  id: valueOf(message, 'id', 'Id'),
+  groupId: Number(valueOf(message, 'groupId', 'GroupId')),
+  sender: valueOf(message, 'senderEmail', 'SenderEmail') || '',
+  senderName: valueOf(message, 'senderName', 'SenderName') || '',
+  message: valueOf(message, 'message', 'Message') || '',
+  sentAt: valueOf(message, 'sentAt', 'SentAt') || null,
 });
 
 const normalizeMessage = (payload) => {
@@ -169,10 +204,10 @@ const imageSrcForMessage = (msg) => {
   return `data:${msg.attachmentMime || inferImageMime(msg.attachmentName)};base64,${msg.attachmentDataBase64}`;
 };
 
-const TypingIndicator = () => (
+const TypingIndicator = ({ dark = false }) => (
   <div className="mb-3 flex w-full items-start">
-    <div className="relative rounded-2xl rounded-bl-none bg-slate-100 px-4 py-3 shadow-sm">
-      <div className="absolute -left-2 bottom-2 h-0 w-0 border-y-[8px] border-r-[10px] border-y-transparent border-r-slate-100" />
+    <div className={`relative rounded-2xl rounded-bl-none px-4 py-3 shadow-sm ${dark ? 'bg-slate-700' : 'bg-slate-100'}`}>
+      <div className={`absolute -left-2 bottom-2 h-0 w-0 border-y-[8px] border-r-[10px] border-y-transparent ${dark ? 'border-r-slate-700' : 'border-r-slate-100'}`} />
       <div className="flex h-5 items-center gap-1" aria-label="Typing">
         <span className="h-2 w-2 animate-bounce rounded-full bg-slate-500" style={{ animationDelay: '0ms' }} />
         <span className="h-2 w-2 animate-bounce rounded-full bg-slate-500" style={{ animationDelay: '120ms' }} />
@@ -189,6 +224,8 @@ const Chat = ({
   isOpen = true,
   onUnreadChange,
   onIncomingMessage,
+  onRegistrationRequest,
+  onSupportNotice,
   autoOpenTarget,
 }) => {
   const [connection, setConnection] = useState(null);
@@ -203,6 +240,25 @@ const Chat = ({
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [messageSearch, setMessageSearch] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [conversationStates, setConversationStates] = useState({});
+  const [chatGroups, setChatGroups] = useState([]);
+  const [groupInvitations, setGroupInvitations] = useState([]);
+  const [groupEligibleUsers, setGroupEligibleUsers] = useState([]);
+  const [groupMessages, setGroupMessages] = useState([]);
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [groupMemberSearch, setGroupMemberSearch] = useState('');
+  const [selectedGroupInvitees, setSelectedGroupInvitees] = useState([]);
+  const [groupActionBusy, setGroupActionBusy] = useState(false);
+  const [isChatDarkMode, setIsChatDarkMode] = useState(() => {
+    try {
+      return localStorage.getItem(`blockgo-chat-dark-mode:${userEmail || 'anonymous'}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   const [chatBoxWidth, setChatBoxWidth] = useState(400);
   const [chatBoxHeight, setChatBoxHeight] = useState(500);
@@ -217,6 +273,8 @@ const Chat = ({
   const secondaryMessagesRef = useRef(null);
   const connectionRef = useRef(null);
   const selectedUserRef = useRef(selectedUser);
+  const selectedGroupIdRef = useRef(selectedGroupId);
+  const chatGroupsRef = useRef(chatGroups);
   const openChatUsersRef = useRef(openChatUsers);
   const historyTargetRef = useRef('');
   const isOpenRef = useRef(isOpen);
@@ -228,6 +286,51 @@ const Chat = ({
   useEffect(() => {
     isOpenRef.current = isOpen;
   }, [isOpen]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`blockgo-chat-dark-mode:${userEmail || 'anonymous'}`, String(isChatDarkMode));
+    } catch {
+      // Chat remains usable when browser storage is unavailable.
+    }
+  }, [isChatDarkMode, userEmail]);
+
+  const applyConversationState = useCallback((rawState) => {
+    const state = normalizeConversationState(rawState);
+    if (!state.otherUserEmail) return;
+    setConversationStates((prev) => {
+      const next = { ...prev };
+      if (!state.isArchived && !state.deletedAt) delete next[state.otherUserEmail];
+      else next[state.otherUserEmail] = state;
+      return next;
+    });
+  }, []);
+
+  const loadConversationStates = useCallback(async (activeConnection) => {
+    if (!activeConnection) return;
+    try {
+      const states = await activeConnection.invoke('GetConversationStates');
+      const next = {};
+      (Array.isArray(states) ? states : []).map(normalizeConversationState).forEach((state) => {
+        if (state.otherUserEmail && (state.isArchived || state.deletedAt)) next[state.otherUserEmail] = state;
+      });
+      setConversationStates(next);
+    } catch (error) {
+      console.error('[Chat] GetConversationStates failed:', error);
+    }
+  }, []);
+
+  const loadGroupChatData = useCallback(async (activeConnection = connectionRef.current) => {
+    if (!activeConnection) return;
+    try {
+      const payload = await activeConnection.invoke('GetGroupChatData');
+      setChatGroups((valueOf(payload, 'groups', 'Groups') || []).map(normalizeGroup).filter((group) => group.id));
+      setGroupInvitations((valueOf(payload, 'invitations', 'Invitations') || []).map(normalizeGroupInvitation).filter((invitation) => invitation.groupId));
+      setGroupEligibleUsers((valueOf(payload, 'eligibleUsers', 'EligibleUsers') || []).map(normalizeUser).filter((user) => user.email));
+    } catch (error) {
+      console.error('[Chat] GetGroupChatData failed:', error);
+    }
+  }, []);
 
   useEffect(() => {
     connectionRef.current = connection;
@@ -305,6 +408,14 @@ const Chat = ({
   }, [selectedUser]);
 
   useEffect(() => {
+    selectedGroupIdRef.current = selectedGroupId;
+  }, [selectedGroupId]);
+
+  useEffect(() => {
+    chatGroupsRef.current = chatGroups;
+  }, [chatGroups]);
+
+  useEffect(() => {
     openChatUsersRef.current = openChatUsers;
     if (isOpen && openChatUsers.length > 0) {
       setUnreadCounts((prev) => {
@@ -321,6 +432,7 @@ const Chat = ({
     const targetEmail = autoOpenTarget?.email;
     if (!targetEmail || targetEmail === userEmail) return;
 
+    setSelectedGroupId(null);
     setSelectedUser(targetEmail);
     setNewMessage('');
     setMessageSearch('');
@@ -344,7 +456,7 @@ const Chat = ({
   // SignalR lifecycle
   useEffect(() => {
     const chatUrl = getChatHubUrl();
-    const token = localStorage.getItem('token');
+    const token = getAuthToken();
 
     const conn = new signalR.HubConnectionBuilder()
       .withUrl(chatUrl, { accessTokenFactory: () => token || '' })
@@ -359,6 +471,12 @@ const Chat = ({
       setMessages((prev) => mergeMessages(prev, [normalized]));
 
       if (otherUser) {
+        setConversationStates((prev) => {
+          if (!prev[otherUser]) return prev;
+          const next = { ...prev };
+          delete next[otherUser];
+          return next;
+        });
         setLatestActivity((prev) => {
           const ts = normalized.sentAt || normalized.timestamp;
           return { ...prev, [otherUser]: new Date(ts).getTime() };
@@ -414,9 +532,19 @@ const Chat = ({
       }
     });
 
+    conn.on('NewRegistrationRequest', (payload) => {
+      console.log('[Chat] NewRegistrationRequest:', payload);
+      onRegistrationRequest?.(payload);
+    });
+
     conn.on('SystemSettingChanged', (payload) => {
       console.log('[Chat] SystemSettingChanged:', payload);
       window.dispatchEvent(new CustomEvent('blockgo:system-setting-changed', { detail: payload }));
+    });
+
+    conn.on('SupportNotice', (payload) => {
+      console.log('[Chat] SupportNotice:', payload);
+      onSupportNotice?.(payload);
     });
 
     conn.on('AcademicDataChanged', (payload) => {
@@ -432,6 +560,64 @@ const Chat = ({
       if (!Array.isArray(contacts)) return;
       const normalizedContacts = contacts.map(normalizeUser).filter((u) => u.email);
       setOnlineUsers(normalizedContacts);
+    });
+
+    conn.on('ConversationStateChanged', applyConversationState);
+
+    conn.on('ConversationDeleted', (payload) => {
+      const otherUserEmail = valueOf(payload, 'otherUserEmail', 'OtherUserEmail');
+      if (!otherUserEmail) return;
+
+      setMessages((prev) => prev.filter((message) => !isConversationMessage(message, userEmail, otherUserEmail)));
+      setOnlineUsers((prev) => prev.map((user) => (
+        user.email === otherUserEmail ? { ...user, hasConversation: false } : user
+      )));
+      setUnreadCounts((prev) => ({ ...prev, [otherUserEmail]: 0 }));
+      setOpenChatUsers((prev) => prev.filter((email) => email !== otherUserEmail));
+      setSelectedUser((current) => (current === otherUserEmail ? '' : current));
+      if (historyTargetRef.current === otherUserEmail) historyTargetRef.current = '';
+    });
+
+    conn.on('GroupInvitationReceived', (payload) => {
+      const invitation = normalizeGroupInvitation(payload);
+      if (!invitation.groupId) return;
+      setGroupInvitations((prev) => [invitation, ...prev.filter((item) => item.groupId !== invitation.groupId)]);
+      onIncomingMessage?.({
+        from: invitation.invitedBy,
+        message: `Invited you to the group chat “${invitation.groupName}”.`,
+        sentAt: invitation.invitedAt,
+        type: 'group_invitation',
+      });
+    });
+
+    conn.on('GroupMembershipChanged', () => loadGroupChatData(conn));
+
+    conn.on('GroupChatHistory', (payload) => {
+      const groupId = Number(valueOf(payload, 'groupId', 'GroupId'));
+      if (!groupId) return;
+      const mapped = (valueOf(payload, 'messages', 'Messages') || []).map(normalizeGroupMessage);
+      setGroupMessages((prev) => [
+        ...prev.filter((message) => message.groupId !== groupId),
+        ...mapped,
+      ]);
+    });
+
+    conn.on('ReceiveGroupMessage', (payload) => {
+      const message = normalizeGroupMessage(payload);
+      if (!message.groupId || !message.id) return;
+      setGroupMessages((prev) => {
+        if (prev.some((item) => String(item.id) === String(message.id) && item.groupId === message.groupId)) return prev;
+        return [...prev, message];
+      });
+      if (message.sender !== userEmail && selectedGroupIdRef.current !== message.groupId) {
+        const group = chatGroupsRef.current.find((item) => item.id === message.groupId);
+        onIncomingMessage?.({
+          from: group?.name || 'Group chat',
+          message: message.message,
+          sentAt: message.sentAt,
+          type: 'group_message',
+        });
+      }
     });
 
     conn.on('UserJoined', (user) => {
@@ -524,6 +710,8 @@ const Chat = ({
         setConnection(conn);
         conn.invoke('JoinChat', userRole || '').catch(e => console.error('[Chat] JoinChat failed:', e));
         conn.invoke('GetChatContacts').catch(e => console.error('[Chat] GetChatContacts failed:', e));
+        loadConversationStates(conn);
+        loadGroupChatData(conn);
         pullSharedClientState().catch((error) => console.warn('[Chat] Initial shared state pull failed:', error));
       })
       .catch((err) => console.error('SignalR connection failed:', err));
@@ -531,6 +719,8 @@ const Chat = ({
     conn.onreconnected(() => {
       conn.invoke('JoinChat', userRole || '').catch(e => console.error('[Chat] JoinChat after reconnect failed:', e));
       conn.invoke('GetChatContacts').catch(e => console.error('[Chat] GetChatContacts after reconnect failed:', e));
+      loadConversationStates(conn);
+      loadGroupChatData(conn);
       if (selectedUserRef.current) {
         conn.invoke('GetChatHistory', selectedUserRef.current).catch(e => console.error('[Chat] GetChatHistory after reconnect failed:', e));
       }
@@ -540,7 +730,7 @@ const Chat = ({
       setConnection(null);
       conn.stop();
     };
-  }, [userEmail, userRole, onIncomingMessage, isConversationReadable, markConversationSeen]);
+  }, [userEmail, userRole, onIncomingMessage, onRegistrationRequest, onSupportNotice, isConversationReadable, markConversationSeen, applyConversationState, loadConversationStates, loadGroupChatData]);
 
   // Load history when selected user changes
   useEffect(() => {
@@ -550,6 +740,12 @@ const Chat = ({
       connection.invoke('GetChatHistory', selectedUser).catch(e => console.error('[Chat] GetChatHistory failed:', e));
     }
   }, [connection, selectedUser]);
+
+  useEffect(() => {
+    if (!connection || !selectedGroupId) return;
+    connection.invoke('GetGroupChatHistory', selectedGroupId)
+      .catch((error) => console.error('[Chat] GetGroupChatHistory failed:', error));
+  }, [connection, selectedGroupId]);
 
   useEffect(() => {
     if (!connection || !isOpen || document.visibilityState === 'hidden') return;
@@ -590,7 +786,7 @@ const Chat = ({
   useEffect(() => {
     const frame = window.requestAnimationFrame(scrollToBottom);
     return () => window.cancelAnimationFrame(frame);
-  }, [messages.length, selectedUser, selectedUserTyping]);
+  }, [messages.length, groupMessages.length, selectedUser, selectedGroupId, selectedUserTyping]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(scrollSecondaryToBottom);
@@ -615,7 +811,8 @@ const Chat = ({
   const allowedTargetsByViewer = (viewerKey) => {
     if (viewerKey === 'faculty') return new Set(['registrar', 'department_admin', 'faculty']);
     if (viewerKey === 'department_admin') return new Set(['registrar', 'faculty']);
-    if (viewerKey === 'registrar') return new Set(['department_admin', 'faculty', 'student']);
+    if (viewerKey === 'system_admin') return new Set(['registrar']);
+    if (viewerKey === 'registrar') return new Set(['system_admin', 'department_admin', 'faculty', 'student']);
     return new Set(['registrar']);
   };
 
@@ -639,6 +836,7 @@ const Chat = ({
       faculty: [],
       student: [],
       registrar: [],
+      system_admin: [],
     };
     for (const u of onlineCandidates) {
       const rk = roleKeyFromRoleString(u.role || '');
@@ -649,7 +847,7 @@ const Chat = ({
   }, [onlineCandidates]);
 
   const allowedGroupOrder = useMemo(() => {
-    return ['department_admin', 'faculty', 'student', 'registrar'].filter((k) => {
+    return ['system_admin', 'department_admin', 'faculty', 'student', 'registrar'].filter((k) => {
       const setHas = allowedTargets.has(k);
       return setHas;
     });
@@ -692,7 +890,20 @@ const Chat = ({
     }
   };
 
-  const sendMessage = async () => sendMessageTo(selectedUser, newMessage, () => setNewMessage(''));
+  const sendMessage = async () => {
+    if (selectedGroupId) {
+      if (!connection || !newMessage.trim()) return;
+      const text = newMessage.trim();
+      setNewMessage('');
+      connection.invoke('SendGroupMessage', Number(selectedGroupId), text)
+        .catch((error) => {
+          console.error('[Chat] SendGroupMessage failed:', error);
+          alert(error?.message || 'The group message could not be sent.');
+        });
+      return;
+    }
+    return sendMessageTo(selectedUser, newMessage, () => setNewMessage(''));
+  };
 
   const handlePickFile = () => fileInputRef.current?.click();
   const fileInputRef = useRef(null);
@@ -822,6 +1033,7 @@ const Chat = ({
     if (key === 'faculty') return 'Faculties';
     if (key === 'student') return 'Students';
     if (key === 'registrar') return 'Registrar';
+    if (key === 'system_admin') return 'System Administrator';
     return key;
   };
 
@@ -833,6 +1045,29 @@ const Chat = ({
   );
 
   const selectedUserName = selectedUserDetails ? displayNameForUser(selectedUserDetails) : selectedUser;
+  const selectedGroup = useMemo(
+    () => chatGroups.find((group) => group.id === Number(selectedGroupId)) || null,
+    [chatGroups, selectedGroupId]
+  );
+  const isAnyConversationSelected = Boolean(selectedUser || selectedGroupId);
+  const canCreateGroupChats = ['registrar', 'department_admin', 'faculty'].includes(viewerKey);
+  const selectedGroupMessages = useMemo(() => {
+    const inGroup = groupMessages
+      .filter((message) => message.groupId === Number(selectedGroupId))
+      .sort((a, b) => new Date(a.sentAt || 0).getTime() - new Date(b.sentAt || 0).getTime());
+    if (!isSearching || !messageSearch.trim()) return inGroup;
+    const query = messageSearch.trim().toLowerCase();
+    return inGroup.filter((message) => message.message.toLowerCase().includes(query) || message.senderName.toLowerCase().includes(query));
+  }, [groupMessages, selectedGroupId, isSearching, messageSearch]);
+  const activeMessages = selectedGroupId ? selectedGroupMessages : filteredMessages;
+
+  const filteredGroupEligibleUsers = useMemo(() => {
+    const query = groupMemberSearch.trim().toLowerCase();
+    return groupEligibleUsers.filter((user) => {
+      if (!query) return true;
+      return displayNameForUser(user).toLowerCase().includes(query) || user.email.toLowerCase().includes(query);
+    });
+  }, [groupEligibleUsers, groupMemberSearch]);
   const getNameForEmail = (email) => {
     const user = onlineUsers.find((u) => u.email === email);
     return user ? displayNameForUser(user) : email;
@@ -844,8 +1079,78 @@ const Chat = ({
     return onlineUsers.filter((u) => u.email !== userEmail && u.isOnline).length;
   }, [onlineUsers, userEmail]);
 
-  const selectRecipient = (email) => {
+  const archivedUsers = useMemo(
+    () => sortedOnlineUsers.filter((u) => conversationStates[u.email]?.isArchived && !conversationStates[u.email]?.deletedAt),
+    [sortedOnlineUsers, conversationStates]
+  );
+
+  const recentlyDeletedUsers = useMemo(() => {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return sortedOnlineUsers.filter((u) => {
+      const deletedAt = conversationStates[u.email]?.deletedAt;
+      return deletedAt && new Date(deletedAt).getTime() >= cutoff;
+    });
+  }, [sortedOnlineUsers, conversationStates]);
+
+  const activeConversationUsers = useMemo(
+    () => sortedOnlineUsers.filter((u) => u.hasConversation && !conversationStates[u.email]?.isArchived && !conversationStates[u.email]?.deletedAt),
+    [sortedOnlineUsers, conversationStates]
+  );
+
+  const closeConversationLocally = useCallback((email) => {
+    stopTyping(email);
+    setOpenChatUsers((prev) => prev.filter((item) => item !== email));
+    setSelectedUser((current) => (current === email ? '' : current));
+    setNewMessage('');
+    setMessageSearch('');
+    setIsSearching(false);
+    setConversationDrafts((prev) => {
+      const next = { ...prev };
+      delete next[email];
+      return next;
+    });
+    if (historyTargetRef.current === email) historyTargetRef.current = '';
+  }, [stopTyping]);
+
+  const updateConversationState = useCallback(async (method, email, ...args) => {
+    if (!connection || !email) return false;
+    try {
+      const state = await connection.invoke(method, email, ...args);
+      applyConversationState(state);
+      return true;
+    } catch (error) {
+      console.error(`[Chat] ${method} failed:`, error);
+      alert(error?.message || 'The conversation could not be updated.');
+      return false;
+    }
+  }, [connection, applyConversationState]);
+
+  const archiveConversation = async (email) => {
+    if (await updateConversationState('SetConversationArchived', email, true)) closeConversationLocally(email);
+  };
+
+  const deleteConversation = async (email) => {
+    if (!window.confirm('Permanently delete every message in this conversation? Messages cannot be recovered. The user will remain available to message.')) return;
+    if (await updateConversationState('DeleteConversation', email)) closeConversationLocally(email);
+  };
+
+  const restoreConversation = async (email, openAfterRestore = false) => {
+    if (!(await updateConversationState('RestoreConversation', email))) return;
+    if (openAfterRestore) {
+      setIsSettingsOpen(false);
+      setSelectedUser(email);
+      setOpenChatUsers((prev) => [...prev.filter((item) => item !== email), email].slice(-2));
+    }
+  };
+
+  const selectRecipient = async (email) => {
     if (selectedUser && selectedUser !== email) stopTyping(selectedUser);
+    if (conversationStates[email]?.isArchived || conversationStates[email]?.deletedAt) {
+      const restored = await updateConversationState('RestoreConversation', email);
+      if (!restored) return;
+    }
+    setIsSettingsOpen(false);
+    setSelectedGroupId(null);
     setSelectedUser(email);
     setNewMessage('');
     setMessageSearch('');
@@ -857,15 +1162,78 @@ const Chat = ({
     });
   };
 
+  const selectGroupChat = (groupId) => {
+    if (selectedUser) stopTyping(selectedUser);
+    setSelectedUser('');
+    setOpenChatUsers([]);
+    setSelectedGroupId(Number(groupId));
+    setIsSettingsOpen(false);
+    setIsCreatingGroup(false);
+    setNewMessage('');
+    setMessageSearch('');
+    setIsSearching(false);
+    setIsUserDropdownOpen(false);
+  };
+
+  const respondToGroupInvitation = async (groupId, accept) => {
+    if (!connection || groupActionBusy) return;
+    setGroupActionBusy(true);
+    try {
+      await connection.invoke('RespondToGroupInvitation', Number(groupId), Boolean(accept));
+      await loadGroupChatData(connection);
+      if (accept) selectGroupChat(groupId);
+    } catch (error) {
+      console.error('[Chat] RespondToGroupInvitation failed:', error);
+      alert(error?.message || 'The group invitation could not be updated.');
+    } finally {
+      setGroupActionBusy(false);
+    }
+  };
+
+  const toggleGroupInvitee = (email) => {
+    setSelectedGroupInvitees((prev) => {
+      if (prev.includes(email)) return prev.filter((item) => item !== email);
+      if (prev.length >= 49) {
+        alert('A group can contain at most 50 people including you.');
+        return prev;
+      }
+      return [...prev, email];
+    });
+  };
+
+  const createGroupChat = async () => {
+    if (!connection || groupActionBusy) return;
+    if (chatGroups.length >= 10) {
+      alert('You can create or accept no more than 10 active group chats.');
+      return;
+    }
+    if (groupName.trim().length < 2) {
+      alert('Enter a group name with at least 2 characters.');
+      return;
+    }
+    setGroupActionBusy(true);
+    try {
+      const created = normalizeGroup(await connection.invoke('CreateGroupChat', groupName.trim(), selectedGroupInvitees));
+      await loadGroupChatData(connection);
+      setGroupName('');
+      setGroupMemberSearch('');
+      setSelectedGroupInvitees([]);
+      setIsCreatingGroup(false);
+      selectGroupChat(created.id);
+    } catch (error) {
+      console.error('[Chat] CreateGroupChat failed:', error);
+      alert(error?.message || 'The group chat could not be created.');
+    } finally {
+      setGroupActionBusy(false);
+    }
+  };
+
   const closeConversation = (email) => {
     stopTyping(email);
     setOpenChatUsers((prev) => {
       const next = prev.filter((item) => item !== email);
       const fallback = next[next.length - 1] || '';
       setSelectedUser(fallback);
-      if (next.length === 0) {
-        window.setTimeout(() => onClose?.(), 0);
-      }
       return next;
     });
     setNewMessage('');
@@ -878,14 +1246,17 @@ const Chat = ({
     if (historyTargetRef.current === email) historyTargetRef.current = '';
   };
 
-  const clearRecipient = () => {
-    if (selectedUser) {
-      closeConversation(selectedUser);
-      return;
-    }
+  const backToConversationList = () => {
+    openChatUsers.forEach((email) => stopTyping(email));
+    setOpenChatUsers([]);
     setSelectedUser('');
+    setSelectedGroupId(null);
+    setIsCreatingGroup(false);
     setNewMessage('');
     setMessageSearch('');
+    setIsSearching(false);
+    setIsUserDropdownOpen(false);
+    setConversationDrafts({});
     historyTargetRef.current = '';
   };
 
@@ -893,6 +1264,8 @@ const Chat = ({
     openChatUsers.forEach((email) => stopTyping(email));
     setOpenChatUsers([]);
     setSelectedUser('');
+    setSelectedGroupId(null);
+    setIsCreatingGroup(false);
     setNewMessage('');
     setMessageSearch('');
     setConversationDrafts({});
@@ -905,59 +1278,271 @@ const Chat = ({
   return (
     <>
     <div
-      className="blockgo-chat-window fixed bottom-5 right-5 z-[1000] flex flex-col rounded-2xl bg-white font-sans shadow-2xl overflow-hidden"
+      className={`fixed bottom-5 right-5 z-[1000] flex flex-col overflow-hidden rounded-2xl font-sans shadow-2xl transition-colors ${
+        isChatDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'
+      }`}
       style={{ width: chatBoxWidth, height: chatBoxHeight }}
     >
-      <div className="relative flex items-center justify-between border-b border-slate-200 p-5">
-        <div>
-          <h3 className="m-0 text-lg font-bold text-[#003366]">Chat</h3>
-          <div className="mt-1 text-xs font-semibold text-slate-500">{totalOnlineUsers} users online</div>
+      <div className={`relative flex items-center justify-between border-b p-5 ${isChatDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+        <div className="flex min-w-0 items-center gap-2">
+          {(isAnyConversationSelected || isCreatingGroup) && !isSettingsOpen && (
+            <button
+              type="button"
+              onClick={backToConversationList}
+              className={`flex h-9 shrink-0 items-center rounded-full px-3 text-sm font-bold transition ${isChatDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-slate-100 text-[#0866ff] hover:bg-blue-50'}`}
+              title="Back to conversations"
+            >
+              Back
+            </button>
+          )}
+          <div className="min-w-0">
+          <h3 className={`m-0 text-lg font-bold ${isChatDarkMode ? 'text-white' : 'text-[#003366]'}`}>
+            {isSettingsOpen ? 'Chat settings' : isCreatingGroup ? 'New group chat' : selectedGroup ? selectedGroup.name : selectedUser ? selectedUserName : 'Chats'}
+          </h3>
+          <div className={`mt-1 truncate text-xs font-semibold ${isChatDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            {isSettingsOpen
+              ? 'Manage your conversations'
+              : isCreatingGroup
+                ? `${selectedGroupInvitees.length + 1} of 50 people`
+                : selectedGroup
+                  ? `${selectedGroup.memberCount} accepted member${selectedGroup.memberCount === 1 ? '' : 's'}`
+                  : selectedUser || `${totalOnlineUsers} users online`}
+          </div>
+          </div>
         </div>
         <div className="flex items-center gap-2">
+          {isAnyConversationSelected && !isSettingsOpen && (
+            <button
+              type="button"
+              onClick={() => setIsSearching((v) => !v)}
+              className={`cursor-pointer rounded-full px-3 py-2 text-xs font-bold transition ${isChatDarkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'}`}
+              title="Search this conversation"
+            >
+              Search
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => setIsSearching((v) => !v)}
-            className="cursor-pointer rounded-full p-2 text-sm font-bold text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-            title="Search messages"
+            onClick={() => {
+              setIsSettingsOpen((value) => !value);
+              setIsSearching(false);
+              setMessageSearch('');
+            }}
+            className={`cursor-pointer rounded-full px-3 py-2 text-xs font-bold transition ${isSettingsOpen ? 'bg-[#0866ff] text-white' : isChatDarkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-500 hover:bg-slate-100'}`}
+            title="Chat settings"
           >
-            <span aria-hidden>Search</span>
+            Settings
           </button>
-          <button onClick={closeAllChatWindows} className="cursor-pointer text-2xl leading-none text-slate-400 transition hover:text-slate-600">
+          <button onClick={closeAllChatWindows} className="cursor-pointer text-2xl leading-none text-slate-400 transition hover:text-slate-600" title="Close chat">
             x
           </button>
         </div>
       </div>
 
-      {isSearching && (
-        <div className="border-b border-slate-200 p-3">
+      {isAnyConversationSelected && !isSettingsOpen && isSearching && (
+        <div className={`border-b p-3 ${isChatDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
           <input
             type="text"
             value={messageSearch}
             onChange={(e) => setMessageSearch(e.target.value)}
             placeholder="Search in chat..."
-            className="w-full rounded-full border border-slate-300 bg-slate-50 px-4 py-2 text-sm outline-none focus:border-[#003366] focus:ring-1 focus:ring-[#003366]/20"
+            className={`w-full rounded-full border px-4 py-2 text-sm outline-none focus:border-[#0866ff] focus:ring-1 focus:ring-[#0866ff]/20 ${isChatDarkMode ? 'border-slate-600 bg-slate-800 text-white placeholder:text-slate-500' : 'border-slate-300 bg-slate-50'}`}
           />
         </div>
       )}
 
-      <div className="blockgo-chat-messages flex-1 overflow-y-auto p-4">
-        {!selectedUser ? (
-          <div className="flex h-full items-center justify-center text-center">
-            <p className="text-sm text-slate-400">Select a recipient to start chatting.</p>
+      {selectedUser && !isSettingsOpen && (
+        <div className={`flex items-center justify-end gap-2 border-b px-4 py-2 ${isChatDarkMode ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-slate-50'}`}>
+          <button type="button" onClick={() => archiveConversation(selectedUser)} className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${isChatDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-white text-slate-600 shadow-sm hover:bg-blue-50 hover:text-[#0866ff]'}`}>Archive</button>
+          <button type="button" onClick={() => deleteConversation(selectedUser)} className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${isChatDarkMode ? 'bg-red-950 text-red-300 hover:bg-red-900' : 'bg-white text-red-600 shadow-sm hover:bg-red-50'}`}>Delete messages</button>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto p-4">
+        {isSettingsOpen ? (
+          <div className="space-y-5">
+            <div className={`flex items-center justify-between rounded-2xl p-4 ${isChatDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+              <div>
+                <div className="text-sm font-bold">Dark mode</div>
+                <div className={`mt-1 text-xs ${isChatDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Only changes this chat window</div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isChatDarkMode}
+                onClick={() => setIsChatDarkMode((value) => !value)}
+                className={`relative h-7 w-12 rounded-full transition ${isChatDarkMode ? 'bg-[#0866ff]' : 'bg-slate-300'}`}
+              >
+                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${isChatDarkMode ? 'left-6' : 'left-1'}`} />
+              </button>
+            </div>
+
+            <div>
+              <h4 className="mb-2 text-sm font-bold">Archived chats</h4>
+              {archivedUsers.length === 0 ? (
+                <p className={`rounded-xl p-3 text-xs ${isChatDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-500'}`}>No archived conversations.</p>
+              ) : archivedUsers.map((user) => (
+                <div key={user.email} className={`mb-2 flex items-center justify-between gap-2 rounded-xl p-3 ${isChatDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold">{displayNameForUser(user)}</div>
+                    <div className={`truncate text-xs ${isChatDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{user.email}</div>
+                  </div>
+                  <button type="button" onClick={() => restoreConversation(user.email, true)} className="rounded-full bg-[#0866ff] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#0758db]">Unarchive</button>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <h4 className="mb-2 text-sm font-bold">Recently deleted</h4>
+              <p className={`mb-2 text-xs ${isChatDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Deleted messages are permanent. These shortcuts only let you start a new conversation.</p>
+              {recentlyDeletedUsers.length === 0 ? (
+                <p className={`rounded-xl p-3 text-xs ${isChatDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-500'}`}>No conversations deleted in the last 30 days.</p>
+              ) : recentlyDeletedUsers.map((user) => (
+                <div key={user.email} className={`mb-2 flex items-center justify-between gap-2 rounded-xl p-3 ${isChatDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold">{displayNameForUser(user)}</div>
+                    <div className={`truncate text-xs ${isChatDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Deleted {new Date(conversationStates[user.email].deletedAt).toLocaleDateString()}</div>
+                  </div>
+                  <button type="button" onClick={() => restoreConversation(user.email, true)} className="rounded-full bg-[#0866ff] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#0758db]">Start new chat</button>
+                </div>
+              ))}
+            </div>
           </div>
-        ) : filteredMessages.length === 0 && !typingUsers[selectedUser] ? (
+        ) : isCreatingGroup ? (
+          <div className="space-y-4">
+            <div>
+              <label className={`mb-1 block text-xs font-bold uppercase tracking-wide ${isChatDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Group name</label>
+              <input
+                type="text"
+                maxLength={100}
+                value={groupName}
+                onChange={(event) => setGroupName(event.target.value)}
+                placeholder="Enter a group name"
+                className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#0866ff] ${isChatDarkMode ? 'border-slate-600 bg-slate-800 text-white' : 'border-slate-300 bg-white'}`}
+              />
+            </div>
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <label className={`text-xs font-bold uppercase tracking-wide ${isChatDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Invite people</label>
+                <span className="text-xs font-bold text-[#0866ff]">{selectedGroupInvitees.length + 1}/50</span>
+              </div>
+              <input
+                type="text"
+                value={groupMemberSearch}
+                onChange={(event) => setGroupMemberSearch(event.target.value)}
+                placeholder="Search name or account..."
+                className={`mb-2 w-full rounded-full border px-3 py-2 text-sm outline-none focus:border-[#0866ff] ${isChatDarkMode ? 'border-slate-600 bg-slate-800 text-white' : 'border-slate-300 bg-white'}`}
+              />
+              <div className={`max-h-64 overflow-y-auto rounded-xl border p-2 ${isChatDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                {filteredGroupEligibleUsers.length === 0 ? (
+                  <p className="p-3 text-center text-xs text-slate-400">No matching users.</p>
+                ) : filteredGroupEligibleUsers.map((user) => {
+                  const selected = selectedGroupInvitees.includes(user.email);
+                  return (
+                    <button
+                      key={user.email}
+                      type="button"
+                      onClick={() => toggleGroupInvitee(user.email)}
+                      className={`mb-1 flex w-full items-center gap-3 rounded-xl p-2 text-left transition ${selected ? 'bg-[#0866ff] text-white' : isChatDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}
+                    >
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${selected ? 'bg-white/20' : 'bg-blue-100 text-[#0866ff]'}`}>{displayNameForUser(user).charAt(0).toUpperCase()}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-bold">{displayNameForUser(user)}</span>
+                        <span className={`block truncate text-[11px] ${selected ? 'text-blue-100' : 'text-slate-500'}`}>{user.role} · {user.email}</span>
+                      </span>
+                      <span className="text-xs font-bold">{selected ? 'Selected' : 'Add'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={backToConversationList} className={`flex-1 rounded-full px-4 py-2 text-sm font-bold ${isChatDarkMode ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-700'}`}>Cancel</button>
+              <button type="button" onClick={createGroupChat} disabled={groupActionBusy || groupName.trim().length < 2} className="flex-1 rounded-full bg-[#0866ff] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{groupActionBusy ? 'Creating...' : 'Create group'}</button>
+            </div>
+          </div>
+        ) : !isAnyConversationSelected ? (
+          <div className="space-y-2">
+            {groupInvitations.length > 0 && (
+              <div className="mb-5">
+                <div className={`mb-2 text-xs font-bold uppercase tracking-wide ${isChatDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Group invitations</div>
+                {groupInvitations.map((invitation) => (
+                  <div key={invitation.groupId} className={`mb-2 rounded-2xl border p-3 ${isChatDarkMode ? 'border-blue-900 bg-blue-950/40' : 'border-blue-200 bg-blue-50'}`}>
+                    <div className="text-sm font-bold">{invitation.groupName}</div>
+                    <div className={`mt-1 text-xs ${isChatDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{invitation.invitedBy} invited you</div>
+                    <div className="mt-3 flex gap-2">
+                      <button type="button" disabled={groupActionBusy} onClick={() => respondToGroupInvitation(invitation.groupId, true)} className="flex-1 rounded-full bg-[#0866ff] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">Accept</button>
+                      <button type="button" disabled={groupActionBusy} onClick={() => respondToGroupInvitation(invitation.groupId, false)} className={`flex-1 rounded-full px-3 py-1.5 text-xs font-bold disabled:opacity-50 ${isChatDarkMode ? 'bg-slate-800 text-slate-200' : 'bg-white text-slate-700'}`}>Decline</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mb-5">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className={`text-xs font-bold uppercase tracking-wide ${isChatDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Group chats · {chatGroups.length}/10</div>
+                {canCreateGroupChats && (
+                  <button
+                    type="button"
+                    disabled={chatGroups.length >= 10}
+                    onClick={() => {
+                      setIsCreatingGroup(true);
+                      setIsSettingsOpen(false);
+                    }}
+                    className="rounded-full bg-[#0866ff] px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    New group
+                  </button>
+                )}
+              </div>
+              {chatGroups.length === 0 ? (
+                <p className={`rounded-xl p-3 text-xs ${isChatDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-500'}`}>No accepted group chats yet.</p>
+              ) : chatGroups.map((group) => (
+                <button key={group.id} type="button" onClick={() => selectGroupChat(group.id)} className={`mb-1 flex w-full items-center gap-3 rounded-2xl p-3 text-left transition ${isChatDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-[#0866ff] font-bold text-white">G</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold">{group.name}</span>
+                    <span className={`block text-xs ${isChatDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{group.memberCount} member{group.memberCount === 1 ? '' : 's'}{group.isOwner ? ' · You created this' : ''}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className={`mb-3 text-xs font-bold uppercase tracking-wide ${isChatDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Recent conversations</div>
+            {activeConversationUsers.length === 0 ? (
+              <div className="flex h-40 items-center justify-center text-center">
+                
+              </div>
+            ) : activeConversationUsers.map((user) => (
+              <button
+                key={user.email}
+                type="button"
+                onClick={() => selectRecipient(user.email)}
+                className={`flex w-full items-center gap-3 rounded-2xl p-3 text-left transition ${isChatDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#0866ff] to-[#6aa7ff] font-bold text-white">{displayNameForUser(user).charAt(0).toUpperCase()}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-bold">{displayNameForUser(user)}</span>
+                  <span className={`block truncate text-xs ${isChatDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{user.isOnline ? 'Active now' : user.email}</span>
+                </span>
+                {(unreadCounts[user.email] || 0) > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#0866ff] px-1 text-[11px] font-bold text-white">{unreadCounts[user.email]}</span>}
+              </button>
+            ))}
+          </div>
+        ) : activeMessages.length === 0 && !typingUsers[selectedUser] ? (
           <div className="flex h-full items-center justify-center text-center">
             <p className="text-sm text-slate-400">No messages yet. Start the conversation!</p>
           </div>
         ) : (
           <>
-          {filteredMessages.map((msg, i) => {
+          {activeMessages.map((msg, i) => {
             const isMine = msg.sender === userEmail;
             const isImage = msg.attachmentName && isImageAttachment(msg) && msg.attachmentDataBase64;
             const imageSrc = isImage ? imageSrcForMessage(msg) : '';
 
             const senderUser = onlineUsers.find((u) => u.email === msg.sender);
-            const senderName = senderUser ? displayNameForUser(senderUser) : msg.sender ? msg.sender.split('@')[0] : 'Unknown';
+            const senderName = msg.senderName || (senderUser ? displayNameForUser(senderUser) : msg.sender ? msg.sender.split('@')[0] : 'Unknown');
 
             return (
               <div key={messageRenderKey(msg, i)} className={`mb-3 flex w-full flex-col ${isMine ? 'items-end' : 'items-start'}`}>
@@ -967,16 +1552,18 @@ const Chat = ({
                 <div
                   className={`relative min-h-[40px] min-w-[56px] whitespace-pre-wrap px-4 py-3 leading-relaxed shadow-sm ${
                     isMine
-                      ? 'rounded-2xl rounded-br-none bg-gradient-to-br from-[#003366] to-[#005599] text-white'
-                      : 'rounded-2xl rounded-bl-none bg-slate-100 text-slate-800'
+                      ? 'rounded-2xl rounded-br-none bg-gradient-to-br from-[#0866ff] to-[#2782ff] text-white'
+                      : isChatDarkMode
+                        ? 'rounded-2xl rounded-bl-none bg-slate-700 text-slate-100'
+                        : 'rounded-2xl rounded-bl-none bg-slate-100 text-slate-800'
                   }`}
                   style={{ width: 'fit-content', maxWidth: '85%', overflowWrap: 'anywhere', wordBreak: 'break-word', overflowX: 'hidden' }}
                 >
                   {isMine && (
-                    <div className="absolute -right-2 bottom-2 h-0 w-0 border-y-[8px] border-l-[10px] border-y-transparent border-l-[#003366]" />
+                    <div className="absolute -right-2 bottom-2 h-0 w-0 border-y-[8px] border-l-[10px] border-y-transparent border-l-[#0866ff]" />
                   )}
                   {!isMine && (
-                    <div className="absolute -left-2 bottom-2 h-0 w-0 border-y-[8px] border-r-[10px] border-y-transparent border-r-slate-100" />
+                    <div className={`absolute -left-2 bottom-2 h-0 w-0 border-y-[8px] border-r-[10px] border-y-transparent ${isChatDarkMode ? 'border-r-slate-700' : 'border-r-slate-100'}`} />
                   )}
 
                   {isImage ? (
@@ -1032,31 +1619,31 @@ const Chat = ({
               </div>
             );
           })}
-          {typingUsers[selectedUser] && <TypingIndicator />}
+          {typingUsers[selectedUser] && <TypingIndicator dark={isChatDarkMode} />}
           </>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="blockgo-chat-recipient flex flex-col gap-2 p-4 pt-0">
+      {!isSettingsOpen && !isAnyConversationSelected && !isCreatingGroup && <div className="flex flex-col gap-2 p-4 pt-0">
         <div className="relative">
           <details
             className="w-full"
             open={isUserDropdownOpen}
             onToggle={(e) => setIsUserDropdownOpen(e.currentTarget.open)}
           >
-            <summary className="cursor-pointer list-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
-              Select user
+            <summary className={`cursor-pointer list-none rounded-full border px-4 py-2 text-sm font-semibold ${isChatDarkMode ? 'border-slate-600 bg-slate-800 text-slate-200' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+              Find people
             </summary>
 
-            <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className={`mt-2 rounded-xl border p-3 shadow-sm ${isChatDarkMode ? 'border-slate-600 bg-slate-800' : 'border-slate-200 bg-white'}`}>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
                   value={onlineSearch}
                   onChange={(e) => setOnlineSearch(e.target.value)}
                   placeholder="Search users..."
-                  className="flex-1 rounded-full border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#003366] focus:ring-1 focus:ring-[#003366]/20"
+                  className={`flex-1 rounded-full border px-3 py-2 text-sm outline-none focus:border-[#0866ff] focus:ring-1 focus:ring-[#0866ff]/20 ${isChatDarkMode ? 'border-slate-600 bg-slate-900 text-white placeholder:text-slate-500' : 'border-slate-300 bg-slate-50'}`}
                 />
               </div>
 
@@ -1118,7 +1705,11 @@ const Chat = ({
                                 key={u.email}
                                 onClick={() => selectRecipient(u.email)}
                                 className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                                  isSelected ? 'bg-[#003366] text-white' : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-[#003366]'
+                                  isSelected
+                                    ? 'bg-[#0866ff] text-white'
+                                    : isChatDarkMode
+                                      ? 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+                                      : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-[#003366]'
                                 }`}
                                 title={displayName}
                               >
@@ -1142,28 +1733,11 @@ const Chat = ({
               </div>
             </div>
           </details>
-
-          {selectedUser && (
-            <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-[#003366]/20 bg-[#003366]/5 px-3 py-2">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-bold text-[#003366]">{selectedUserName}</div>
-                <div className="truncate text-xs text-slate-500">{selectedUser}</div>
-              </div>
-              <button
-                type="button"
-                onClick={clearRecipient}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-base font-bold text-slate-500 shadow-sm transition hover:bg-red-50 hover:text-red-600"
-                title="Close current recipient"
-              >
-                x
-              </button>
-            </div>
-          )}
         </div>
 
-      </div>
+      </div>}
 
-      <div className="blockgo-chat-composer flex gap-2 items-end p-4 pt-0">
+      {isAnyConversationSelected && !isSettingsOpen && <div className="flex gap-2 items-end p-4 pt-0">
         <input
           ref={fileInputRef}
           type="file"
@@ -1172,37 +1746,36 @@ const Chat = ({
           aria-hidden="true"
         />
 
-        <button
+        {selectedUser && <button
           type="button"
           onClick={handlePickFile}
           disabled={!selectedUser}
           title={selectedUser ? 'Send file' : 'Select a user to send a file'}
-          className="shrink-0 mb-[2px] rounded-full bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`mb-[2px] shrink-0 rounded-full px-3 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${isChatDarkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
         >
           Attach
-        </button>
+        </button>}
 
         <input
           type="text"
           value={newMessage}
           onChange={(e) => {
             setNewMessage(e.target.value);
-            updateTyping(selectedUser, e.target.value);
+            if (selectedUser) updateTyping(selectedUser, e.target.value);
           }}
           onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-          disabled={!selectedUser}
-          placeholder={selectedUser ? 'Type a message...' : 'Select a recipient first'}
-          className="flex-1 rounded-full border border-slate-300 bg-slate-50 px-4 py-2 text-sm outline-none focus:border-[#003366] focus:ring-1 focus:ring-[#003366]/20"
+          placeholder={selectedGroupId ? `Message ${selectedGroup?.name || 'group'}...` : 'Type a message...'}
+          className={`flex-1 rounded-full border px-4 py-2 text-sm outline-none focus:border-[#0866ff] focus:ring-1 focus:ring-[#0866ff]/20 ${isChatDarkMode ? 'border-slate-600 bg-slate-800 text-white placeholder:text-slate-500' : 'border-slate-300 bg-slate-50'}`}
         />
 
         <button
           onClick={sendMessage}
-          disabled={!newMessage.trim() || !selectedUser}
-          className="shrink-0 rounded-full bg-[#003366] px-5 py-2 text-sm font-bold text-white transition hover:bg-[#00264d] disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!newMessage.trim() || !isAnyConversationSelected}
+          className="shrink-0 rounded-full bg-[#0866ff] px-5 py-2 text-sm font-bold text-white transition hover:bg-[#0758db] disabled:cursor-not-allowed disabled:opacity-50"
         >
           Send
         </button>
-      </div>
+      </div>}
 
       <div
         onMouseDown={onResizeMouseDown}
@@ -1246,12 +1819,12 @@ const Chat = ({
       return (
         <div
           key={email}
-          className="blockgo-chat-secondary-window fixed bottom-5 z-[999] flex flex-col overflow-hidden rounded-2xl bg-white font-sans shadow-2xl"
+          className={`fixed bottom-5 z-[999] flex flex-col overflow-hidden rounded-2xl font-sans shadow-2xl ${isChatDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}`}
           style={{ width: chatBoxWidth, height: chatBoxHeight, right: rightOffset }}
         >
-          <div className="flex items-center justify-between border-b border-slate-200 p-4">
+          <div className={`flex items-center justify-between border-b p-4 ${isChatDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
             <div className="min-w-0">
-              <h3 className="truncate text-base font-bold text-[#003366]">{getNameForEmail(email)}</h3>
+              <h3 className={`truncate text-base font-bold ${isChatDarkMode ? 'text-white' : 'text-[#003366]'}`}>{getNameForEmail(email)}</h3>
               <p className="truncate text-xs text-slate-500">{email}</p>
             </div>
             <button
@@ -1264,7 +1837,7 @@ const Chat = ({
             </button>
           </div>
 
-          <div ref={secondaryMessagesRef} className="blockgo-chat-messages flex-1 overflow-y-auto p-4">
+          <div ref={secondaryMessagesRef} className="flex-1 overflow-y-auto p-4">
             {secondaryMessages.length === 0 && !typingUsers[email] ? (
               <div className="flex h-full items-center justify-center text-center">
                 <p className="text-sm text-slate-400">No messages yet.</p>
@@ -1286,8 +1859,10 @@ const Chat = ({
                     <div
                       className={`relative min-h-[40px] min-w-[56px] whitespace-pre-wrap px-4 py-3 leading-relaxed shadow-sm ${
                         isMine
-                          ? 'rounded-2xl rounded-br-none bg-gradient-to-br from-[#003366] to-[#005599] text-white'
-                          : 'rounded-2xl rounded-bl-none bg-slate-100 text-slate-800'
+                          ? 'rounded-2xl rounded-br-none bg-gradient-to-br from-[#0866ff] to-[#2782ff] text-white'
+                          : isChatDarkMode
+                            ? 'rounded-2xl rounded-bl-none bg-slate-700 text-slate-100'
+                            : 'rounded-2xl rounded-bl-none bg-slate-100 text-slate-800'
                       }`}
                       style={{ width: 'fit-content', maxWidth: '85%', overflowWrap: 'anywhere', wordBreak: 'break-word', overflowX: 'hidden' }}
                     >
@@ -1327,12 +1902,12 @@ const Chat = ({
                   </div>
                 );
               })}
-              {typingUsers[email] && <TypingIndicator />}
+              {typingUsers[email] && <TypingIndicator dark={isChatDarkMode} />}
               </>
             )}
           </div>
 
-          <div className="blockgo-chat-composer flex gap-2 p-4 pt-0">
+          <div className="flex gap-2 p-4 pt-0">
             <input
               type="text"
               value={draft}
@@ -1345,12 +1920,12 @@ const Chat = ({
                 sendMessageTo(email, draft, () => setConversationDrafts((prev) => ({ ...prev, [email]: '' })))
               }
               placeholder="Type a message..."
-              className="min-w-0 flex-1 rounded-full border border-slate-300 bg-slate-50 px-4 py-2 text-sm outline-none focus:border-[#003366] focus:ring-1 focus:ring-[#003366]/20"
+              className={`min-w-0 flex-1 rounded-full border px-4 py-2 text-sm outline-none focus:border-[#0866ff] focus:ring-1 focus:ring-[#0866ff]/20 ${isChatDarkMode ? 'border-slate-600 bg-slate-800 text-white placeholder:text-slate-500' : 'border-slate-300 bg-slate-50'}`}
             />
             <button
               onClick={() => sendMessageTo(email, draft, () => setConversationDrafts((prev) => ({ ...prev, [email]: '' })))}
               disabled={!draft.trim()}
-              className="shrink-0 rounded-full bg-[#003366] px-5 py-2 text-sm font-bold text-white transition hover:bg-[#00264d] disabled:cursor-not-allowed disabled:opacity-50"
+              className="shrink-0 rounded-full bg-[#0866ff] px-5 py-2 text-sm font-bold text-white transition hover:bg-[#0758db] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Send
             </button>

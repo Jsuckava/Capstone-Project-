@@ -1,0 +1,72 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ipfs-webui-bootstrap
+  namespace: plv-fabric
+  labels:
+    app: ipfs-webui-bootstrap
+spec:
+  backoffLimit: 4
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: ipfs-webui-bootstrap
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: importer
+        image: curlimages/curl:8.14.1
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 5m
+            memory: 8Mi
+          limits:
+            memory: 64Mi
+        env:
+        - name: WEBUI_CID
+          value: "bafybeihxglpcfyarpm7apn7xpezbuoqgk3l5chyk7w4gvrjwk45rqohlmm"
+        - name: IPFS_APIS
+          value: "http://ipfs-api.plv-fabric.svc.cluster.local:5001 http://ipfs-annex-api.plv-annex-campus.svc.cluster.local:5001 http://ipfs-pubad-api.plv-pubad-campus.svc.cluster.local:5001"
+        command:
+        - /bin/sh
+        - -ec
+        - |
+          for IPFS_API in ${IPFS_APIS}; do
+            until curl -fsS -X POST "${IPFS_API}/api/v0/id" >/dev/null; do
+              echo "Waiting for ${IPFS_API}..."
+              sleep 3
+            done
+          done
+
+          NEED_IMPORT=false
+          for IPFS_API in ${IPFS_APIS}; do
+            if ! curl -fsS -X POST "${IPFS_API}/api/v0/pin/ls?arg=${WEBUI_CID}&type=recursive" >/dev/null 2>&1; then
+              NEED_IMPORT=true
+            fi
+          done
+
+          if [ "${NEED_IMPORT}" = "false" ]; then
+            echo "IPFS Web UI ${WEBUI_CID} is already pinned on all three campus nodes."
+            exit 0
+          fi
+
+          echo "Downloading the Kubo 0.41 Web UI CAR from the official IPFS gateway..."
+          curl -fsSL --retry 4 --retry-all-errors --connect-timeout 15 --max-time 300 \
+            "https://dweb.link/ipfs/${WEBUI_CID}?format=car" \
+            -o /tmp/ipfs-webui.car
+
+          for IPFS_API in ${IPFS_APIS}; do
+            if curl -fsS -X POST "${IPFS_API}/api/v0/pin/ls?arg=${WEBUI_CID}&type=recursive" >/dev/null 2>&1; then
+              echo "${IPFS_API} already has the Web UI pin."
+              continue
+            fi
+            echo "Importing and pinning the Web UI on ${IPFS_API}..."
+            curl -fsS -X POST \
+              -F "file=@/tmp/ipfs-webui.car;type=application/vnd.ipld.car" \
+              "${IPFS_API}/api/v0/dag/import?pin-roots=true&stats=true"
+            curl -fsS -X POST "${IPFS_API}/api/v0/pin/add?arg=${WEBUI_CID}&recursive=true" >/dev/null
+            curl -fsS -X POST "${IPFS_API}/api/v0/pin/ls?arg=${WEBUI_CID}&type=recursive" >/dev/null
+          done
+          echo "IPFS Web UI is installed and pinned on Main, Annex, and Pubad."

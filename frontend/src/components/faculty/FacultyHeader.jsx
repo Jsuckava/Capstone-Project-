@@ -26,9 +26,12 @@ const FacultyHeader = ({ facultyData, totalSections, onLogout }) => {
 
   return (
     <div className="w-full">
-      <header className="w-full border-b border-slate-200 bg-[#003366] shadow-sm">
-        <div className="flex w-full items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
-          <div className="flex min-w-0 items-center gap-3">
+      <header
+        className="w-full border-b-2 border-yellow-400 bg-[#001b55] shadow-sm"
+        style={{ backgroundImage: "linear-gradient(118deg, transparent 0 48%, rgba(10,48,122,.72) 48.2% 62%, transparent 62.2%), linear-gradient(142deg, transparent 0 68%, rgba(0,43,112,.85) 68.2% 83%, transparent 83.2%), linear-gradient(105deg, #00113f 0%, #002469 54%, #001748 100%)" }}
+      >
+        <div className="flex w-full items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10">
               <img
                 src={plvlogo}
@@ -37,15 +40,15 @@ const FacultyHeader = ({ facultyData, totalSections, onLogout }) => {
               />
             </div>
 
-            <div className="min-w-0 leading-tight">
+            <div className="leading-tight">
               <p className="text-sm text-white/80">Faculty Portal</p>
-              <h1 className="truncate text-base font-bold text-white sm:text-xl">
+              <h1 className="text-xl font-bold text-white">
                 Welcome, {facultyName}
               </h1>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex items-center gap-3">
             <div className="hidden rounded-xl bg-white/10 px-4 py-2 text-right md:block">
               <p className="text-xs text-white/70">Semester</p>
               <p className="text-sm font-semibold text-white">{semester}</p>
@@ -53,7 +56,7 @@ const FacultyHeader = ({ facultyData, totalSections, onLogout }) => {
 
             <button
               onClick={onLogout}
-              className="rounded-xl border border-yellow-400 bg-transparent px-3 py-2 text-sm font-semibold text-yellow-400 transition hover:bg-yellow-400 hover:text-[#003366] sm:px-5"
+              className="rounded-xl border border-yellow-400 bg-transparent px-5 py-2 text-sm font-semibold text-yellow-400 transition hover:bg-yellow-400 hover:text-[#003366]"
             >
               Logout
             </button>

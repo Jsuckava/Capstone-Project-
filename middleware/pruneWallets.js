@@ -3,8 +3,8 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../network/.env'), override: true });
 
 async function pruneWallet(role, port) {
-    const user = process.env.COUCHDB_USER || 'hidden';
-    const pass = process.env.COUCHDB_PASS || 'hidden';
+    const user = process.env.COUCHDB_USER || 'PLVADMIN';
+    const pass = process.env.COUCHDB_PASS || 'PLVSYSTEM2026';
     const host = '127.0.0.1';
     const couchUrl = `http://${user}:${pass}@${host}:${port}`;
     const walletName = `fabric_wallet_${role}`;

@@ -33,7 +33,7 @@ spec:
       serviceAccountName: fabric-sa
       containers:
       - name: chaincode
-        image: registry.example.com/plv-repo/registrar-chaincode:latest
+        image: registry.example.com/plv-repo/faculty-chaincode:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 9999

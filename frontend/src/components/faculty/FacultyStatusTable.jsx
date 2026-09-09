@@ -84,29 +84,10 @@ const getWorkflowState = (sections = []) => {
   return "submitted";
 };
 
-const buildSectionSelectionIdentity = (section) => {
-  const safeSection = section || {};
-
-  return [
-    safeSection.reviewKey || "",
-    safeSection.facultyId || "",
-    safeSection.sectionName || "",
-    safeSection.subjectCode || "",
-    safeSection.schoolYear || "",
-    safeSection.semester || "",
-    safeSection.ipfsCid || "",
-    safeSection.earliestEncodedAt || "",
-    safeSection.totalStudents || 0,
-    safeSection.encodedCount || 0,
-  ]
-    .map((value) => String(value || "").trim().toLowerCase())
-    .join("|");
-};
-
 function FacultyStatusTable({
   rows,
   allRows = [],
-  selectedReviewSection,
+  selectedReviewKey,
   onSelectSection,
   onViewIpfs,
   viewMode = "default",
@@ -183,9 +164,7 @@ function FacultyStatusTable({
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-6 py-5">
           <h3 className="text-xl font-bold text-[#003366]">Faculty For Review</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Review submitted sections per faculty and open each section individually.
-          </p>
+          
         </div>
 
         <div className="overflow-x-auto">
@@ -252,9 +231,7 @@ function FacultyStatusTable({
                       <td colSpan="4" className="px-6 py-5">
                         <div className="flex flex-col gap-3">
                           {faculty.sections.map((section) => {
-                            const isActive =
-                              buildSectionSelectionIdentity(selectedReviewSection) ===
-                              buildSectionSelectionIdentity(section);
+                            const isActive = selectedReviewKey === section.reviewKey;
                             const priorityLabel = buildPriorityLabel(section.prioritySummary);
 
                             return (
@@ -280,7 +257,11 @@ function FacultyStatusTable({
                                 </div>
                                 <button
                                   type="button"
-                                  onClick={() => onSelectSection?.(isActive ? null : { ...section })}
+                                  onClick={() =>
+                                    onSelectSection?.(
+                                      isActive ? null : section
+                                    )
+                                  }
                                   className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition ${
                                     section.needsPriorityReview
                                       ? "bg-red-600 hover:bg-red-700"

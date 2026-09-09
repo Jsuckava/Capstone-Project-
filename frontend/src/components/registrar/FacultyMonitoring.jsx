@@ -82,10 +82,7 @@ function FacultyMonitoring() {
           <h3 className="text-xl font-bold text-[#003366]">
             Chairperson Review Log
           </h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Sections approved, returned to faculty, or forwarded by the
-            chairperson are reflected here for registrar monitoring.
-          </p>
+          
         </div>
 
         <div className="mt-6 overflow-x-auto">

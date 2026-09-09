@@ -53,9 +53,7 @@ function RegistrarDashboard() {
             <h3 className="text-xl font-bold text-[#003366]">
               Chairperson to Registrar Flow
             </h3>
-            <p className="mt-1 text-sm text-slate-500">
-              View which section grades have already been approved by the chairperson and which have been forwarded to the registrar.
-            </p>
+            
           </div>
 
           <div className="inline-flex w-fit rounded-full bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-700">

@@ -1,0 +1,218 @@
+groups:
+  - name: blockgo-middleware
+    interval: 30s
+    rules:
+      - alert: MiddlewareAPIMemoryUsageHigh
+        expr: |
+          container_memory_working_set_bytes{namespace="plv-fabric",pod=~"(middleware-api|auth-service|fabric-identity-service|ledger-service|grade-upload-service|settings-service).*",container=~"api-gateway|auth-service|identity-service|ledger-service|upload-service|settings-service"}
+          / container_spec_memory_limit_bytes{namespace="plv-fabric",pod=~"(middleware-api|auth-service|fabric-identity-service|ledger-service|grade-upload-service|settings-service).*",container=~"api-gateway|auth-service|identity-service|ledger-service|upload-service|settings-service"} > 0.9
+        for: 2m
+        labels:
+          severity: critical
+          component: middleware-api
+        annotations:
+          summary: "Middleware API pod {{ $labels.pod }} memory usage is above 90%"
+          description: "The middleware container is close to its memory limit. Check /metrics, pod logs, and heap snapshots if DEBUG_TOKEN is enabled."
+
+      - alert: MiddlewareAPIMemoryGrowth
+        expr: |
+          increase(container_memory_working_set_bytes{namespace="plv-fabric",pod=~"(middleware-api|auth-service|fabric-identity-service|ledger-service|grade-upload-service|settings-service).*"}[1h]) > 52428800
+        for: 10m
+        labels:
+          severity: warning
+          component: middleware-api
+        annotations:
+          summary: "Middleware API pod {{ $labels.pod }} memory grew by more than 50MiB in 1h"
+          description: "Sustained memory growth can indicate retained Fabric gateways, request buffers, or other leaked objects."
+
+      - alert: MiddlewareGatewayCacheNearCapacity
+        expr: |
+          blockgo_gateway_cache_entries{job="middleware-services",service="ledger-service"} / blockgo_gateway_cache_max_entries{job="middleware-services",service="ledger-service"} > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: middleware-api
+        annotations:
+          summary: "Middleware gateway cache is above 80% capacity"
+          description: "The Fabric gateway cache is nearing its configured maximum. Verify user traffic and eviction logs."
+
+      - alert: MiddlewareAPIPodRestarting
+        expr: |
+          increase(kube_pod_container_status_restarts_total{namespace="plv-fabric",pod=~"(middleware-api|auth-service|fabric-identity-service|ledger-service|grade-upload-service|settings-service).*"}[15m]) > 1
+        for: 5m
+        labels:
+          severity: critical
+          component: middleware-api
+        annotations:
+          summary: "Middleware API pod {{ $labels.pod }} restarted repeatedly"
+          description: "Check previous container logs and pod events for OOMKilled, failed probes, or startup errors."
+
+      - alert: MiddlewareAPIHighLatency
+        expr: |
+          histogram_quantile(0.95, sum by (le, pod) (rate(http_request_duration_seconds_bucket{job="middleware-api"}[5m]))) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: middleware-api
+        annotations:
+          summary: "Middleware API p95 latency is above 1s"
+          description: "High latency may come from PostgreSQL, Fabric gateway calls, or memory pressure."
+
+      - alert: MiddlewareAPIDown
+        expr: |
+          up{job="middleware-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: middleware-api
+        annotations:
+          summary: "Middleware API target {{ $labels.pod }} is down"
+          description: "Prometheus cannot scrape middleware metrics. Check pod readiness and service discovery."
+
+      - alert: MiddlewareInternalServiceDown
+        expr: up{job="middleware-services"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: middleware-services
+        annotations:
+          summary: "Middleware service {{ $labels.service }} target {{ $labels.pod }} is down"
+          description: "Check the owning Deployment, its readiness endpoint, and its direct dependencies."
+
+  - name: blockgo-platform
+    interval: 30s
+    rules:
+      - alert: FrontendDeploymentUnavailable
+        expr: |
+          kube_deployment_status_replicas_available{namespace="plv-fabric",deployment="frontend"} < 1
+        for: 2m
+        labels:
+          severity: critical
+          component: frontend
+        annotations:
+          summary: "Frontend deployment has no available replicas"
+          description: "The React/Nginx frontend is unavailable. Check frontend pod readiness, /nginx-health, and ingress events."
+
+      - alert: DotnetGatewayDeploymentUnavailable
+        expr: |
+          kube_deployment_status_replicas_available{namespace="plv-fabric",deployment="dotnet-api-gateway"} < 1
+        for: 2m
+        labels:
+          severity: critical
+          component: dotnet-api-gateway
+        annotations:
+          summary: "ASP.NET API gateway has no available replicas"
+          description: "The .NET gateway is unavailable. Check /api/backend/health, its aggregate /api/ready response, pod logs, and service endpoints."
+
+      - alert: DotnetInternalServiceUnavailable
+        expr: |
+          kube_deployment_status_replicas_available{namespace="plv-fabric",deployment=~"dotnet-(auth|academic|grade|operations|realtime)-service"} < 1
+        for: 2m
+        labels:
+          severity: critical
+          component: dotnet-microservices
+        annotations:
+          summary: "ASP.NET service {{ $labels.deployment }} has no available replicas"
+          description: "An internal .NET bounded-context service is unavailable. Check its /health endpoint and downstream dependencies."
+
+      - alert: PlatformPodRestarting
+        expr: |
+          increase(kube_pod_container_status_restarts_total{namespace="plv-fabric",pod=~"(frontend|dotnet-).*",container=~"frontend-nginx|dotnet-.*"}[15m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: platform
+        annotations:
+          summary: "Platform pod {{ $labels.pod }} restarted repeatedly"
+          description: "A frontend or C# backend container restarted more than once in 15 minutes. Check previous logs and pod events."
+
+      - alert: FrontendMemoryUsageHigh
+        expr: |
+          container_memory_working_set_bytes{namespace="plv-fabric",pod=~"frontend.*",container="frontend-nginx"}
+          / container_spec_memory_limit_bytes{namespace="plv-fabric",pod=~"frontend.*",container="frontend-nginx"} > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: frontend
+        annotations:
+          summary: "Frontend pod {{ $labels.pod }} memory usage is above 85%"
+          description: "The frontend Nginx container is close to its memory limit. Check traffic, static asset serving, and pod events."
+
+      - alert: DotnetServiceMemoryUsageHigh
+        expr: |
+          container_memory_working_set_bytes{namespace="plv-fabric",pod=~"dotnet-.*",container=~"dotnet-.*"}
+          / container_spec_memory_limit_bytes{namespace="plv-fabric",pod=~"dotnet-.*",container=~"dotnet-.*"} > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: dotnet-microservices
+        annotations:
+          summary: "ASP.NET pod {{ $labels.pod }} memory usage is above 85%"
+          description: "A .NET microservice is close to its memory limit. Check its bounded-context request volume, logs, and downstream dependencies."
+
+  - name: blockgo-observability
+    interval: 30s
+    rules:
+      - alert: KubernetesNodeMemoryHigh
+        expr: |
+          sum(container_memory_working_set_bytes{namespace!=""})
+          / scalar(max(machine_memory_bytes)) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          component: kubernetes
+        annotations:
+          summary: "Kubernetes node memory usage is above 90%"
+          description: "Review the Kubernetes and Node Memory dashboard for the largest namespaces and pods."
+
+      - alert: PostgreSQLExporterDown
+        expr: up{job="postgres-exporter"} == 0 or pg_up == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: postgresql
+        annotations:
+          summary: "PostgreSQL monitoring target is unavailable"
+          description: "Prometheus cannot collect PostgreSQL health and activity metrics."
+
+      - alert: FabricPeerDown
+        expr: up{job="fabric-peer"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: fabric-peer
+        annotations:
+          summary: "Fabric peer {{ $labels.pod }} is unavailable"
+          description: "Check the peer operations endpoint, pod readiness, and recent Fabric logs."
+
+      - alert: FabricOrdererDown
+        expr: up{job="fabric-orderer"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: fabric-orderer
+        annotations:
+          summary: "Fabric orderer {{ $labels.pod }} is unavailable"
+          description: "Check the orderer operations endpoint, Raft state, and recent Fabric logs."
+
+      - alert: ObservabilityComponentDown
+        expr: up{job="observability"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: observability
+        annotations:
+          summary: "Observability component {{ $labels.component }} is unavailable"
+          description: "Grafana dashboards may have incomplete metrics or logs until the component recovers."
+
+      - alert: BlockGOWorkflowFailureRateHigh
+        expr: |
+          sum(rate(http_requests_total{route=~".*(register|enroll|revoke|wallet|batch-upload|upload-grades|issue-grade|batch-issue-grade|audit-event).*",status=~"4..|5.."}[5m]))
+          / clamp_min(sum(rate(http_requests_total{route=~".*(register|enroll|revoke|wallet|batch-upload|upload-grades|issue-grade|batch-issue-grade|audit-event).*"}[5m])), 0.000001) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: blockgo-workflow
+        annotations:
+          summary: "BlockGO workflow failure rate is above 10%"
+          description: "Review the workflow and API dashboards, then correlate failures with Loki logs."

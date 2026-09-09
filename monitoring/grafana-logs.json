@@ -1,0 +1,246 @@
+{
+    "annotations":  {
+                        "list":  [
+
+                                 ]
+                    },
+    "editable":  false,
+    "fiscalYearStartMonth":  0,
+    "graphTooltip":  1,
+    "links":  [
+
+              ],
+    "panels":  [
+                   {
+                       "id":  1,
+                       "title":  "Log Lines by Namespace",
+                       "type":  "timeseries",
+                       "datasource":  {
+                                          "type":  "loki",
+                                          "uid":  "loki"
+                                      },
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  12,
+                                       "x":  0,
+                                       "y":  0
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "short",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "legend":  {
+                                                      "displayMode":  "table",
+                                                      "placement":  "bottom",
+                                                      "calcs":  [
+                                                                    "lastNotNull",
+                                                                    "max"
+                                                                ]
+                                                  },
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   }
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum by (namespace) (count_over_time({cluster=\"blockgo\"}[$__interval]))",
+                                           "queryType":  "range",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  2,
+                       "title":  "Errors and Exceptions",
+                       "type":  "timeseries",
+                       "datasource":  {
+                                          "type":  "loki",
+                                          "uid":  "loki"
+                                      },
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  12,
+                                       "x":  12,
+                                       "y":  0
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "short",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "legend":  {
+                                                      "displayMode":  "table",
+                                                      "placement":  "bottom",
+                                                      "calcs":  [
+                                                                    "lastNotNull",
+                                                                    "max"
+                                                                ]
+                                                  },
+                                       "tooltip":  {
+                                                       "mode":  "multi",
+                                                       "sort":  "desc"
+                                                   }
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum by (namespace, app) (count_over_time({cluster=\"blockgo\"} |~ \"(?i)(error|exception|failed|42P08)\" [$__interval]))",
+                                           "queryType":  "range",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  3,
+                       "title":  "BlockGO Application Logs",
+                       "type":  "logs",
+                       "datasource":  {
+                                          "type":  "loki",
+                                          "uid":  "loki"
+                                      },
+                       "gridPos":  {
+                                       "h":  11,
+                                       "w":  24,
+                                       "x":  0,
+                                       "y":  8
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "short",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "dedupStrategy":  "none",
+                                       "enableLogDetails":  true,
+                                       "prettifyLogMessage":  false,
+                                       "showCommonLabels":  false,
+                                       "showLabels":  false,
+                                       "showTime":  true,
+                                       "sortOrder":  "Descending",
+                                       "wrapLogMessage":  true
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "{cluster=\"blockgo\",namespace=~\"plv-.*\"}",
+                                           "queryType":  "range",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  4,
+                       "title":  "Kubernetes Events",
+                       "type":  "logs",
+                       "datasource":  {
+                                          "type":  "loki",
+                                          "uid":  "loki"
+                                      },
+                       "gridPos":  {
+                                       "h":  9,
+                                       "w":  24,
+                                       "x":  0,
+                                       "y":  19
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "short",
+                                                            "color":  {
+                                                                          "mode":  "palette-classic"
+                                                                      },
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "lineInterpolation":  "linear",
+                                                                           "lineWidth":  1,
+                                                                           "fillOpacity":  10,
+                                                                           "showPoints":  "never"
+                                                                       }
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "options":  {
+                                       "dedupStrategy":  "none",
+                                       "enableLogDetails":  true,
+                                       "prettifyLogMessage":  false,
+                                       "showCommonLabels":  false,
+                                       "showLabels":  false,
+                                       "showTime":  true,
+                                       "sortOrder":  "Descending",
+                                       "wrapLogMessage":  true
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "{cluster=\"blockgo\",job=\"integrations/kubernetes/eventhandler\"}",
+                                           "queryType":  "range",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   }
+               ],
+    "refresh":  "15s",
+    "schemaVersion":  41,
+    "tags":  [
+                 "blockgo",
+                 "loki",
+                 "logs",
+                 "kubernetes",
+                 "system-admin"
+             ],
+    "templating":  {
+                       "list":  [
+
+                                ]
+                   },
+    "time":  {
+                 "from":  "now-6h",
+                 "to":  "now"
+             },
+    "timezone":  "browser",
+    "title":  "BlockGO / Kubernetes \u0026 Application Logs",
+    "uid":  "blockgo-logs",
+    "version":  1,
+    "weekStart":  ""
+}

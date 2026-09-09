@@ -1,217 +1,455 @@
 ---
-# Middleware API Service Deployment
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: middleware-service-config
+  namespace: plv-fabric
+data:
+  NODE_ENV: production
+  AUTH_SERVICE_URL: http://auth-service.plv-fabric.svc.cluster.local:4001
+  IDENTITY_SERVICE_URL: http://fabric-identity-service.plv-fabric.svc.cluster.local:4002
+  LEDGER_SERVICE_URL: http://ledger-service.plv-fabric.svc.cluster.local:4003
+  UPLOAD_SERVICE_URL: http://grade-upload-service.plv-fabric.svc.cluster.local:4004
+  SETTINGS_SERVICE_URL: http://settings-service.plv-fabric.svc.cluster.local:4005
+  CSHARP_API_URL: http://client-app-service.plv-fabric.svc.cluster.local:5000
+  IPFS_API_URL: /dns4/ipfs-ha-api.plv-fabric.svc.cluster.local/tcp/5001/http
+  POSTGRES_DB: ActivityLogs
+  POSTGRES_HOST: postgres.plv-main-campus.svc.cluster.local
+  POSTGRES_PORT: "5432"
+  CHANNEL_NAME: registrar-channel
+  CHAINCODE_NAME: registrar
+  COUCHDB_WALLET_REGISTRAR_URL: http://couchdb-wallet-registrar.plv-main-campus.svc.cluster.local:5985
+  COUCHDB_WALLET_FACULTY_URL: http://couchdb-wallet-faculty.plv-annex-campus.svc.cluster.local:5985
+  COUCHDB_WALLET_DEPARTMENT_URL: http://couchdb-wallet-department.plv-pubad-campus.svc.cluster.local:5985
+  FABRIC_CA_REGISTRAR_URL: https://ca-registrar.plv-main-campus.svc.cluster.local:7054
+  FABRIC_CA_FACULTY_URL: https://ca-faculty.plv-annex-campus.svc.cluster.local:7054
+  FABRIC_CA_DEPARTMENT_URL: https://ca-department.plv-pubad-campus.svc.cluster.local:7054
+  FABRIC_CA_REGISTRAR_CERT: /etc/hyperledger/fabric-ca-roots/registrar-ca-cert.pem
+  FABRIC_CA_REGISTRAR_TLS_CERT: /etc/hyperledger/fabric-ca-roots/registrar-tls-cert.pem
+  FABRIC_CA_FACULTY_CERT: /etc/hyperledger/fabric-ca-roots/faculty-ca-cert.pem
+  FABRIC_CA_FACULTY_TLS_CERT: /etc/hyperledger/fabric-ca-roots/faculty-tls-cert.pem
+  FABRIC_CA_DEPARTMENT_CERT: /etc/hyperledger/fabric-ca-roots/department-ca-cert.pem
+  FABRIC_CA_DEPARTMENT_TLS_CERT: /etc/hyperledger/fabric-ca-roots/department-tls-cert.pem
+  FABRIC_CA_INSECURE_TLS: "false"
+  FABRIC_GATEWAY_TLS_ROOTS: /etc/hyperledger/fabric-gateway-tls
+  FABRIC_DISCOVERY_ENABLED: "true"
+  FABRIC_HA_ENABLED: "true"
+  FABRIC_PEER_REGISTRAR_2_URL: grpcs://peer-registrar-2.plv-main-campus.svc.cluster.local:7051
+  FABRIC_PEER_FACULTY_2_URL: grpcs://peer-faculty-2.plv-annex-campus.svc.cluster.local:7051
+  FABRIC_PEER_DEPARTMENT_2_URL: grpcs://peer-department-2.plv-pubad-campus.svc.cluster.local:7051
+  FABRIC_ORDERER_2_URL: grpcs://orderer-2.plv-main-campus.svc.cluster.local:7050
+  FABRIC_ORDERER_3_URL: grpcs://orderer-3.plv-annex-campus.svc.cluster.local:7050
+  FABRIC_ORDERER_4_URL: grpcs://orderer-4.plv-annex-campus.svc.cluster.local:7050
+  FABRIC_ORDERER_5_URL: grpcs://orderer-5.plv-pubad-campus.svc.cluster.local:7050
+  FABRIC_ORDERER_6_URL: grpcs://orderer-6.plv-pubad-campus.svc.cluster.local:7050
+  CONNECTION_PROFILE_PATH: /app/connection.json
+  GATEWAY_CACHE_MAX_USERS: "500"
+  GATEWAY_IDLE_TIMEOUT_MS: "300000"
+  GATEWAY_PRUNE_INTERVAL_MS: "60000"
+  SHUTDOWN_GRACE_MS: "30000"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: middleware-api
   namespace: plv-fabric
 spec:
-  replicas: 1
+  replicas: 3
   selector:
-    matchLabels:
-      app: middleware-api
-      tier: application
+    matchLabels: { app: middleware-api, tier: application }
   strategy:
     type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 0
-      maxUnavailable: 1
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
   template:
     metadata:
-      labels:
-        app: middleware-api
-        tier: application
+      labels: { app: middleware-api, tier: application }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "4000"
     spec:
-      serviceAccountName: fabric-sa
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - middleware-api
-              topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 35
       containers:
-      - name: middleware
+      - name: api-gateway
         image: registry.example.com/plv-repo/fabric-middleware:latest
         imagePullPolicy: Always
-        workingDir: /app/middleware
-        command: ["npm", "start"]
-        ports:
-        - containerPort: 4000
-          name: api
-          protocol: TCP
-        envFrom:
-        - secretRef:
-            name: blockgo-secrets
+        command: ["npm", "run", "start:gateway"]
+        ports: [{ name: api, containerPort: 4000 }]
+        envFrom: [{ configMapRef: { name: middleware-service-config } }]
         env:
-        - name: NODE_ENV
-          value: production
-        - name: PORT
-          value: "4000"
-        - name: PG_POOL_MAX
-          value: "20"
-        - name: PG_CONNECTION_TIMEOUT_MS
-          value: "3000"
-        - name: HTTP_KEEP_ALIVE_TIMEOUT_MS
-          value: "65000"
-        - name: HTTP_HEADERS_TIMEOUT_MS
-          value: "66000"
-        - name: HTTP_REQUEST_TIMEOUT_MS
-          value: "120000"
-        - name: CSHARP_API_URL
-          value: "http://client-app-service.plv-fabric.svc.cluster.local:5000"
-        - name: IPFS_API_URL
-          value: "/dns4/ipfs-api.plv-fabric.svc.cluster.local/tcp/5001/http"
-        - name: POSTGRES_DB
-          value: ActivityLogs
-        - name: POSTGRES_HOST
-          value: postgres.plv-main-campus.svc.cluster.local
-        - name: POSTGRES_PORT
-          value: "5432"
-        - name: COUCHDB_WALLET_REGISTRAR_URL
-          value: http://capstone:pass123@couchdb-wallet-registrar.plv-main-campus.svc.cluster.local:5984
-        - name: COUCHDB_WALLET_FACULTY_URL
-          value: http://capstone:pass123@couchdb-wallet-faculty.plv-annex-campus.svc.cluster.local:5984
-        - name: COUCHDB_WALLET_DEPARTMENT_URL
-          value: http://capstone:pass123@couchdb-wallet-department.plv-pubad-campus.svc.cluster.local:5984
-        - name: CHANNEL_NAME
-          value: registrar-channel
-        - name: CHAINCODE_NAME
-          value: registrar
-        - name: FABRIC_CA_REGISTRAR_URL
-          value: "https://ca-registrar.plv-main-campus.svc.cluster.local:7054"
-        - name: FABRIC_CA_FACULTY_URL
-          value: "https://ca-faculty.plv-annex-campus.svc.cluster.local:7054"
-        - name: FABRIC_CA_DEPARTMENT_URL
-          value: "https://ca-department.plv-pubad-campus.svc.cluster.local:7054"
-        - name: FABRIC_CA_REGISTRAR_CERT
-          value: "/etc/hyperledger/fabric-ca-roots/registrar-ca-cert.pem"
-        - name: FABRIC_CA_REGISTRAR_TLS_CERT
-          value: "/etc/hyperledger/fabric-ca-roots/registrar-tls-cert.pem"
-        - name: FABRIC_CA_FACULTY_CERT
-          value: "/etc/hyperledger/fabric-ca-roots/faculty-ca-cert.pem"
-        - name: FABRIC_CA_FACULTY_TLS_CERT
-          value: "/etc/hyperledger/fabric-ca-roots/faculty-tls-cert.pem"
-        - name: FABRIC_CA_DEPARTMENT_CERT
-          value: "/etc/hyperledger/fabric-ca-roots/department-ca-cert.pem"
-        - name: FABRIC_CA_DEPARTMENT_TLS_CERT
-          value: "/etc/hyperledger/fabric-ca-roots/department-tls-cert.pem"
-        - name: FABRIC_CA_INSECURE_TLS
-          value: "true"
-        volumeMounts:
-        - name: fabric-ca-roots
-          mountPath: /etc/hyperledger/fabric-ca-roots
-          readOnly: true
-        livenessProbe:
-          httpGet:
-            path: /api/health
-            port: 4000
-            scheme: HTTP
-          initialDelaySeconds: 120
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /api/health
-            port: 4000
-            scheme: HTTP
-          initialDelaySeconds: 60
+        - { name: PORT, value: "4000" }
+        - { name: NODE_OPTIONS, value: "--max-old-space-size=160" }
+        - name: FRONTEND_URL
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: FRONTEND_URL, optional: true } }
+        - name: CORS_ORIGINS
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: CORS_ORIGINS, optional: true } }
+        startupProbe: &gateway-health
+          httpGet: { path: /api/health, port: 4000 }
           periodSeconds: 5
           timeoutSeconds: 3
-          failureThreshold: 2
+          failureThreshold: 30
+        livenessProbe: *gateway-health
+        readinessProbe:
+          httpGet: { path: /api/ready, port: 4000 }
+          periodSeconds: 5
+          timeoutSeconds: 4
+          failureThreshold: 3
         resources:
-          requests:
-            memory: "512Mi"
-            cpu: "250m"
-          limits:
-            memory: "768Mi"
-            cpu: "1000m"
-      volumes:
-      - name: fabric-ca-roots
-        secret:
-          secretName: fabric-ca-roots
+          requests: { memory: 128Mi, cpu: 100m }
+          limits: { memory: 192Mi, cpu: 300m }
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: middleware-api
   namespace: plv-fabric
-  labels:
-    app: middleware-api
+  labels: { app: middleware-api }
   annotations:
     cloud.google.com/neg: '{"ingress": true}'
-    cloud.google.com/backend-config: '{"ports":{"4000":"middleware-api-backend-config"}}'
 spec:
-  type: ClusterIP
-  selector:
-    app: middleware-api
-  ports:
-  - port: 4000
-    targetPort: 4000
-    protocol: TCP
-    name: api
-  sessionAffinity: ClientIP
-  sessionAffinityConfig:
-    clientIP:
-      timeoutSeconds: 10800
----
-apiVersion: cloud.google.com/v1
-kind: BackendConfig
-metadata:
-  name: middleware-api-backend-config
-  namespace: plv-fabric
-spec:
-  timeoutSec: 120
-  healthCheck:
-    type: HTTP
-    requestPath: /api/health
-    port: 4000
+  selector: { app: middleware-api }
+  ports: [{ name: api, port: 4000, targetPort: 4000 }]
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: middleware
   namespace: plv-fabric
-  labels:
-    app: middleware-api
 spec:
-  type: ClusterIP
-  selector:
-    app: middleware-api
-  ports:
-  - port: 4000
-    targetPort: 4000
-    protocol: TCP
-    name: api
+  selector: { app: middleware-api }
+  ports: [{ name: api, port: 4000, targetPort: 4000 }]
 ---
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: middleware-api-hpa
+  name: auth-service
   namespace: plv-fabric
 spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: middleware-api
-  minReplicas: 1
-  maxReplicas: 1
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
+  replicas: 2
+  selector:
+    matchLabels: { app: auth-service, tier: application }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  template:
+    metadata:
+      labels: { app: auth-service, tier: application }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/path: /metrics, prometheus.io/port: "4001" }
+    spec:
+      terminationGracePeriodSeconds: 35
+      containers:
+      - name: auth-service
+        image: registry.example.com/plv-repo/fabric-middleware:latest
+        imagePullPolicy: Always
+        command: ["npm", "run", "start:auth"]
+        ports: [{ name: api, containerPort: 4001 }]
+        envFrom:
+        - configMapRef: { name: middleware-service-config }
+        env:
+        - { name: PORT, value: "4001" }
+        - { name: NODE_OPTIONS, value: "--max-old-space-size=192" }
+        - name: JWT_SECRET
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: JWT_SECRET } }
+        - name: INTERNAL_API_KEY
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: INTERNAL_API_KEY } }
+        - name: POSTGRES_USER
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: POSTGRES_USER } }
+        - name: POSTGRES_PASS
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: POSTGRES_PASS } }
+        - name: BOOTSTRAP_REGISTRAR_PASS
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: BOOTSTRAP_REGISTRAR_PASS } }
+        - name: BOOTSTRAP_SYSTEM_ADMIN_PASS
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: BOOTSTRAP_SYSTEM_ADMIN_PASS } }
+        - name: FRONTEND_URL
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: FRONTEND_URL, optional: true } }
+        - name: EMAIL_USER
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: EMAIL_USER, optional: true } }
+        - name: EMAIL_PASS
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: EMAIL_PASS, optional: true } }
+        startupProbe: &auth-health
+          httpGet: { path: /api/health, port: 4001 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+        livenessProbe: *auth-health
+        readinessProbe:
+          httpGet: { path: /api/ready, port: 4001 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+        resources:
+          requests: { memory: 128Mi, cpu: 100m }
+          limits: { memory: 256Mi, cpu: 400m }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: plv-fabric
+  labels: { app: auth-service }
+spec:
+  selector: { app: auth-service }
+  ports: [{ name: api, port: 4001, targetPort: 4001 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fabric-identity-service
+  namespace: plv-fabric
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: fabric-identity-service, tier: application }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  template:
+    metadata:
+      labels: { app: fabric-identity-service, tier: application }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/path: /metrics, prometheus.io/port: "4002" }
+    spec:
+      serviceAccountName: fabric-sa
+      terminationGracePeriodSeconds: 40
+      initContainers:
+      - name: wait-for-wallets
+        image: busybox:1.36.1
+        command: ["/bin/sh", "-ec", "for e in couchdb-wallet-registrar.plv-main-campus.svc.cluster.local:5985 couchdb-wallet-faculty.plv-annex-campus.svc.cluster.local:5985 couchdb-wallet-department.plv-pubad-campus.svc.cluster.local:5985; do until nc -w 2 ${e%:*} ${e##*:} </dev/null; do sleep 2; done; done"]
+      containers:
+      - name: identity-service
+        image: registry.example.com/plv-repo/fabric-middleware:latest
+        imagePullPolicy: Always
+        command: ["npm", "run", "start:identity"]
+        ports: [{ name: api, containerPort: 4002 }]
+        envFrom:
+        - configMapRef: { name: middleware-service-config }
+        env:
+        - { name: PORT, value: "4002" }
+        - { name: NODE_OPTIONS, value: "--max-old-space-size=256" }
+        - name: INTERNAL_API_KEY
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: INTERNAL_API_KEY } }
+        - name: COUCHDB_USER
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: COUCHDB_USER } }
+        - name: COUCHDB_PASS
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: COUCHDB_PASS } }
+        - name: WALLET_ENCRYPTION_KEY
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: WALLET_ENCRYPTION_KEY, optional: true } }
+        - name: BOOTSTRAP_REGISTRAR_PASS
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: BOOTSTRAP_REGISTRAR_PASS } }
+        volumeMounts:
+        - { name: fabric-ca-roots, mountPath: /etc/hyperledger/fabric-ca-roots, readOnly: true }
+        startupProbe: &identity-health
+          httpGet: { path: /api/health, port: 4002 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe: *identity-health
+        readinessProbe:
+          httpGet: { path: /api/ready, port: 4002 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+        resources:
+          requests: { memory: 192Mi, cpu: 100m }
+          limits: { memory: 384Mi, cpu: 500m }
+      volumes:
+      - name: fabric-ca-roots
+        secret: { secretName: fabric-ca-roots }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fabric-identity-service
+  namespace: plv-fabric
+  labels: { app: fabric-identity-service }
+spec:
+  selector: { app: fabric-identity-service }
+  ports: [{ name: api, port: 4002, targetPort: 4002 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ledger-service
+  namespace: plv-fabric
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app: ledger-service, tier: application }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  template:
+    metadata:
+      labels: { app: ledger-service, tier: application }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/path: /metrics, prometheus.io/port: "4003" }
+    spec:
+      serviceAccountName: fabric-sa
+      terminationGracePeriodSeconds: 45
+      initContainers:
+      - name: wait-for-wallets
+        image: busybox:1.36.1
+        command: ["/bin/sh", "-ec", "for e in couchdb-wallet-registrar.plv-main-campus.svc.cluster.local:5985 couchdb-wallet-faculty.plv-annex-campus.svc.cluster.local:5985 couchdb-wallet-department.plv-pubad-campus.svc.cluster.local:5985; do until nc -w 2 ${e%:*} ${e##*:} </dev/null; do sleep 2; done; done"]
+      containers:
+      - name: ledger-service
+        image: registry.example.com/plv-repo/fabric-middleware:latest
+        imagePullPolicy: Always
+        command: ["npm", "run", "start:ledger"]
+        ports: [{ name: api, containerPort: 4003 }]
+        envFrom:
+        - configMapRef: { name: middleware-service-config }
+        env:
+        - { name: PORT, value: "4003" }
+        - { name: NODE_OPTIONS, value: "--max-old-space-size=384" }
+        - name: INTERNAL_API_KEY
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: INTERNAL_API_KEY } }
+        - name: COUCHDB_USER
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: COUCHDB_USER } }
+        - name: COUCHDB_PASS
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: COUCHDB_PASS } }
+        - name: WALLET_ENCRYPTION_KEY
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: WALLET_ENCRYPTION_KEY, optional: true } }
+        volumeMounts:
+        - { name: fabric-gateway-tls-roots, mountPath: /etc/hyperledger/fabric-gateway-tls, readOnly: true }
+        startupProbe: &ledger-health
+          httpGet: { path: /api/health, port: 4003 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe: *ledger-health
+        readinessProbe:
+          httpGet: { path: /api/ready, port: 4003 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+        resources:
+          requests: { memory: 256Mi, cpu: 150m }
+          limits: { memory: 512Mi, cpu: 750m }
+      volumes:
+      - name: fabric-gateway-tls-roots
+        secret: { secretName: fabric-gateway-tls-roots }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ledger-service
+  namespace: plv-fabric
+  labels: { app: ledger-service }
+spec:
+  selector: { app: ledger-service }
+  ports: [{ name: api, port: 4003, targetPort: 4003 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grade-upload-service
+  namespace: plv-fabric
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: grade-upload-service, tier: application }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  template:
+    metadata:
+      labels: { app: grade-upload-service, tier: application }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/path: /metrics, prometheus.io/port: "4004" }
+    spec:
+      terminationGracePeriodSeconds: 35
+      containers:
+      - name: upload-service
+        image: registry.example.com/plv-repo/fabric-middleware:latest
+        imagePullPolicy: Always
+        command: ["npm", "run", "start:upload"]
+        ports: [{ name: api, containerPort: 4004 }]
+        envFrom:
+        - configMapRef: { name: middleware-service-config }
+        env:
+        - { name: PORT, value: "4004" }
+        - { name: NODE_OPTIONS, value: "--max-old-space-size=256" }
+        - name: INTERNAL_API_KEY
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: INTERNAL_API_KEY } }
+        - name: IPFS_ENCRYPTION_KEY
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: IPFS_ENCRYPTION_KEY } }
+        volumeMounts: [{ name: uploads, mountPath: /app/uploads }]
+        startupProbe: &upload-health
+          httpGet: { path: /api/health, port: 4004 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+        livenessProbe: *upload-health
+        readinessProbe:
+          httpGet: { path: /api/ready, port: 4004 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+        resources:
+          requests: { memory: 192Mi, cpu: 100m }
+          limits: { memory: 512Mi, cpu: 1000m }
+      volumes:
+      - name: uploads
+        emptyDir: { sizeLimit: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grade-upload-service
+  namespace: plv-fabric
+  labels: { app: grade-upload-service }
+spec:
+  selector: { app: grade-upload-service }
+  ports: [{ name: api, port: 4004, targetPort: 4004 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: settings-service
+  namespace: plv-fabric
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: settings-service, tier: application }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  template:
+    metadata:
+      labels: { app: settings-service, tier: application }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/path: /metrics, prometheus.io/port: "4005" }
+    spec:
+      terminationGracePeriodSeconds: 35
+      containers:
+      - name: settings-service
+        image: registry.example.com/plv-repo/fabric-middleware:latest
+        imagePullPolicy: Always
+        command: ["npm", "run", "start:settings"]
+        ports: [{ name: api, containerPort: 4005 }]
+        envFrom:
+        - configMapRef: { name: middleware-service-config }
+        env:
+        - { name: PORT, value: "4005" }
+        - { name: NODE_OPTIONS, value: "--max-old-space-size=160" }
+        - name: INTERNAL_API_KEY
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: INTERNAL_API_KEY } }
+        - name: POSTGRES_USER
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: POSTGRES_USER } }
+        - name: POSTGRES_PASS
+          valueFrom: { secretKeyRef: { name: blockgo-secrets, key: POSTGRES_PASS } }
+        startupProbe: &settings-health
+          httpGet: { path: /api/health, port: 4005 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+        livenessProbe: *settings-health
+        readinessProbe:
+          httpGet: { path: /api/ready, port: 4005 }
+          periodSeconds: 5
+          timeoutSeconds: 3
+        resources:
+          requests: { memory: 128Mi, cpu: 100m }
+          limits: { memory: 192Mi, cpu: 300m }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: settings-service
+  namespace: plv-fabric
+  labels: { app: settings-service }
+spec:
+  selector: { app: settings-service }
+  ports: [{ name: api, port: 4005, targetPort: 4005 }]

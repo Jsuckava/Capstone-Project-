@@ -19,6 +19,12 @@ namespace Client_app.Models
         public string? Address { get; set; }
         public string? Sex { get; set; }
         public string? YearLevel { get; set; }
+        public long? CurriculumId { get; set; }
+        public string? CurriculumName { get; set; }
+        public string? CurriculumVersion { get; set; }
+        public string? SchoolYear { get; set; }
+        public string? Semester { get; set; }
+        public string? EnrollmentStatus { get; set; }
         public string? FacultyType { get; set; }
         public List<string>? EnrolledSubjects { get; set; }
     }

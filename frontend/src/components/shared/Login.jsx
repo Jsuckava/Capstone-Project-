@@ -4,36 +4,24 @@ import '../../assets/App.css';
 import plvbg from '../../assets/plvbg.png';
 import plvlogo from '../../assets/plvlogo.png';
 import { login, forgotPassword, resetPassword } from '../../services/api';
-import { useRecoveredState } from '../../utils/sessionRecovery';
-
+import { createLocalDevToken, createLocalDevTokenForRole } from '../../utils/localDevAuth';
 
 const Login = ({ onLogin }) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const [email, setEmail] = useRecoveredState("login:email", "");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [currentView, setCurrentView] = useRecoveredState('login:currentView', 'signIn');
+  const [currentView, setCurrentView] = useState('signIn');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [resetToken, setResetToken] = useState('');
+  const [resetOtp, setResetOtp] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-    if (token || window.location.pathname.includes('/reset-password')) {
-      if (token) setResetToken(token);
-      setCurrentView('resetPassword');
-    }
+    if (window.location.pathname.includes('/reset-password')) setCurrentView('resetPassword');
   }, []);
-
-  useEffect(() => {
-    if (!['signIn', 'forgotPassword', 'resetPassword'].includes(currentView)) {
-      setCurrentView('signIn');
-    }
-  }, [currentView, setCurrentView]);
 
   const validatePassword = (pwd) => {
     if (pwd.length < 8) return "Password must be at least 8 characters long.";
@@ -50,9 +38,15 @@ const Login = ({ onLogin }) => {
     setError('');
     setMessage('');
     try {
+      const localDevToken = createLocalDevToken(email);
+      if (localDevToken) {
+        onLogin(localDevToken);
+        return;
+      }
+
       const data = await login({ username: email, password: password });
       if (data.token) {
-        onLogin(data.token);
+        await onLogin(data.token);
       } else {
         setError(data.error || "Login failed. Invalid email or password.");
       }
@@ -60,6 +54,13 @@ const Login = ({ onLogin }) => {
       setError(error.message || "Error connecting to the server.");
     }
     setIsLoading(false);
+  };
+
+  const enterLocalPortal = (role) => {
+    setError('');
+    setMessage('');
+    const token = createLocalDevTokenForRole(role);
+    if (token) onLogin(token);
   };
 
   const handleForgotPassword = async (e) => {
@@ -73,7 +74,8 @@ const Login = ({ onLogin }) => {
     setMessage('');
     try {
       const data = await forgotPassword(email);
-      setMessage(data.message || 'Reset link sent.');
+      setMessage(data.message || 'Reset OTP sent.');
+      setCurrentView('resetPassword');
     } catch (error) {
       setError(error.message);
     }
@@ -97,13 +99,13 @@ const Login = ({ onLogin }) => {
     setError('');
     setMessage('');
     try {
-      const data = await resetPassword(resetToken, password);
+      const data = await resetPassword({ email, otp: resetOtp, newPassword: password });
       setMessage(data.message || 'Password updated successfully.');
       setTimeout(() => {
         setCurrentView('signIn');
         setPassword('');
         setConfirmPassword('');
-        window.history.replaceState({}, document.title, "/");
+        window.history.replaceState({}, document.title, "/login");
       }, 3000);
     } catch (error) {
       setError(error.message);
@@ -215,8 +217,6 @@ const Login = ({ onLogin }) => {
           {error && <p style={{ color: 'red', textAlign: 'center' }}>{error}</p>}
           {message && <p style={{ color: 'green', textAlign: 'center' }}>{message}</p>}
           
-          {/* Registrar users now create accounts from Register Users. */}
-
           {/* SIGN IN FORM */}
           {currentView === 'signIn' && (
             <form className="login-form" onSubmit={handleLoginSubmit}>
@@ -242,6 +242,30 @@ const Login = ({ onLogin }) => {
               <button type="submit" className="sign-in-btn" disabled={isLoading}>
                 {isLoading ? (<><span className="spinner"></span> Signing In...</>) : 'Sign In'}
               </button>
+              {process.env.NODE_ENV === 'development' && (
+                <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid #ddd' }}>
+                  <p style={{ marginBottom: '8px', textAlign: 'center', color: '#666', fontSize: '13px' }}>
+                    Local access — middleware authentication disabled
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <button type="button" className="sign-in-btn" onClick={() => enterLocalPortal('system_admin')}>
+                      Enter as System Admin
+                    </button>
+                    <button type="button" className="sign-in-btn" onClick={() => enterLocalPortal('registrar')}>
+                      Enter as Registrar
+                    </button>
+                    <button type="button" className="sign-in-btn" onClick={() => enterLocalPortal('faculty')}>
+                      Enter as Faculty
+                    </button>
+                    <button type="button" className="sign-in-btn" onClick={() => enterLocalPortal('department_admin')}>
+                      Enter as Chairperson
+                    </button>
+                    <button type="button" className="sign-in-btn" onClick={() => enterLocalPortal('student')}>
+                      Enter as Student
+                    </button>
+                  </div>
+                </div>
+              )}
               <p className="forgot-password auth-link" onClick={() => { setCurrentView('forgotPassword'); setError(''); setMessage(''); }} style={{ cursor: 'pointer', fontWeight: 'normal', marginTop: '10px', textAlign: 'center' }}>
                 Forgot Password?
               </p>
@@ -251,13 +275,13 @@ const Login = ({ onLogin }) => {
           {/* FORGOT PASSWORD FORM */}
           {currentView === 'forgotPassword' && (
             <form className="login-form" onSubmit={handleForgotPassword}>
-              <p style={{ textAlign: 'center', marginBottom: '15px', color: '#666' }}>Enter your email to receive a password reset link.</p>
+              
               <div className="input-group">
                 <label>Email</label>
                 <input type="email" placeholder="Your registered email" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
               <button type="submit" className="sign-in-btn" disabled={isLoading}>
-                {isLoading ? (<><span className="spinner"></span> Sending...</>) : 'Send Reset Link'}
+                {isLoading ? (<><span className="spinner"></span> Sending...</>) : 'Send Reset OTP'}
               </button>
             </form>
           )}
@@ -265,7 +289,11 @@ const Login = ({ onLogin }) => {
           {/* RESET PASSWORD FORM */}
           {currentView === 'resetPassword' && (
             <form className="login-form" onSubmit={handleResetSubmit}>
-              <p style={{ textAlign: 'center', marginBottom: '15px', color: '#666' }}>Enter your new password below.</p>
+              
+              <div className="input-group">
+                <label>Reset OTP</label>
+                <input type="text" inputMode="numeric" pattern="[0-9]{6}" maxLength="6" placeholder="6-digit OTP" value={resetOtp} onChange={(e) => setResetOtp(e.target.value.replace(/\D/g, ''))} required />
+              </div>
               {renderPasswordInput({
                 label: "New Password",
                 value: password,
@@ -290,7 +318,7 @@ const Login = ({ onLogin }) => {
             </form>
           )}
 
-          {currentView !== 'resetPassword' && currentView !== 'signIn' && (
+          {currentView === 'forgotPassword' && (
             <p className="toggle-view auth-link" onClick={() => { setCurrentView('signIn'); setError(''); setMessage(''); }} style={{ cursor: 'pointer', fontWeight: 'bold', marginTop: '15px' }}>
               Back to Sign In
             </p>

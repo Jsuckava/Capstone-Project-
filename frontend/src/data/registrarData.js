@@ -1,22 +1,24 @@
-export const programs = [
-  "Bachelor of Early Childhood Education",
-  "Bachelor of Secondary Education Major in English",
-  "Bachelor of Secondary Education Major in Filipino",
-  "Bachelor of Secondary Education Major in Mathematics",
-  "Bachelor of Secondary Education Major in Science",
-  "Bachelor of Secondary Education Major in Social Studies",
-  "Bachelor of Science in Civil Engineering",
-  "Bachelor of Science in Electrical Engineering",
-  "Bachelor of Science in Information Technology",
-  "Bachelor of Arts in Communication",
-  "Bachelor of Science in Psychology",
-  "Bachelor of Science in Social Work",
-  "Bachelor of Public Administration",
-  "Bachelor of Science in Accountancy",
-  "Bachelor of Science in Business Administration Major in Financial Management",
-  "Bachelor of Science in Business Administration Major in Human Resource Management",
-  "Bachelor of Science in Business Administration Major in Marketing Management",
+export const programOptions = [
+  { code: 'BECED', name: 'Bachelor of Early Childhood Education' },
+  { code: 'BSED-ENG', name: 'Bachelor of Secondary Education Major in English' },
+  { code: 'BSED-FIL', name: 'Bachelor of Secondary Education Major in Filipino' },
+  { code: 'BSED-MATH', name: 'Bachelor of Secondary Education Major in Mathematics' },
+  { code: 'BSED-SCI', name: 'Bachelor of Secondary Education Major in Science' },
+  { code: 'BSED-SOCSTUD', name: 'Bachelor of Secondary Education Major in Social Studies' },
+  { code: 'BSCE', name: 'Bachelor of Science in Civil Engineering' },
+  { code: 'BSEE', name: 'Bachelor of Science in Electrical Engineering' },
+  { code: 'BSIT', name: 'Bachelor of Science in Information Technology' },
+  { code: 'BAC', name: 'Bachelor of Arts in Communication' },
+  { code: 'BSP', name: 'Bachelor of Science in Psychology' },
+  { code: 'BSSW', name: 'Bachelor of Science in Social Work' },
+  { code: 'BPA', name: 'Bachelor of Public Administration' },
+  { code: 'BSA', name: 'Bachelor of Science in Accountancy' },
+  { code: 'BSBA-FM', name: 'Bachelor of Science in Business Administration Major in Financial Management' },
+  { code: 'BSBA-HRM', name: 'Bachelor of Science in Business Administration Major in Human Resource Management' },
+  { code: 'BSBA-MM', name: 'Bachelor of Science in Business Administration Major in Marketing Management' },
 ];
+
+export const programs = programOptions.map((program) => program.name);
 
 export const facultyList = [
   {
