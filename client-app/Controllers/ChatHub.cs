@@ -1064,12 +1064,24 @@ namespace Client_app.Controllers
             var onlineUsers = await _chatCache.GetOnlineStatusesAsync();
             var onlineByEmail = onlineUsers.ToDictionary(u => u.Email, StringComparer.OrdinalIgnoreCase);
             var contacts = new List<ChatUserStatus>();
+            var viewerDepartment = string.Empty;
 
             try
             {
                 using var conn = new NpgsqlConnection(_connectionString);
                 await conn.OpenAsync();
                 await EnsureChatSchemaAsync(conn);
+
+                using (var viewerCommand = new NpgsqlCommand(@"
+                    SELECT COALESCE(fp.department, ap.department, '')
+                    FROM users u
+                    LEFT JOIN facultyprofiles fp ON fp.user_id = u.id
+                    LEFT JOIN adminprofiles ap ON ap.user_id = u.id
+                    WHERE LOWER(u.email) = LOWER(@userEmail) LIMIT 1;", conn))
+                {
+                    viewerCommand.Parameters.AddWithValue("userEmail", userEmail);
+                    viewerDepartment = (await viewerCommand.ExecuteScalarAsync())?.ToString() ?? string.Empty;
+                }
 
                 using var cmd = new NpgsqlCommand(@"
                     SELECT
@@ -1085,7 +1097,8 @@ namespace Client_app.Controllers
                                 (LOWER(cm.sender_email) = LOWER(u.email) AND LOWER(cm.receiver_email) = LOWER(@userEmail))
                             )
                             AND COALESCE(cm.sent_at, cm.timestamp) >= NOW() - INTERVAL '30 days'
-                        ) AS has_conversation
+                        ) AS has_conversation,
+                        COALESCE(fp.department, ap.department, '') AS department
                     FROM users u
                     LEFT JOIN studentprofiles sp ON sp.user_id = u.id
                     LEFT JOIN facultyprofiles fp ON fp.user_id = u.id
@@ -1102,6 +1115,7 @@ namespace Client_app.Controllers
                     var email = reader.GetString(0);
                     var role = reader.GetString(1);
                     var hasConversation = reader.GetBoolean(3);
+                    var department = reader.IsDBNull(4) ? string.Empty : reader.GetString(4);
 
                     if (!IsAllowedChatTarget(viewerRole, role)) continue;
 
@@ -1113,7 +1127,9 @@ namespace Client_app.Controllers
                         FullName = reader.IsDBNull(2) ? email.Split('@')[0] : reader.GetString(2),
                         IsOnline = isOnline,
                         LastSeen = isOnline ? onlineStatus!.LastSeen : DateTime.MinValue,
-                        HasConversation = hasConversation
+                        HasConversation = hasConversation,
+                        Department = department,
+                        IsAssignedContact = IsAssignedAcademicContact(viewerRole, role, viewerDepartment, department)
                     });
                 }
             }
@@ -1126,6 +1142,15 @@ namespace Client_app.Controllers
             }
 
             await Clients.Caller.SendAsync("ChatContacts", contacts);
+        }
+
+        private static bool IsAssignedAcademicContact(string viewerRole, string targetRole, string viewerDepartment, string targetDepartment)
+        {
+            var viewer = NormalizeRole(viewerRole);
+            var target = NormalizeRole(targetRole);
+            if (!((viewer == "faculty" && target == "department_admin") || (viewer == "department_admin" && target == "faculty"))) return false;
+            if (string.IsNullOrWhiteSpace(viewerDepartment) || string.IsNullOrWhiteSpace(targetDepartment)) return false;
+            return string.Equals(viewerDepartment.Trim(), targetDepartment.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task JoinAcceptedGroupChatsAsync(string userEmail)

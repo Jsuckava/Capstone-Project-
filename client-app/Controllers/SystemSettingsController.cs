@@ -82,7 +82,7 @@ namespace Client_app.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "registrar,admin")]
+        [Authorize(Roles = "registrar,system_admin")]
         public async Task<IActionResult> SaveSetting([FromBody] SettingRequest req)
         {
             try
@@ -110,7 +110,7 @@ namespace Client_app.Controllers
         }
 
         [HttpPost("reset-season")]
-        [Authorize(Roles = "registrar,admin")]
+        [Authorize(Roles = "registrar,system_admin")]
         public async Task<IActionResult> ResetEncodingSeason()
         {
             try
@@ -119,8 +119,9 @@ namespace Client_app.Controllers
                 await conn.OpenAsync();
                 using var tx = await conn.BeginTransactionAsync();
 
-                using var cmdClearGrades = new NpgsqlCommand("DELETE FROM pending_grade_records", conn, tx);
-                await cmdClearGrades.ExecuteNonQueryAsync();
+                using var cmdClearGrades = new NpgsqlCommand(
+                    "DELETE FROM pending_grade_records WHERE LOWER(COALESCE(status, '')) <> 'finalized'", conn, tx);
+                var clearedDraftGradeCount = await cmdClearGrades.ExecuteNonQueryAsync();
 
                 using var cmdClearFacSections = new NpgsqlCommand("DELETE FROM FacultySections", conn, tx);
                 await cmdClearFacSections.ExecuteNonQueryAsync();
@@ -145,7 +146,8 @@ namespace Client_app.Controllers
                 return Ok(new
                 {
                     status = "Success",
-                    message = "Encoding season reset. Faculty assigned sections were cleared while saved sections were kept."
+                    message = "Encoding season reset. Non-finalized grade work and faculty assignments were cleared; finalized ledger records and saved sections were preserved.",
+                    clearedDraftGradeCount
                 });
             }
             catch (Exception ex)

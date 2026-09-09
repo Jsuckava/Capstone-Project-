@@ -238,6 +238,103 @@ namespace Client_app.Controllers
             return Ok(new { status = "Success", message = "Security event resolved." });
         }
 
+        [HttpGet("finalized-ledger")]
+        public async Task<IActionResult> FinalizedLedger(
+            [FromQuery] string? search,
+            [FromQuery] string? source,
+            [FromQuery] string? schoolYear,
+            [FromQuery] string? semester,
+            [FromQuery] DateTimeOffset? from,
+            [FromQuery] DateTimeOffset? to,
+            [FromQuery] int limit = 100,
+            CancellationToken cancellationToken = default)
+        {
+            limit = Math.Clamp(limit, 1, 500);
+            if (from.HasValue && to.HasValue && from > to)
+                return BadRequest(new { status = "Error", message = "The from date must not be later than the to date." });
+
+            var query = new List<string> { $"limit={limit}" };
+            AddQuery(query, "search", search);
+            AddQuery(query, "source", source);
+            AddQuery(query, "schoolYear", schoolYear);
+            AddQuery(query, "semester", semester);
+            if (from.HasValue) AddQuery(query, "from", from.Value.ToString("O"));
+            if (to.HasValue) AddQuery(query, "to", to.Value.ToString("O"));
+
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"{_middlewareUrl.TrimEnd('/')}/api/admin/ledger-transactions?{string.Join('&', query)}");
+            if (Request.Headers.TryGetValue("Authorization", out var authorization))
+                request.Headers.TryAddWithoutValidation("Authorization", authorization.ToString());
+
+            using var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(20);
+            using var response = await client.SendAsync(request, cancellationToken);
+            var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+            return new ContentResult
+            {
+                StatusCode = (int)response.StatusCode,
+                ContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json",
+                Content = payload
+            };
+        }
+
+        [HttpGet("live-transactions")]
+        public async Task<IActionResult> LiveTransactions(
+            [FromQuery] long? afterAuditId,
+            [FromQuery] string? action,
+            [FromQuery] DateTimeOffset? from,
+            [FromQuery] DateTimeOffset? to,
+            [FromQuery] int limit = 100,
+            CancellationToken cancellationToken = default)
+        {
+            limit = Math.Clamp(limit, 1, 500);
+            if (afterAuditId < 0)
+                return BadRequest(new { status = "Error", message = "afterAuditId must be zero or greater." });
+            if (from.HasValue && to.HasValue && from > to)
+                return BadRequest(new { status = "Error", message = "The from date must not be later than the to date." });
+
+            var records = new List<object>();
+            await using var connection = new NpgsqlConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
+            await using var command = new NpgsqlCommand(@"
+                SELECT a.audit_id, a.action, a.entity_type, a.entity_id, a.actor_role,
+                       a.description, a.timestamp,
+                       COALESCE(fp.full_name, ap.full_name, sp.full_name, u.username, u.email, 'System') AS actor
+                FROM audit_logs a
+                LEFT JOIN users u ON u.id = a.user_id
+                LEFT JOIN facultyprofiles fp ON fp.user_id = u.id
+                LEFT JOIN adminprofiles ap ON ap.user_id = u.id
+                LEFT JOIN studentprofiles sp ON sp.user_id = u.id
+                WHERE (@afterAuditId IS NULL OR a.audit_id > @afterAuditId)
+                  AND (@action IS NULL OR a.action ILIKE '%' || @action || '%')
+                  AND (@fromDate IS NULL OR a.timestamp >= @fromDate)
+                  AND (@toDate IS NULL OR a.timestamp < @toDate + INTERVAL '1 day')
+                ORDER BY a.audit_id DESC
+                LIMIT @limit;", connection);
+            command.Parameters.Add("afterAuditId", NpgsqlTypes.NpgsqlDbType.Bigint).Value = (object?)afterAuditId ?? DBNull.Value;
+            AddNullableText(command, "action", action);
+            command.Parameters.Add("fromDate", NpgsqlTypes.NpgsqlDbType.TimestampTz).Value = (object?)from?.ToUniversalTime() ?? DBNull.Value;
+            command.Parameters.Add("toDate", NpgsqlTypes.NpgsqlDbType.TimestampTz).Value = (object?)to?.ToUniversalTime() ?? DBNull.Value;
+            command.Parameters.AddWithValue("limit", limit);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                records.Add(new
+                {
+                    auditId = reader.GetInt64(0),
+                    action = TextOrNull(reader, 1),
+                    entityType = TextOrNull(reader, 2),
+                    entityId = TextOrNull(reader, 3),
+                    actorRole = TextOrNull(reader, 4),
+                    description = TextOrNull(reader, 5),
+                    occurredAt = ValueOrNull(reader, 6),
+                    actor = TextOrNull(reader, 7)
+                });
+            }
+            return Ok(new { status = "Success", generatedAt = DateTimeOffset.UtcNow, count = records.Count, data = records });
+        }
+
         private async Task<List<object>> LoadSecurityAlertsAsync(CancellationToken cancellationToken)
         {
             var alerts = new List<object>();
@@ -271,6 +368,18 @@ namespace Client_app.Controllers
         private static object Service(string id, string name, string layer, string status, long latencyMs, string message, string target) =>
             new { id, name, layer, status, latencyMs, message, target };
         private static string SafeMessage(Exception exception) => exception is TaskCanceledException ? "Health check timed out." : exception.Message;
+        private static void AddNullableText(NpgsqlCommand command, string name, string? value) =>
+            command.Parameters.Add(name, NpgsqlTypes.NpgsqlDbType.Text).Value =
+                string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
+        private static string? TextOrNull(NpgsqlDataReader reader, int ordinal) =>
+            reader.IsDBNull(ordinal) ? null : reader.GetValue(ordinal).ToString();
+        private static object? ValueOrNull(NpgsqlDataReader reader, int ordinal) =>
+            reader.IsDBNull(ordinal) ? null : reader.GetValue(ordinal);
+        private static void AddQuery(ICollection<string> query, string name, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                query.Add($"{Uri.EscapeDataString(name)}={Uri.EscapeDataString(value.Trim())}");
+        }
         private static string JsonText(JsonElement element, string property, string fallback) =>
             element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) ? value.ToString() : fallback;
 

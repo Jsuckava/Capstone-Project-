@@ -72,6 +72,24 @@ namespace BlockGo.Controllers
             });
         }
 
+        private Task NotifyGradeFinalizedAsync(AcademicRecord record, string actor)
+        {
+            if (string.IsNullOrWhiteSpace(record.StudentHash)) return Task.CompletedTask;
+            return _chatHubContext.Clients.Group($"private_{record.StudentHash}").SendAsync("GradeFinalized", new
+            {
+                Type = "grade_finalized",
+                Title = "Grade finalized",
+                Message = $"Your grade for {record.SubjectCode} has been finalized and recorded on the ledger.",
+                RecordId = record.Id,
+                SubjectCode = record.SubjectCode,
+                Status = "Finalized",
+                TransactionId = record.TransactionId,
+                TransactionHash = string.IsNullOrWhiteSpace(record.TransactionHash) ? record.TransactionId : record.TransactionHash,
+                Actor = actor,
+                OccurredAt = DateTimeOffset.UtcNow
+            });
+        }
+
         public class FlagRequest
         {
             public bool IsFlagged { get; set; }
@@ -1728,6 +1746,7 @@ namespace BlockGo.Controllers
                         { "grade", g.Grade ?? "" },
                         { "semester", g.Semester ?? "" },
                         { "school_year", g.SchoolYear ?? "" },
+                        { "schoolYear", g.SchoolYear ?? "" },
                         { "faculty_id", safeFacultyId },
                         { "professor_name", g.ProfessorName ?? "" },
                         { "submitted_by", g.SubmittedBy ?? "" },
@@ -1973,13 +1992,42 @@ namespace BlockGo.Controllers
                     using var cmdDel = new NpgsqlCommand("DELETE FROM pending_grade_records WHERE id = @id", conn);
                     cmdDel.Parameters.AddWithValue("id", recordId);
                     await cmdDel.ExecuteNonQueryAsync();
-                    
+
+                    var notificationRecord = pendingRecord;
+                    try
+                    {
+                        var finalizedJson = await _blockchainService.GetGradeAsync(recordId, invokerId);
+                        var finalizedRecord = JsonSerializer.Deserialize<AcademicRecord>(finalizedJson, new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        });
+                        if (finalizedRecord != null) notificationRecord = finalizedRecord;
+                    }
+                    catch (Exception notificationException)
+                    {
+                        _logger.LogWarning(
+                            notificationException,
+                            "Finalized ledger metadata was unavailable for notification {RecordId}; using staged record metadata.",
+                            recordId);
+                    }
+
+                    await NotifyGradeFinalizedAsync(notificationRecord, invokerId);
                     NotifyStudentOfFinalization(recordId, invokerId);
                     await NotifyAcademicDataChangedAsync("grade_finalized", pendingRecord.Course, invokerId);
                     return Ok(new { status = "Success", message = "Grade finalized and successfully written to Ledger." });
                 }
 
                 await _blockchainService.FinalizeGradeAsync(recordId, invokerId);
+                try
+                {
+                    var finalizedJson = await _blockchainService.GetGradeAsync(recordId, invokerId);
+                    var finalizedRecord = JsonSerializer.Deserialize<AcademicRecord>(finalizedJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (finalizedRecord != null) await NotifyGradeFinalizedAsync(finalizedRecord, invokerId);
+                }
+                catch (Exception notificationException)
+                {
+                    _logger.LogWarning(notificationException, "Failed to emit targeted grade finalization notification for {RecordId}.", recordId);
+                }
                 NotifyStudentOfFinalization(recordId, invokerId);
                 await NotifyAcademicDataChangedAsync("grade_finalized", null, invokerId);
                 return Ok(new { status = "Success", message = "Grade finalized on Ledger." });
@@ -2097,16 +2145,28 @@ namespace BlockGo.Controllers
             }
         }
 
-        private async Task<bool> UpdatePendingGradeJsonAsync(string recordId, Action<System.Text.Json.Nodes.JsonObject> updateAction)
+        private async Task<bool> UpdatePendingGradeJsonAsync(
+            string recordId,
+            Action<System.Text.Json.Nodes.JsonObject> updateAction,
+            IReadOnlyCollection<string>? allowedStatuses = null)
         {
             try {
                 using var conn = new NpgsqlConnection(_connectionString);
                 await conn.OpenAsync();
-                using var cmdSel = new NpgsqlCommand("SELECT grade FROM pending_grade_records WHERE id = @id", conn);
+                using var cmdSel = new NpgsqlCommand("SELECT grade, status FROM pending_grade_records WHERE id = @id", conn);
                 cmdSel.Parameters.AddWithValue("id", recordId);
-                var existingGrade = await cmdSel.ExecuteScalarAsync() as string;
-                
-                if (existingGrade == null) return false;
+                string? existingGrade = null;
+                string? existingStatus = null;
+                using (var reader = await cmdSel.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        existingGrade = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+                        existingStatus = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                    }
+                }
+
+                if (existingGrade == null || (allowedStatuses != null && !allowedStatuses.Contains(existingStatus ?? string.Empty, StringComparer.OrdinalIgnoreCase))) return false;
                 
                 System.Text.Json.Nodes.JsonObject gradeObj;
                 if (existingGrade.TrimStart().StartsWith("{")) {
@@ -2205,6 +2265,10 @@ namespace BlockGo.Controllers
         [Authorize(Roles = "department_admin,registrar")]
         public async Task<IActionResult> ReturnGrade(string recordId, [FromBody] ReturnRequest request)
         {
+            var note = request.Note?.Trim();
+            if (string.IsNullOrWhiteSpace(note) || note.Length < 3)
+                return BadRequest(new { status = "Error", message = "Correction remarks must contain at least 3 characters." });
+
             try
             {
                 var invokerId = AuthenticatedEmail();
@@ -2214,13 +2278,29 @@ namespace BlockGo.Controllers
                 if (!await CanAccessGradeRecordAsync(conn, recordId, invokerId, AuthenticatedRole()))
                     return Forbid();
                 
-                using var cmd = new NpgsqlCommand("UPDATE pending_grade_records SET status = 'Returned', note = @note, date = @dt WHERE id = @id RETURNING id", conn);
-                cmd.Parameters.AddWithValue("note", request.Note ?? "");
+                using var cmd = new NpgsqlCommand(@"
+                    UPDATE pending_grade_records
+                    SET status = 'Returned', note = @note, date = @dt
+                    WHERE id = @id
+                      AND LOWER(status) IN ('departmentapproved', 'approved', 'submitted')
+                    RETURNING id, status, faculty_id, course;", conn);
+                cmd.Parameters.AddWithValue("note", note);
                 cmd.Parameters.AddWithValue("dt", DateTime.UtcNow.ToString("o"));
                 cmd.Parameters.AddWithValue("id", recordId);
-                var res = await cmd.ExecuteScalarAsync();
-                
-                if (res != null)
+                string? returnedId = null;
+                string? facultyId = null;
+                string? course = null;
+                await using (var reader = await cmd.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        returnedId = reader.GetString(0);
+                        facultyId = reader.IsDBNull(2) ? null : reader.GetString(2);
+                        course = reader.IsDBNull(3) ? null : reader.GetString(3);
+                    }
+                }
+
+                if (returnedId != null)
                 {
                     using var cmdLog = new NpgsqlCommand(@"
                         INSERT INTO gradecorrectionlogs (recordid, oldgrade, newgrade, reasontext, approvedby, timestamp) 
@@ -2228,41 +2308,25 @@ namespace BlockGo.Controllers
                     cmdLog.Parameters.AddWithValue("rid", recordId);
                     cmdLog.Parameters.AddWithValue("old", "Forwarded");
                     cmdLog.Parameters.AddWithValue("new", "Returned");
-                    cmdLog.Parameters.AddWithValue("reason", request.Note ?? "Returned for revision");
+                    cmdLog.Parameters.AddWithValue("reason", note);
                     cmdLog.Parameters.AddWithValue("appr", invokerId);
                     await cmdLog.ExecuteNonQueryAsync();
 
-                    await NotifyAcademicDataChangedAsync("grade_returned", null, invokerId);
-                    return Ok(new { status = "Success", message = "Grade returned to faculty with notes (Staged)." });
+                    if (!string.IsNullOrWhiteSpace(facultyId))
+                        await _chatHubContext.Clients.Group($"private_{facultyId}").SendAsync("GradeReturned", new
+                        {
+                            Type = "grade_returned", RecordId = recordId, Note = note, Actor = invokerId, OccurredAt = DateTimeOffset.UtcNow
+                        });
+                    await NotifyAcademicDataChangedAsync("grade_returned", course, invokerId);
+                    return Ok(new { status = "Success", message = "Grade returned to faculty with correction remarks.", data = new { recordId, note, facultyId } });
                 }
 
-                var gradeJson = await _blockchainService.GetGradeAsync(recordId, invokerId);
-                var gradeToUpdate = System.Text.Json.JsonSerializer.Deserialize<AcademicRecord>(gradeJson);
-
-                if (gradeToUpdate == null) return NotFound(new { status = "Error", message = "Grade not found" });
-
-                // Update status and attach note
-                gradeToUpdate.Status = "Returned";
-                gradeToUpdate.Date = DateTime.UtcNow.ToString("yyyy-MM-dd");
-                
-                // We use the 'Note' field in the blockchain record to store the revision instructions
-                gradeToUpdate.Note = request.Note;
-
-                await _blockchainService.UpdateGradeAsync(gradeToUpdate, invokerId);
-
-                // Log the return action in PostgreSQL
-                using var cmdLogBlockchain = new NpgsqlCommand(@"
-                    INSERT INTO gradecorrectionlogs (recordid, oldgrade, newgrade, reasontext, approvedby, timestamp) 
-                    VALUES (@rid, @old, @new, @reason, @appr, CURRENT_TIMESTAMP)", conn);
-                cmdLogBlockchain.Parameters.AddWithValue("rid", recordId);
-                cmdLogBlockchain.Parameters.AddWithValue("old", "Forwarded");
-                cmdLogBlockchain.Parameters.AddWithValue("new", "Returned");
-                cmdLogBlockchain.Parameters.AddWithValue("reason", request.Note ?? "Returned for revision");
-                cmdLogBlockchain.Parameters.AddWithValue("appr", invokerId);
-                await cmdLogBlockchain.ExecuteNonQueryAsync();
-
-                await NotifyAcademicDataChangedAsync("grade_returned", gradeToUpdate.Course, invokerId);
-                return Ok(new { status = "Success", message = "Grade returned to faculty with notes." });
+                using var statusCommand = new NpgsqlCommand("SELECT status FROM pending_grade_records WHERE id = @id", conn);
+                statusCommand.Parameters.AddWithValue("id", recordId);
+                var currentStatus = (await statusCommand.ExecuteScalarAsync())?.ToString();
+                if (currentStatus is null)
+                    return NotFound(new { status = "Error", message = "The staged grade record was not found. Finalized ledger records are immutable." });
+                return Conflict(new { status = "Error", message = $"A grade in {currentStatus} status cannot be returned. Only submitted or Department-approved staged grades can be returned." });
             }
             catch (Exception ex)
             {
@@ -2281,6 +2345,9 @@ namespace BlockGo.Controllers
         public async Task<IActionResult> UpdateAcademicStatus(string recordId, [FromQuery] string invokerId, [FromBody] AcademicStatusRequest request)
         {
             invokerId = AuthenticatedEmail();
+            var academicStatus = NormalizeAcademicStatus(request.Status);
+            if (academicStatus is null)
+                return BadRequest(new { status = "Error", message = "Academic status must be Dropped, Incomplete, or Withdrawn." });
 
             try
             {
@@ -2291,47 +2358,30 @@ namespace BlockGo.Controllers
                         return Forbid();
                 }
 
-                if (await UpdatePendingGradeJsonAsync(recordId, obj => obj["remarks"] = request.Status))
+                var updated = await UpdatePendingGradeJsonAsync(recordId, obj =>
                 {
-                    await NotifyAcademicDataChangedAsync("academic_status_updated", null, invokerId);
-                    return Ok(new { status = "Success", message = $"Academic status updated to {request.Status} (Staged)." });
-                }
+                    obj["academicStatus"] = academicStatus;
+                    obj["remarks"] = academicStatus;
+                }, new[] { "Draft", "Returned" });
+                if (!updated)
+                    return Conflict(new { status = "Error", message = "Academic standing can be changed only while a grade is Draft or Returned. Finalized ledger records are immutable." });
 
-                var jsonResult = await _blockchainService.GetGradeAsync(recordId, invokerId);
-                var gradeToUpdate = JsonSerializer.Deserialize<AcademicRecord>(jsonResult, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (gradeToUpdate == null) 
-                    return NotFound(new { status = "Error", message = "Record not found on blockchain." });
-
-                System.Text.Json.Nodes.JsonObject gradeObj;
-                if (!string.IsNullOrEmpty(gradeToUpdate.Grade) && gradeToUpdate.Grade.TrimStart().StartsWith("{"))
-                {
-                    try {
-                        gradeObj = System.Text.Json.Nodes.JsonNode.Parse(gradeToUpdate.Grade)?.AsObject() ?? new System.Text.Json.Nodes.JsonObject();
-                    } catch {
-                        gradeObj = new System.Text.Json.Nodes.JsonObject();
-                        gradeObj["finalAverage"] = gradeToUpdate.Grade;
-                    }
-                }
-                else
-                {
-                    gradeObj = new System.Text.Json.Nodes.JsonObject();
-                    gradeObj["finalAverage"] = gradeToUpdate.Grade ?? "";
-                }
-
-                gradeObj["remarks"] = request.Status;
-                gradeToUpdate.Grade = gradeObj.ToJsonString();
-                gradeToUpdate.Date = DateTime.UtcNow.ToString("yyyy-MM-dd");
-                
-                await _blockchainService.UpdateGradeAsync(gradeToUpdate, invokerId);
-
-                await NotifyAcademicDataChangedAsync("academic_status_updated", gradeToUpdate.Course, invokerId);
-                return Ok(new { status = "Success", message = $"Academic status updated to {request.Status}." });
+                await NotifyAcademicDataChangedAsync("academic_status_updated", null, invokerId);
+                return Ok(new { status = "Success", message = $"Academic status updated to {academicStatus}.", data = new { recordId, academicStatus } });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { status = "Error", message = ex.Message });
             }
         }
+
+        private static string? NormalizeAcademicStatus(string? value) => (value ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "d" or "dropped" => "Dropped",
+            "inc" or "incomplete" => "Incomplete",
+            "w" or "withdrawn" => "Withdrawn",
+            _ => null
+        };
 
         [HttpGet("audit-all")]
         [Authorize(Roles = "registrar,system_admin")]

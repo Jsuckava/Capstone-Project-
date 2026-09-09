@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
 using NpgsqlTypes;
+using CsvHelper;
+using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace Client_app.Controllers
 {
@@ -126,6 +129,114 @@ namespace Client_app.Controllers
                 "Chairperson created a curriculum draft.", IpAddress(), connection, transaction, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return CreatedAtAction(nameof(GetById), new { id = curriculumId }, new { status = "Success", data = await LoadCurriculumAsync(connection, curriculumId, cancellationToken) });
+        }
+
+        [HttpPost("bulk-import")]
+        [Authorize(Roles = "department_admin")]
+        [RequestSizeLimit(5 * 1024 * 1024)]
+        public async Task<IActionResult> BulkImport([FromForm] ImportCurriculumRequest request, CancellationToken cancellationToken)
+        {
+            if (request.File is null || request.File.Length == 0)
+                return BadRequest(new { status = "Error", message = "A non-empty curriculum CSV file is required." });
+            if (!string.Equals(Path.GetExtension(request.File.FileName), ".csv", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { status = "Error", message = "Curriculum bulk import accepts CSV files only." });
+
+            var subjects = new List<CurriculumSubjectRequest>();
+            var errors = new List<object>();
+            await using (var stream = request.File.OpenReadStream())
+            using (var reader = new StreamReader(stream))
+            using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+            {
+                if (!await csv.ReadAsync() || !csv.ReadHeader())
+                    return BadRequest(new { status = "Error", message = "The curriculum CSV must include a header row." });
+                var headers = (csv.HeaderRecord ?? Array.Empty<string>())
+                    .GroupBy(NormalizeCsvHeader)
+                    .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+                var rowNumber = 1;
+                while (await csv.ReadAsync())
+                {
+                    rowNumber++;
+                    try
+                    {
+                        var subject = new CurriculumSubjectRequest
+                        {
+                            SubjectCode = CsvValue(csv, headers, "subjectcode", "code"),
+                            SubjectTitle = CsvValue(csv, headers, "subjecttitle", "subjectname", "title"),
+                            Units = CsvDecimal(csv, headers, rowNumber, true, "units"),
+                            LectureHours = CsvDecimal(csv, headers, rowNumber, false, "lecturehours", "lecture"),
+                            LaboratoryHours = CsvDecimal(csv, headers, rowNumber, false, "laboratoryhours", "labhours", "laboratory"),
+                            Prerequisite = CsvValue(csv, headers, "prerequisite", "prerequisites"),
+                            YearLevel = CsvInteger(csv, headers, rowNumber, "yearlevel", "year"),
+                            Semester = CsvValue(csv, headers, "semester", "term"),
+                            SubjectType = CsvValue(csv, headers, "subjecttype", "type")
+                        };
+                        NormalizeAndValidateSubject(subject);
+                        subjects.Add(subject);
+                    }
+                    catch (ArgumentException exception)
+                    {
+                        errors.Add(new { row = rowNumber, message = exception.Message });
+                    }
+                }
+            }
+
+            if (subjects.Count == 0)
+                errors.Add(new { row = 0, message = "The CSV contains no valid subject rows." });
+            foreach (var duplicate in subjects.GroupBy(item => $"{item.YearLevel}|{item.Semester}|{item.SubjectCode}", StringComparer.OrdinalIgnoreCase).Where(group => group.Count() > 1))
+                errors.Add(new { row = 0, message = $"Duplicate curriculum subject: {duplicate.First().SubjectCode} ({duplicate.First().YearLevel}/{duplicate.First().Semester})." });
+            var codes = subjects.Select(subject => subject.SubjectCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var subject in subjects.Where(subject => !string.IsNullOrWhiteSpace(subject.Prerequisite) && !codes.Contains(subject.Prerequisite!)))
+                errors.Add(new { row = 0, message = $"Prerequisite {subject.Prerequisite} for {subject.SubjectCode} does not exist in the uploaded curriculum." });
+            if (errors.Count > 0)
+                return BadRequest(new { status = "Error", message = "Curriculum CSV validation failed. No records were created.", errors });
+
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+            var actor = await GetActorAsync(connection, transaction, cancellationToken);
+            var program = await ResolveOwnedProgramAsync(connection, transaction, actor.Id, request.ProgramCode, cancellationToken);
+            long curriculumId;
+            try
+            {
+                await using var create = new NpgsqlCommand(@"
+                    INSERT INTO curriculums
+                        (curriculum_code, curriculum_name, program_id, curriculum_version, school_year, status, created_by)
+                    VALUES (@code, @name, @programId, @version, @schoolYear, 'DRAFT', @actorId)
+                    RETURNING curriculum_id;", connection, transaction);
+                create.Parameters.AddWithValue("code", RequiredTrim(request.CurriculumCode, "Curriculum code"));
+                create.Parameters.AddWithValue("name", RequiredTrim(request.CurriculumName, "Curriculum name"));
+                create.Parameters.AddWithValue("programId", program.Id);
+                create.Parameters.AddWithValue("version", RequiredTrim(request.CurriculumVersion, "Curriculum version"));
+                create.Parameters.AddWithValue("schoolYear", (object?)request.SchoolYear?.Trim() ?? DBNull.Value);
+                create.Parameters.AddWithValue("actorId", actor.Id);
+                curriculumId = Convert.ToInt64(await create.ExecuteScalarAsync(cancellationToken));
+
+                foreach (var subject in subjects)
+                {
+                    await using var insert = new NpgsqlCommand(@"
+                        INSERT INTO curriculum_subjects
+                            (curriculum_id, subject_code, subject_title, units, lecture_hours, laboratory_hours,
+                             prerequisite, year_level, semester, subject_type)
+                        VALUES (@curriculumId, @code, @title, @units, @lecture, @laboratory,
+                                @prerequisite, @yearLevel, @semester, @subjectType);", connection, transaction);
+                    AddSubjectParameters(insert, curriculumId, subject);
+                    await insert.ExecuteNonQueryAsync(cancellationToken);
+                }
+            }
+            catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return Conflict(new { status = "Error", message = "That curriculum code/version or one of its subject rows already exists. No records were created." });
+            }
+
+            await _auditLog.LogAsync(actor.Email, actor.Role, "CURRICULUM_BULK_IMPORTED", "curriculum", curriculumId.ToString(), null,
+                new { request.CurriculumCode, program.Code, request.CurriculumVersion, subjectCount = subjects.Count },
+                "Chairperson created a curriculum draft from a validated CSV file.", IpAddress(), connection, transaction, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return CreatedAtAction(nameof(GetById), new { id = curriculumId }, new
+            {
+                status = "Success", message = $"Curriculum draft created with {subjects.Count} subjects.",
+                data = await LoadCurriculumAsync(connection, curriculumId, cancellationToken)
+            });
         }
 
         [HttpPut("{id:long}")]
@@ -629,7 +740,7 @@ namespace Client_app.Controllers
         {
             request.SubjectCode = RequiredTrim(request.SubjectCode, "Subject code").ToUpperInvariant();
             request.SubjectTitle = RequiredTrim(request.SubjectTitle, "Subject title");
-            request.Semester = RequiredTrim(request.Semester, "Semester").ToUpperInvariant();
+            request.Semester = NormalizeCurriculumSemester(RequiredTrim(request.Semester, "Semester"));
             request.Prerequisite = string.IsNullOrWhiteSpace(request.Prerequisite) ? null : request.Prerequisite.Trim().ToUpperInvariant();
             request.SubjectType = string.IsNullOrWhiteSpace(request.SubjectType) ? null : request.SubjectType.Trim();
             if (request.YearLevel is < 1 or > 4) throw new ArgumentException("Year level must be between 1 and 4.");
@@ -637,6 +748,37 @@ namespace Client_app.Controllers
             if (request.Units <= 0 || request.Units > 20) throw new ArgumentException("Units must be greater than 0 and no more than 20.");
             if (request.LectureHours < 0 || request.LaboratoryHours < 0) throw new ArgumentException("Lecture and laboratory hours cannot be negative.");
             if (string.Equals(request.Prerequisite, request.SubjectCode, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("A subject cannot be its own prerequisite.");
+        }
+
+        private static string NormalizeCurriculumSemester(string value) => value.Trim().ToLowerInvariant() switch
+        {
+            "first" or "1" or "1st" or "first semester" or "1st semester" => CurriculumSemesters.First,
+            "second" or "2" or "2nd" or "second semester" or "2nd semester" => CurriculumSemesters.Second,
+            "midyear" or "mid-year" or "summer" or "summer / midyear" => CurriculumSemesters.Midyear,
+            _ => value.Trim().ToUpperInvariant()
+        };
+
+        private static string NormalizeCsvHeader(string value) => Regex.Replace(value ?? string.Empty, "[^a-z0-9]", string.Empty, RegexOptions.IgnoreCase).ToLowerInvariant();
+        private static string CsvValue(CsvReader csv, IReadOnlyDictionary<string, string> headers, params string[] aliases)
+        {
+            var header = aliases.Select(NormalizeCsvHeader).FirstOrDefault(headers.ContainsKey);
+            return header is null ? string.Empty : (csv.GetField(headers[header]) ?? string.Empty).Trim();
+        }
+        private static decimal CsvDecimal(CsvReader csv, IReadOnlyDictionary<string, string> headers, int row, bool required, params string[] aliases)
+        {
+            var value = CsvValue(csv, headers, aliases);
+            if (string.IsNullOrWhiteSpace(value) && !required) return 0;
+            if (!decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
+                throw new ArgumentException($"Row {row}: {aliases[0]} must be a valid number.");
+            return parsed;
+        }
+        private static int CsvInteger(CsvReader csv, IReadOnlyDictionary<string, string> headers, int row, params string[] aliases)
+        {
+            var value = CsvValue(csv, headers, aliases);
+            var match = Regex.Match(value, "[1-4]");
+            if (!match.Success || !int.TryParse(match.Value, out var parsed))
+                throw new ArgumentException($"Row {row}: year level must be from 1 to 4.");
+            return parsed;
         }
 
         private static async Task ValidatePrerequisiteAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, long curriculumId, string? prerequisite, long? subjectId, CancellationToken cancellationToken)

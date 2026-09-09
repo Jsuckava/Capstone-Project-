@@ -3,6 +3,7 @@ const { required, serviceUrl } = require('../shared/config');
 const { requestJson } = require('../shared/internal-http');
 const createLogger = require('../shared/logger');
 const { normalizeAuthRole } = require('../shared/roles');
+const { filterLedgerTransactions } = require('../shared/ledger-transactions');
 const { createServiceApp, installErrorHandler, listen } = require('../shared/service-app');
 const { cacheStats, checkFabricEndpoints, closeGateways, contractForUser, disconnect } = require('../fabric/gateway-manager');
 const { checkWallets } = require('../fabric/wallet-manager');
@@ -42,7 +43,7 @@ async function contractWithReadFallback(actor) {
     } catch (error) {
         if (actor.dbRole === 'student') throw error;
         logger.warn({ username: actor.username, err: error }, 'Using registrar read identity fallback');
-        return contractForUser('system-admin-registrar', 'registrar');
+        return contractForUser(process.env.BOOTSTRAP_REGISTRAR_EMAIL || 'registrar@plv.edu.ph', 'registrar');
     }
 }
 
@@ -71,7 +72,7 @@ app.get('/api/all-grades', authenticate, async (req, res) => {
         catch (error) {
             if (!shouldReconnect(error) || actor.dbRole === 'student') throw error;
             disconnect(actor.username, 'read-fallback');
-            contract = await contractForUser('system-admin-registrar', 'registrar');
+            contract = await contractForUser(process.env.BOOTSTRAP_REGISTRAR_EMAIL || 'registrar@plv.edu.ph', 'registrar');
             result = await contract.evaluateTransaction('GetAllGrades');
         }
         let grades;
@@ -117,6 +118,24 @@ app.get('/api/student-transactions', authenticate, async (req, res) => {
         onLedgerError(actor?.username, error);
         logger.error({ err: error, username: actor?.username }, 'Student transaction history query failed');
         res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Unable to retrieve transaction history' : error.message });
+    }
+});
+
+app.get('/api/admin/ledger-transactions', authenticate, authorizeRole(['system_admin']), async (req, res) => {
+    let actor;
+    try {
+        actor = await actorForRequest(req);
+        const contract = await contractWithReadFallback(actor);
+        const result = await contract.evaluateTransaction('GetAllGrades');
+        const records = JSON.parse(result.toString() || '[]') || [];
+        if (!Array.isArray(records)) throw new Error('The grade ledger returned an invalid response.');
+        decodeFacultyIdentity(records);
+        const data = filterLedgerTransactions(records, req.query);
+        res.json({ status: 'success', generatedAt: new Date().toISOString(), count: data.length, data });
+    } catch (error) {
+        onLedgerError(actor?.username, error);
+        logger.error({ err: error, username: actor?.username }, 'Administrator ledger transaction query failed');
+        res.status(error.status || 500).json({ error: process.env.NODE_ENV === 'production' ? 'Unable to retrieve ledger transactions' : error.message });
     }
 });
 

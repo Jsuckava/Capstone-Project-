@@ -27,6 +27,8 @@
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.1",
+    "fabric-ca-client": "2.2.20",
+    "fabric-network": "2.2.20",
     "form-data": "^4.0.5",
     "js-yaml": "^4.1.1",
     "jsonwebtoken": "^9.0.3",

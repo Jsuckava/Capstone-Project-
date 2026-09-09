@@ -37,6 +37,16 @@ namespace Client_app.Models
         [StringLength(50)] public string? SchoolYear { get; set; }
     }
 
+    public sealed class ImportCurriculumRequest
+    {
+        [Required, StringLength(40)] public string ProgramCode { get; set; } = string.Empty;
+        [Required, StringLength(100)] public string CurriculumCode { get; set; } = string.Empty;
+        [Required, StringLength(255)] public string CurriculumName { get; set; } = string.Empty;
+        [Required, StringLength(100)] public string CurriculumVersion { get; set; } = string.Empty;
+        [StringLength(50)] public string? SchoolYear { get; set; }
+        [Required] public IFormFile? File { get; set; }
+    }
+
     public sealed class CurriculumSubjectRequest
     {
         [Required, StringLength(80)] public string SubjectCode { get; set; } = string.Empty;
