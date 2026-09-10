@@ -33,7 +33,7 @@ export const normalizeGradeStatus = (status) => {
 };
 
 export const isDepartmentApprovedGradeStatus = (status) =>
-  normalizeGradeStatus(status) === GRADE_STATUS.APPROVED;
+  ["departmentapproved", "forwarded", "forwardedtoregistrar"].includes(compactStatus(status));
 
 export const isChairpersonForwardedGradeStatus = (status) =>
-  normalizeGradeStatus(status) === GRADE_STATUS.APPROVED;
+  isDepartmentApprovedGradeStatus(status);

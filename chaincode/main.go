@@ -357,6 +357,15 @@ func (cc *SmartContract) returnGrade(stub shim.ChaincodeStubInterface, args []st
 	if err := json.Unmarshal(recordJSON, &record); err != nil {
 		return shim.Error(fmt.Sprintf("Failed to unmarshal record: %v", err))
 	}
+	if record.Status == statusReturned && record.Note == note {
+		return shim.Success(recordJSON)
+	}
+	if isDepartmentAdmin && record.Status != statusIssued && record.Status != statusCorrected && record.Status != statusDepartmentApproved {
+		return shim.Error("Invalid grade transition: Department Admin may return only issued, corrected, or department-approved grades")
+	}
+	if isRegistrar && record.Status != statusIssued && record.Status != statusCorrected && record.Status != statusDepartmentApproved && record.Status != statusFinalized {
+		return shim.Error("Invalid grade transition: Registrar cannot return a grade in its current status")
+	}
 
 	record.Status = statusReturned
 	record.Note = note
@@ -432,6 +441,9 @@ func (cc *SmartContract) updateGrade(stub shim.ChaincodeStubInterface, args []st
 	if err := json.Unmarshal(existingJSON, &existing); err != nil {
 		return shim.Error(fmt.Sprintf("Failed to unmarshal existing record: %v", err))
 	}
+	if existing.Status != statusReturned {
+		return shim.Error("Invalid grade transition: only a returned grade can be corrected")
+	}
 
 	submitterID, _ := cid.GetID(stub)
 	var email string
@@ -443,7 +455,7 @@ func (cc *SmartContract) updateGrade(stub shim.ChaincodeStubInterface, args []st
 	
 	if existing.FacultyID != submitterID && existing.FacultyID != email {
 		
-		if updated.Status == statusReturned && (role == "department_admin" || role == "deptAdmin" || role == "registrar") {
+		if existing.Status == statusReturned && (role == "department_admin" || role == "deptAdmin" || role == "registrar") {
 			
 		} else {
 			return shim.Error("Only the original professor who issued the grade can update it")
@@ -497,6 +509,12 @@ func (cc *SmartContract) approveGrade(stub shim.ChaincodeStubInterface, args []s
 	if err := json.Unmarshal(recordJSON, &record); err != nil {
 		return shim.Error(fmt.Sprintf("Failed to unmarshal record: %v", err))
 	}
+	if record.Status == statusDepartmentApproved {
+		return shim.Success(recordJSON)
+	}
+	if record.Status != statusIssued && record.Status != statusCorrected {
+		return shim.Error("Invalid grade transition: only issued or corrected grades can be department-approved")
+	}
 
 	record.Status = statusDepartmentApproved
 	record.Version++
@@ -538,6 +556,12 @@ func (cc *SmartContract) finalizeRecord(stub shim.ChaincodeStubInterface, args [
 	var record AcademicRecord
 	if err := json.Unmarshal(recordJSON, &record); err != nil {
 		return shim.Error(fmt.Sprintf("Failed to unmarshal record: %v", err))
+	}
+	if record.Status == statusFinalized {
+		return shim.Success(recordJSON)
+	}
+	if record.Status != statusDepartmentApproved {
+		return shim.Error("Invalid grade transition: Registrar may finalize only department-approved grades")
 	}
 
 	record.Status = statusFinalized

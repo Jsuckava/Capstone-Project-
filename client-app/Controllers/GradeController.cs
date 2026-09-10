@@ -1663,6 +1663,12 @@ namespace BlockGo.Controllers
                 {
                     allGrades = allGrades.Where(grade => string.Equals(grade.FacultyId, invokerId, StringComparison.OrdinalIgnoreCase)).ToList();
                 }
+                else if (jwtRole == "registrar")
+                {
+                    allGrades = allGrades.Where(grade =>
+                        string.Equals(grade.Status, "DepartmentApproved", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(grade.Status, "Finalized", StringComparison.OrdinalIgnoreCase)).ToList();
+                }
                 else if (jwtRole == "department_admin")
                 {
                     string? programCode = null;
@@ -1884,14 +1890,30 @@ namespace BlockGo.Controllers
                 await conn.OpenAsync();
                 if (!await CanAccessGradeRecordAsync(conn, recordId, invokerId, "department_admin"))
                     return Forbid();
-                using var cmd = new NpgsqlCommand("UPDATE pending_grade_records SET status = 'DepartmentApproved' WHERE id = @id RETURNING id", conn);
+                using var cmd = new NpgsqlCommand(@"
+                    UPDATE pending_grade_records
+                    SET status = 'ChairpersonApproved', date = @date
+                    WHERE id = @id
+                      AND LOWER(status) IN ('submittedtochairperson', 'submitted')
+                    RETURNING id", conn);
                 cmd.Parameters.AddWithValue("id", recordId);
+                cmd.Parameters.AddWithValue("date", DateTime.UtcNow.ToString("o"));
                 var res = await cmd.ExecuteScalarAsync();
                 
                 if (res != null) 
                 {
                     await NotifyAcademicDataChangedAsync("grade_approved", null, invokerId);
-                    return Ok(new { status = "Success", message = "Grade approved by Department successfully (Staged)." });
+                    return Ok(new { status = "Success", message = "Grade approved by the Chairperson and ready to be forwarded." });
+                }
+
+                using (var statusCommand = new NpgsqlCommand("SELECT status FROM pending_grade_records WHERE id = @id", conn))
+                {
+                    statusCommand.Parameters.AddWithValue("id", recordId);
+                    var currentStatus = (await statusCommand.ExecuteScalarAsync())?.ToString();
+                    if (string.Equals(currentStatus, "ChairpersonApproved", StringComparison.OrdinalIgnoreCase))
+                        return Ok(new { status = "Success", message = "Grade was already approved by the Chairperson.", idempotent = true });
+                    if (!string.IsNullOrWhiteSpace(currentStatus))
+                        return Conflict(new { status = "Error", message = $"A grade in {currentStatus} status cannot be approved. It must first be submitted by Faculty." });
                 }
 
                 await _blockchainService.ApproveGradeAsync(recordId, invokerId);
@@ -1919,9 +1941,24 @@ namespace BlockGo.Controllers
                 await connIntercept.OpenAsync();
                 if (!await CanAccessGradeRecordAsync(connIntercept, recordId, invokerId, "department_admin"))
                     return Forbid();
-                using var cmdApprove = new NpgsqlCommand("UPDATE pending_grade_records SET status = 'DepartmentApproved' WHERE id = @id", connIntercept);
+                using var cmdApprove = new NpgsqlCommand(@"
+                    UPDATE pending_grade_records
+                    SET status = 'DepartmentApproved', date = @date
+                    WHERE id = @id AND LOWER(status) = 'chairpersonapproved'
+                    RETURNING id", connIntercept);
                 cmdApprove.Parameters.AddWithValue("id", recordId);
-                await cmdApprove.ExecuteNonQueryAsync();
+                cmdApprove.Parameters.AddWithValue("date", DateTime.UtcNow.ToString("o"));
+                var forwardedId = await cmdApprove.ExecuteScalarAsync();
+                if (forwardedId == null)
+                {
+                    using var statusCommand = new NpgsqlCommand("SELECT status FROM pending_grade_records WHERE id = @id", connIntercept);
+                    statusCommand.Parameters.AddWithValue("id", recordId);
+                    var currentStatus = (await statusCommand.ExecuteScalarAsync())?.ToString();
+                    if (string.Equals(currentStatus, "DepartmentApproved", StringComparison.OrdinalIgnoreCase))
+                        return Ok(new { status = "Success", message = "Grade was already forwarded to the Registrar.", idempotent = true });
+                    if (string.IsNullOrWhiteSpace(currentStatus)) return NotFound(new { status = "Error", message = "Staged grade was not found." });
+                    return Conflict(new { status = "Error", message = $"A grade in {currentStatus} status cannot be forwarded. Chairperson approval is required first." });
+                }
                 
                 await NotifyAcademicDataChangedAsync("grade_forwarded", null, invokerId);
                 return Ok(new { status = "Success", message = "Section forwarded to Registrar successfully." });
@@ -1935,7 +1972,8 @@ namespace BlockGo.Controllers
                 using var cmd = new NpgsqlCommand(@"
                     SELECT id, student_hash, student_no, student_name, section, course, subject_code, grade,
                            semester, school_year, faculty_id, date, ipfs_cid, note,
-                           subject_title, professor_name, program, term, units, submitted_by, recorded_at
+                           subject_title, professor_name, program, term, units, submitted_by, recorded_at,
+                           status
                     FROM pending_grade_records WHERE id = @id", conn);
                 cmd.Parameters.AddWithValue("id", recordId);
                 
@@ -1966,7 +2004,7 @@ namespace BlockGo.Controllers
                             Units = reader.IsDBNull(18) ? 0 : reader.GetDecimal(18),
                             SubmittedBy = reader.IsDBNull(19) ? "" : reader.GetString(19),
                             Timestamp = reader.IsDBNull(20) ? "" : reader.GetFieldValue<DateTimeOffset>(20).ToString("O"),
-                            Status = "Finalized",
+                            Status = reader.IsDBNull(21) ? "" : reader.GetString(21),
                             University = "PLV",
                             Version = 1
                         };
@@ -1975,18 +2013,32 @@ namespace BlockGo.Controllers
 
                 if (pendingRecord != null)
                 {
+                    if (!string.Equals(pendingRecord.Status, "DepartmentApproved", StringComparison.OrdinalIgnoreCase))
+                        return Conflict(new { status = "Error", message = $"A grade in {pendingRecord.Status} status cannot be committed. It must be approved and forwarded by the Chairperson first." });
+                    pendingRecord.Status = "Finalized";
                     var facId = string.IsNullOrEmpty(pendingRecord.FacultyId) ? invokerId : pendingRecord.FacultyId;
                     
-                    bool isExistingOnLedger = false;
+                    AcademicRecord? stagedLedgerRecord = null;
                     try {
                         var existing = await _blockchainService.GetGradeAsync(recordId, facId);
-                        if (!string.IsNullOrEmpty(existing) && !existing.Contains("error") && !existing.Contains("not found")) isExistingOnLedger = true;
+                        if (!string.IsNullOrEmpty(existing) && !existing.Contains("error") && !existing.Contains("not found"))
+                            stagedLedgerRecord = JsonSerializer.Deserialize<AcademicRecord>(existing, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                     } catch { }
 
-                    if (isExistingOnLedger) await _blockchainService.UpdateGradeAsync(pendingRecord, facId);
-                    else await _blockchainService.SubmitGradeAsync(pendingRecord, facId);
+                    if (string.Equals(stagedLedgerRecord?.Status, "Finalized", StringComparison.OrdinalIgnoreCase))
+                    {
+                        using var cleanupCommand = new NpgsqlCommand("DELETE FROM pending_grade_records WHERE id = @id", conn);
+                        cleanupCommand.Parameters.AddWithValue("id", recordId);
+                        await cleanupCommand.ExecuteNonQueryAsync();
+                        return Ok(new { status = "Success", message = "Grade was already finalized on the Ledger; stale staging was cleaned up.", idempotent = true });
+                    }
 
-                    await _blockchainService.ApproveGradeAsync(recordId, invokerId);
+                    if (stagedLedgerRecord == null)
+                        await _blockchainService.SubmitGradeAsync(pendingRecord, facId);
+
+                    if (!string.Equals(stagedLedgerRecord?.Status, "DepartmentApproved", StringComparison.OrdinalIgnoreCase))
+                        await _blockchainService.ApproveGradeAsync(recordId, invokerId);
+
                     await _blockchainService.FinalizeGradeAsync(recordId, invokerId);
                     
                     using var cmdDel = new NpgsqlCommand("DELETE FROM pending_grade_records WHERE id = @id", conn);
@@ -2015,6 +2067,23 @@ namespace BlockGo.Controllers
                     NotifyStudentOfFinalization(recordId, invokerId);
                     await NotifyAcademicDataChangedAsync("grade_finalized", pendingRecord.Course, invokerId);
                     return Ok(new { status = "Success", message = "Grade finalized and successfully written to Ledger." });
+                }
+
+                try
+                {
+                    var existingLedgerJson = await _blockchainService.GetGradeAsync(recordId, invokerId);
+                    if (!string.IsNullOrWhiteSpace(existingLedgerJson) &&
+                        !existingLedgerJson.Contains("error", StringComparison.OrdinalIgnoreCase) &&
+                        !existingLedgerJson.Contains("not found", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var existingLedgerRecord = JsonSerializer.Deserialize<AcademicRecord>(existingLedgerJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (string.Equals(existingLedgerRecord?.Status, "Finalized", StringComparison.OrdinalIgnoreCase))
+                            return Ok(new { status = "Success", message = "Grade was already finalized on the Ledger.", idempotent = true });
+                    }
+                }
+                catch
+                {
+                    // Let the authoritative FinalizeRecord transaction return the domain error.
                 }
 
                 await _blockchainService.FinalizeGradeAsync(recordId, invokerId);

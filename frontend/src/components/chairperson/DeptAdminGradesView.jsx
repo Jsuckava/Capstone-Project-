@@ -762,8 +762,8 @@ const DeptAdminGradesView = ({ loggedInEmail = '', loggedInName = '', userRole =
             });
             
             let normalizedReviewStatus = 'pending';
-            if (status.includes('finalized') || status.includes('forwarded')) normalizedReviewStatus = 'forwarded';
-            else if (status.includes('approved')) normalizedReviewStatus = 'approved';
+            if (status.includes('finalized') || status.includes('forwarded') || status.includes('departmentapproved')) normalizedReviewStatus = 'forwarded';
+            else if (status.includes('chairpersonapproved') || status === 'approved') normalizedReviewStatus = 'approved';
             else if (status.includes('issued') || status.includes('submitted') || status === '') normalizedReviewStatus = 'submitted';
             else if (status.includes('returned') || status.includes('rejected')) normalizedReviewStatus = 'returned';
 
