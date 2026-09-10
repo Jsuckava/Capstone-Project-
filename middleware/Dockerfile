@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:26-slim
 
 # Install system dependencies for node-canvas, bcrypt, etc. if needed
 RUN apt-get update && apt-get install -y \
