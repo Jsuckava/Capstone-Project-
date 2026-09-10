@@ -7,7 +7,7 @@ const { isRetryableCouchDbError } = require('../src/fabric/wallet-manager');
 const expected = {
     '/api/login': 'auth', '/api/crypto/hash-password': 'auth', '/api/forgot-password': 'auth', '/api/reset-password': 'auth', '/api/bootstrap': 'auth',
     '/api/fabric/register-user': 'identity', '/api/enroll': 'identity', '/api/register': 'identity', '/api/revoke': 'identity', '/api/wallet/person@example.edu': 'identity',
-    '/api/all-grades': 'ledger', '/api/student-transactions': 'ledger', '/api/grade-history/GRADE-1': 'ledger',
+    '/api/all-grades': 'ledger', '/api/student-transactions': 'ledger', '/api/admin/ledger-transactions': 'ledger', '/api/grade-history/GRADE-1': 'ledger',
     '/api/fabric/audit-event': 'ledger', '/api/issue-grade': 'ledger', '/api/get-grade/GRADE-1': 'ledger',
     '/api/update-grade': 'ledger', '/api/approve-grade/GRADE-1': 'ledger', '/api/finalize-grade/GRADE-1': 'ledger',
     '/api/return-grade/GRADE-1': 'ledger', '/api/batch-issue-grade': 'ledger',

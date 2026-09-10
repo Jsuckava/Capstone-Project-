@@ -10,7 +10,11 @@
     "start:ledger": "node src/services/ledger-service.js",
     "start:upload": "node src/services/grade-upload-service.js",
     "start:settings": "node src/services/settings-service.js",
-    "test": "node --test --test-concurrency=1 test/*.test.js"
+    "lint": "node scripts/lint.js",
+    "test": "node --test --test-concurrency=1 test/login-rate-limit.test.js test/login-identifier.test.js test/route-map.test.js test/serialized-contract.test.js",
+    "test:api": "node --test --test-concurrency=1 test/api-contract.test.js",
+    "test:integration": "node --test --test-concurrency=1 test/service-startup.test.js",
+    "test:e2e": "node --test --test-concurrency=1 test/gateway-e2e.test.js"
   },
   "keywords": [],
   "author": "",

@@ -212,34 +212,30 @@ function AppContent() {
         <>
           {/* Floating Chat Button */}
           {canUseChat && !isChatOpen && (
-            <button 
-              onClick={() => setIsChatOpen(true)} 
-              style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000, padding: '15px 25px', backgroundColor: '#003366', color: 'white', border: 'none', borderRadius: '30px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontWeight: 'bold', fontSize: '16px' }}>
-              💬 Open Chat
-            </button>
-          )}
-          {canUseChat && !isChatOpen && chatUnreadTotal > 0 && (
-            <span
-              style={{
-                position: 'fixed',
-                bottom: '52px',
-                right: '18px',
-                zIndex: 1001,
-                display: 'inline-flex',
-                minWidth: 22,
-                height: 22,
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 999,
-                background: '#ef4444',
-                color: 'white',
-                fontSize: 12,
-                fontWeight: 700,
-                boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-              }}
-            >
-              {chatUnreadTotal > 9 ? '9+' : chatUnreadTotal}
-            </span>
+            <div className="group fixed bottom-5 right-5 z-[1000]">
+              <button
+                type="button"
+                aria-label="Open Chat"
+                title="Open Chat"
+                onClick={() => setIsChatOpen(true)}
+                className="flex h-11 w-11 items-center justify-start overflow-hidden rounded-full bg-[#003366] text-white shadow-lg transition-[width,background-color,box-shadow] duration-200 ease-out hover:w-32 hover:bg-[#004b8f] hover:shadow-xl focus-visible:w-32 focus-visible:bg-[#004b8f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                    <path d="M21 15a4 4 0 0 1-4 4H8l-5 3 1.7-5.1A7 7 0 0 1 3 12V8a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z" />
+                    <path d="M8 10h.01M12 10h.01M16 10h.01" />
+                  </svg>
+                </span>
+                <span className="whitespace-nowrap pr-4 text-sm font-bold opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                  Open Chat
+                </span>
+              </button>
+              {chatUnreadTotal > 0 && (
+                <span className="pointer-events-none absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow">
+                  {chatUnreadTotal > 9 ? '9+' : chatUnreadTotal}
+                </span>
+              )}
+            </div>
           )}
           {canUseChat && <Chat
             userEmail={user.email}

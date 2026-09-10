@@ -1,96 +1,601 @@
 openapi: 3.0.3
 
 info:
-  title: BlockGo Feature/API CI
-  description: >
-    CI-only OpenAPI definition for non-destructive BlockGo
-    middleware API security and fuzz testing.
-  version: 1.0.0
+  title: BlockGo Middleware Security-Test API
+  version: 2.0.0
+  description: |
+    CI contract for the public Node middleware gateway. It documents the routes
+    owned by auth, Fabric identity, ledger, grade upload, and settings services.
+    The server is intentionally fixed to the isolated GitHub Actions runner.
 
 servers:
   - url: http://127.0.0.1:4000
 
-paths:
+tags:
+  - name: Platform
+  - name: Authentication
+  - name: Identity
+  - name: Ledger
+  - name: Upload
+  - name: Settings
 
+paths:
   /api/health:
     get:
-      operationId: getHealth
-      summary: Middleware health check
-
+      tags: [Platform]
+      operationId: getMiddlewareHealth
+      summary: Check the middleware gateway process
       responses:
         "200":
-          description: Middleware is operational
+          description: Gateway is operational
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - status
-                  - mode
-                properties:
-                  status:
-                    type: string
-                    example: operational
-                  mode:
-                    type: string
+                $ref: "#/components/schemas/GatewayHealth"
 
+  /api/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Authenticate a system account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200": { $ref: "#/components/responses/LoginSuccess" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /api/crypto/hash-password:
     post:
+      tags: [Authentication]
       operationId: hashPassword
-      summary: Hash password
-
+      summary: Hash a password for an authorized provisioning workflow
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - password
+              required: [password]
               additionalProperties: false
               properties:
                 password:
                   type: string
                   minLength: 1
-                  maxLength: 256
-
+                  maxLength: 128
       responses:
-
         "200":
-          description: Password successfully hashed
+          description: Password was hashed
           content:
             application/json:
               schema:
                 type: object
-                required:
-                  - hash
+                required: [hash]
                 properties:
-                  hash:
-                    type: string
+                  hash: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
-        "400":
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
+  /api/forgot-password:
+    post:
+      tags: [Authentication]
+      operationId: requestPasswordReset
+      summary: Request a password-reset OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              additionalProperties: false
+              properties:
+                email: { type: string, format: email, maxLength: 255 }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
-        "500":
-          description: Internal processing failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
+  /api/reset-password:
+    post:
+      tags: [Authentication]
+      operationId: resetPassword
+      summary: Complete password reset with an OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp, newPassword]
+              additionalProperties: false
+              properties:
+                email: { type: string, format: email, maxLength: 255 }
+                otp: { type: string, pattern: "^[0-9]{6}$" }
+                newPassword: { type: string, minLength: 8, maxLength: 128 }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
+  /api/fabric/register-user:
+    post:
+      tags: [Identity]
+      operationId: registerFabricUser
+      summary: Register and enroll a managed Fabric identity
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FabricRegisterUserRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/enroll:
+    post:
+      tags: [Identity]
+      operationId: enrollFabricIdentity
+      summary: Enroll an existing Fabric identity
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IdentityCredentialRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/register:
+    post:
+      tags: [Identity]
+      operationId: registerFabricIdentity
+      summary: Register a Fabric identity
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IdentityCredentialRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/revoke:
+    post:
+      tags: [Identity]
+      operationId: revokeFabricIdentity
+      summary: Revoke a managed Fabric identity
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RevokeIdentityRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/wallet/{username}:
+    delete:
+      tags: [Identity]
+      operationId: removeWalletIdentity
+      summary: Remove a managed identity from its server-side wallet
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Username"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/all-grades:
+    get:
+      tags: [Ledger]
+      operationId: getAllGrades
+      summary: Query role-scoped ledger grades
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/student-transactions:
+    get:
+      tags: [Ledger]
+      operationId: getStudentTransactions
+      summary: Query the authenticated student's transactions
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/admin/ledger-transactions:
+    get:
+      tags: [Ledger]
+      operationId: getAdministratorLedgerTransactions
+      summary: Query and filter ledger transactions for the System Administrator
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: source, in: query, schema: { type: string, enum: [registrar, department_admin, faculty] } }
+        - { name: search, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: schoolYear, in: query, schema: { type: string, maxLength: 20 } }
+        - { name: semester, in: query, schema: { type: string, maxLength: 30 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/grade-history/{id}:
+    get:
+      tags: [Ledger]
+      operationId: getGradeHistory
+      summary: Query the immutable history of one grade
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/fabric/audit-event:
+    post:
+      tags: [Ledger]
+      operationId: createFabricAuditEvent
+      summary: Record a Registrar audit event
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "201": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/issue-grade:
+    post:
+      tags: [Ledger]
+      operationId: issueGrade
+      summary: Submit a grade to the ledger workflow
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GradeMutation" }
+      responses:
+        "201": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/get-grade/{id}:
+    get:
+      tags: [Ledger]
+      operationId: getGrade
+      summary: Read one ledger grade
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/update-grade:
+    post:
+      tags: [Ledger]
+      operationId: updateGrade
+      summary: Correct a ledger grade
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GradeMutation" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/approve-grade/{id}:
+    post:
+      tags: [Ledger]
+      operationId: approveGrade
+      summary: Department-approve a grade
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/finalize-grade/{id}:
+    post:
+      tags: [Ledger]
+      operationId: finalizeGrade
+      summary: Registrar-finalize a grade
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/return-grade/{id}:
+    post:
+      tags: [Ledger]
+      operationId: returnGrade
+      summary: Return a grade to faculty
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/batch-issue-grade:
+    post:
+      tags: [Ledger]
+      operationId: batchIssueGrades
+      summary: Submit multiple grades
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              maxItems: 200
+              items: { $ref: "#/components/schemas/GradeMutation" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/batch-upload:
+    post:
+      tags: [Upload]
+      operationId: batchUploadGrades
+      summary: Upload a grade spreadsheet
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/GradeUpload" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/upload-grades:
+    post:
+      tags: [Upload]
+      operationId: uploadGrades
+      summary: Compatibility route for grade spreadsheet upload
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/GradeUpload" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/SystemSettings/{key}:
+    get:
+      tags: [Settings]
+      operationId: getSystemSetting
+      summary: Read a public academic-period setting
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 100 }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/SystemSettings:
+    post:
+      tags: [Settings]
+      operationId: saveSystemSetting
+      summary: Save an academic-period setting
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, value]
+              additionalProperties: false
+              properties:
+                key: { type: string, minLength: 1, maxLength: 100 }
+                value: { type: string, maxLength: 10000 }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/SystemSettings/reset-season:
+    post:
+      tags: [Settings]
+      operationId: resetEncodingSeason
+      summary: Clear non-finalized staging data for a new encoding season
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Username:
+      name: username
+      in: path
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 255 }
+    RecordId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 255 }
+
   schemas:
+    GatewayHealth:
+      type: object
+      required: [status, service, architecture]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [operational] }
+        service: { type: string, enum: [middleware-api] }
+        architecture: { type: string, enum: [microservices] }
+    LoginRequest:
+      type: object
+      required: [username, password]
+      additionalProperties: false
+      properties:
+        username: { type: string, minLength: 1, maxLength: 255 }
+        password: { type: string, minLength: 1, maxLength: 128 }
+    FabricRegisterUserRequest:
+      type: object
+      required: [email, role]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email, maxLength: 255 }
+        password: { type: string, minLength: 8, maxLength: 128 }
+        role: { type: string, enum: [student, faculty, department_admin, registrar] }
+    IdentityCredentialRequest:
+      type: object
+      required: [username, password, role]
+      additionalProperties: false
+      properties:
+        username: { type: string, minLength: 1, maxLength: 255 }
+        password: { type: string, minLength: 8, maxLength: 128 }
+        role: { type: string, enum: [student, faculty, department_admin, registrar] }
+    RevokeIdentityRequest:
+      type: object
+      required: [username, role]
+      additionalProperties: false
+      properties:
+        username: { type: string, minLength: 1, maxLength: 255 }
+        role: { type: string, enum: [student, faculty, department_admin, registrar] }
+    GradeMutation:
+      type: object
+      minProperties: 1
+      maxProperties: 40
+      additionalProperties: true
+    GradeUpload:
+      type: object
+      required: [excel]
+      properties:
+        excel: { type: string, format: binary }
+        facultyId: { type: string, maxLength: 255 }
+        term: { type: string, enum: [midterm, finals] }
     Error:
       type: object
-      required:
-        - error
+      required: [error]
       additionalProperties: true
       properties:
-        error:
-          type: string
+        error: { type: string }
+    StatusResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        status: { type: string }
+        message: { type: string }
+
+  responses:
+    Success:
+      description: Operation response
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/StatusResponse" }
+    Message:
+      description: Generic message response
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [message]
+            properties:
+              message: { type: string }
+    LoginSuccess:
+      description: Authentication succeeded
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [status, token]
+            properties:
+              status: { type: string }
+              token: { type: string }
+              message: { type: string }
+    BadRequest:
+      description: Invalid or malformed request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Authentication is required or credentials are invalid
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Authenticated identity is not permitted
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: Request rate limit exceeded
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    InternalError:
+      description: Internal service failure
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }

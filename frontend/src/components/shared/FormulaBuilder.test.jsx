@@ -68,13 +68,11 @@ describe('FormulaBuilder Component', () => {
     const submitBtn = screen.getByText('Submit for Approval');
     fireEvent.click(submitBtn);
 
-    await waitFor(() => {
-      expect(createGradeTemplate).toHaveBeenCalledTimes(1);
-      expect(createGradeTemplate).toHaveBeenCalledWith(expect.objectContaining({
-        templateName: 'Test Template',
-        department: 'Bachelor of Science in Information Technology',
-      }));
-      expect(window.alert).toHaveBeenCalledWith('Template submitted for approval successfully!');
-    });
+    await waitFor(() => expect(window.alert).toHaveBeenCalledWith('Template submitted for approval successfully!'));
+    expect(createGradeTemplate).toHaveBeenCalledTimes(1);
+    expect(createGradeTemplate).toHaveBeenCalledWith(expect.objectContaining({
+      templateName: 'Test Template',
+      department: 'Bachelor of Science in Information Technology',
+    }));
   });
 });
