@@ -23,7 +23,7 @@ Configure branch protection or repository rulesets with these required checks:
 | `Develop-and-Integration` | `Required Develop CI Gate` |
 | `feature/api-endpoints-Testing` | `Required Feature/API Gate` |
 | `Staging-and-Testing` | `Required Staging Gate` |
-| `main` | `Required Security Gate` |
+| `main` | `Required Security Gate` and the repository's default-setup CodeQL checks |
 
 Require pull requests, prevent force pushes and branch deletion, dismiss stale
 approvals, and require branches to be current before merging. Enable GitHub code
@@ -33,8 +33,8 @@ their complete results.
 ## Security coverage
 
 - actionlint validation for workflow syntax and expressions
-- repository hygiene checks for tracked credentials and runtime data
-- CodeQL analysis for JavaScript/TypeScript, C#, and Go
+- repository hygiene checks that block newly tracked credentials and runtime data
+- GitHub CodeQL default setup, or optional advanced analysis for JavaScript/TypeScript, C#, and Go
 - dependency review for pull-request dependency changes
 - Trivy filesystem, secret, dependency, IaC, and container-image scanning
 - npm and NuGet production dependency audits
@@ -43,8 +43,15 @@ their complete results.
 - frontend, middleware, chaincode, ASP.NET, enrollment, container, and SPA-route tests
 - Dependabot updates for Actions, npm, NuGet, Go, pip, and Docker
 
-High or critical dependency/image/IaC findings and any detected secret block their
-quality gate. ZAP and Nuclei enforce the policies in `security/`.
+High or critical dependency/image findings block their quality gate. New IaC or
+secret regressions are blocked while the complete legacy inventory remains visible
+for controlled remediation. ZAP and Nuclei enforce the policies in `security/`.
+
+Keep GitHub CodeQL default setup enabled for the normal configuration. To use the
+workflow's advanced CodeQL matrix instead, first disable default setup and then set
+the repository variable `CODEQL_ADVANCED_SETUP=true`. Advanced Go analysis uses
+the supported `autobuild` mode. Add the default-setup CodeQL checks to the `main`
+ruleset so those separately managed results remain merge-blocking.
 
 ## Production environment
 
@@ -76,8 +83,9 @@ it with owner-only permissions for deployment and shreds the temporary file afte
 
 ## Current security blockers
 
-The repository hygiene gate intentionally rejects tracked logs, IPFS runtime data,
-Fabric keystores, and private-key filenames. Before making this gate required:
+The repository hygiene gate reports existing tracked logs, IPFS runtime data,
+Fabric keystores, and private-key filenames, and blocks newly introduced instances.
+Complete this cleanup as soon as possible:
 
 1. Rotate every credential or token that appears in tracked files.
 2. Remove runtime data and private keys from the Git index while preserving any

@@ -375,7 +375,7 @@ jobs:
           done
 
       - name: Scan frontend image
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: blockgo/frontend:ci
           scanners: vuln
@@ -384,7 +384,7 @@ jobs:
           exit-code: "1"
 
       - name: Scan middleware image
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: blockgo/middleware:ci
           scanners: vuln
@@ -393,7 +393,7 @@ jobs:
           exit-code: "1"
 
       - name: Scan ASP.NET image
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: blockgo/client-app:ci
           scanners: vuln
@@ -402,7 +402,7 @@ jobs:
           exit-code: "1"
 
       - name: Scan chaincode image
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: blockgo/chaincode:ci
           scanners: vuln
