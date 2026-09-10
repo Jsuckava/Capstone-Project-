@@ -267,66 +267,105 @@ jobs:
           echo "iac_count=$iac_count" >> "$GITHUB_OUTPUT"
           echo "Prepared $changed_count changed file(s), including $iac_count IaC file(s), for regression security scanning."
 
-      - name: Scan dependencies
+      - name: Report dependency findings
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          version: v0.74.0
           scan-type: fs
           scan-ref: .
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          skip-dirs: frontend/node_modules,middleware/node_modules,client-app/bin,client-app/obj,tests/EnrollmentImportChecks/bin,tests/EnrollmentImportChecks/obj,tests/EnrollmentSectioningChecks/bin,tests/EnrollmentSectioningChecks/obj,tmp,network/ipfs_data,network/fabric-k8s-data,network/channel-artifacts-final
+          exit-code: "0"
+          format: table
+
+      - name: Enforce dependency vulnerability gate
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          skip-setup-trivy: true
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          skip-dirs: frontend/node_modules,middleware/node_modules,client-app/bin,client-app/obj,tests/EnrollmentImportChecks/bin,tests/EnrollmentImportChecks/obj,tests/EnrollmentSectioningChecks/bin,tests/EnrollmentSectioningChecks/obj,tmp,network/ipfs_data,network/fabric-k8s-data,network/channel-artifacts-final
           exit-code: "1"
           format: sarif
+          limit-severities-for-sarif: true
           output: security-results/code-scanning/trivy-dependencies.sarif
 
       - name: Block newly introduced secrets
         if: always() && steps.changed-files.outputs.secret_diff == '1'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          skip-setup-trivy: true
           scan-type: fs
           scan-ref: .security-secret-changes
           scanners: secret
           exit-code: "1"
           format: sarif
+          limit-severities-for-sarif: true
           output: security-results/code-scanning/trivy-secret-changes.sarif
 
       - name: Block new IaC regressions
         if: always() && steps.changed-files.outputs.iac_count != '0'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          skip-setup-trivy: true
           scan-type: fs
           scan-ref: .security-iac-changes
           scanners: misconfig
           severity: HIGH,CRITICAL
           exit-code: "1"
           format: sarif
+          limit-severities-for-sarif: true
           output: security-results/code-scanning/trivy-iac-changes.sarif
 
       - name: Report complete legacy secret and IaC debt
         if: always()
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          skip-setup-trivy: true
           scan-type: fs
           scan-ref: .
           scanners: secret,misconfig
           severity: HIGH,CRITICAL
+          skip-dirs: frontend/node_modules,middleware/node_modules,client-app/bin,client-app/obj,tests/EnrollmentImportChecks/bin,tests/EnrollmentImportChecks/obj,tests/EnrollmentSectioningChecks/bin,tests/EnrollmentSectioningChecks/obj,tmp
           exit-code: "0"
           format: sarif
+          limit-severities-for-sarif: true
           output: security-results/trivy-legacy-debt.sarif
 
-      - name: Upload repository findings to code scanning
-        if: always() && hashFiles('security-results/code-scanning/*.sarif') != ''
+      - name: Upload dependency findings to code scanning
+        if: always() && hashFiles('security-results/code-scanning/trivy-dependencies.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: security-results/code-scanning
-          category: trivy-repository
+          sarif_file: security-results/code-scanning/trivy-dependencies.sarif
+          category: trivy-dependencies
+
+      - name: Upload changed-secret findings to code scanning
+        if: always() && hashFiles('security-results/code-scanning/trivy-secret-changes.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: security-results/code-scanning/trivy-secret-changes.sarif
+          category: trivy-secret-changes
+
+      - name: Upload changed-IaC findings to code scanning
+        if: always() && hashFiles('security-results/code-scanning/trivy-iac-changes.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: security-results/code-scanning/trivy-iac-changes.sarif
+          category: trivy-iac-changes
 
       - name: Generate CycloneDX repository SBOM
         if: always()
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          skip-setup-trivy: true
           scan-type: fs
           scan-ref: .
+          skip-dirs: frontend/node_modules,middleware/node_modules,client-app/bin,client-app/obj,tests/EnrollmentImportChecks/bin,tests/EnrollmentImportChecks/obj,tests/EnrollmentSectioningChecks/bin,tests/EnrollmentSectioningChecks/obj,tmp,network/ipfs_data,network/fabric-k8s-data,network/channel-artifacts-final
           format: cyclonedx
           output: security-results/blockgo-repository.cdx.json
           exit-code: "0"
