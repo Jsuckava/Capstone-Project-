@@ -28,7 +28,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.1",
     "form-data": "^4.0.5",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^5.4.1",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "nodemailer": "^10.0.1",
