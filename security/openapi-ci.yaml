@@ -26,13 +26,18 @@ paths:
                 type: object
                 required:
                   - status
-                  - mode
+                  - service
+                  - architecture
                 properties:
                   status:
                     type: string
                     example: operational
-                  mode:
+                  service:
                     type: string
+                    example: middleware-api
+                  architecture:
+                    type: string
+                    example: microservices
 
 
   /api/crypto/hash-password:
@@ -53,7 +58,7 @@ paths:
                 password:
                   type: string
                   minLength: 1
-                  maxLength: 256
+                  maxLength: 128
 
       responses:
 
@@ -71,6 +76,16 @@ paths:
 
         "400":
           description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+        "429":
+          description: Password hashing rate limit exceeded
+
+        "503":
+          description: Authentication service is temporarily unavailable
           content:
             application/json:
               schema:

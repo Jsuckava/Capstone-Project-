@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\EnrollmentImportChecks.csproj": {}
+    "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentSectioningChecks\\EnrollmentSectioningChecks.csproj": {}
   },
   "projects": {
-    "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\EnrollmentImportChecks.csproj": {
+    "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentSectioningChecks\\EnrollmentSectioningChecks.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\EnrollmentImportChecks.csproj",
-        "projectName": "EnrollmentImportChecks",
-        "projectPath": "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\EnrollmentImportChecks.csproj",
+        "projectUniqueName": "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentSectioningChecks\\EnrollmentSectioningChecks.csproj",
+        "projectName": "EnrollmentSectioningChecks",
+        "projectPath": "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentSectioningChecks\\EnrollmentSectioningChecks.csproj",
         "packagesPath": "C:\\Users\\pascu\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\obj\\",
+        "outputPath": "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentSectioningChecks\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\pascu\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -44,9 +44,9 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
-            "CsvHelper": {
+            "Npgsql": {
               "target": "Package",
-              "version": "[33.1.0, )"
+              "version": "[8.0.6, )"
             }
           },
           "imports": [
