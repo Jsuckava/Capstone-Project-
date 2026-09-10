@@ -64,6 +64,63 @@ revision, generates a separate six-consenter channel block, validates certificat
 expiry, CA chains, private-key matches, and Kubernetes DNS SANs, and then deploys
 the HA topology. Local channel artifacts remain three-consenter artifacts.
 
+### Automated PostgreSQL backups
+
+Production deploys the `postgres-backup` CronJob in `plv-main-campus`. At
+00:00 and 12:00 UTC it runs `pg_dump`, compresses the SQL dump, encrypts it
+with GnuPG AES-256, creates a SHA-256 checksum, and uploads both files under
+`gs://BUCKET/postgres/DATABASE/TIMESTAMP/`. The unencrypted archive exists only
+inside the Job's temporary `emptyDir` and is removed when the Job exits.
+
+Add these values to `network/.env` before running `production apply`:
+
+```dotenv
+POSTGRES_BACKUP_GCS_BUCKET=your-private-blockgo-backups
+POSTGRES_BACKUP_ENCRYPTION_KEY=<strong-random-passphrase-kept-outside-the-cluster>
+```
+
+`production gke-setup` enables Workload Identity Federation for GKE. After the
+bucket exists, grant only object-creation access to the Kubernetes service
+account used by the CronJob:
+
+```bash
+export GCP_PROJECT_ID="your-project"
+export POSTGRES_BACKUP_GCS_BUCKET="your-private-blockgo-backups"
+export GCP_PROJECT_NUMBER="$(gcloud projects describe "$GCP_PROJECT_ID" --format='value(projectNumber)')"
+export POSTGRES_BACKUP_PRINCIPAL="principal://iam.googleapis.com/projects/${GCP_PROJECT_NUMBER}/locations/global/workloadIdentityPools/${GCP_PROJECT_ID}.svc.id.goog/subject/ns/plv-main-campus/sa/postgres-backup"
+
+gcloud storage buckets create "gs://${POSTGRES_BACKUP_GCS_BUCKET}" \
+  --project="$GCP_PROJECT_ID" \
+  --location=asia-southeast1 \
+  --uniform-bucket-level-access
+
+gcloud storage buckets add-iam-policy-binding "gs://${POSTGRES_BACKUP_GCS_BUCKET}" \
+  --member="$POSTGRES_BACKUP_PRINCIPAL" \
+  --role=roles/storage.objectCreator \
+  --condition=None
+```
+
+Configure a Cloud Storage lifecycle rule on the bucket for the required backup
+retention period. Keep the encryption passphrase in a separate recovery vault;
+losing it makes the uploaded backups unusable.
+
+Test one backup without waiting for the schedule:
+
+```bash
+JOB_NAME="postgres-backup-manual-$(date +%s)"
+kubectl create job --from=cronjob/postgres-backup "$JOB_NAME" -n plv-main-campus
+kubectl wait --for=condition=complete "job/$JOB_NAME" -n plv-main-campus --timeout=2h
+kubectl logs "job/$JOB_NAME" -n plv-main-campus
+```
+
+The backup executable runs in the purpose-built Linux workload image from
+`k8s/postgres-backup/Dockerfile`; `pg_dump`, GPG, and the Google Cloud CLI are
+not required on a developer laptop. GitHub Actions validates the shell script
+and Kubernetes schema on `ubuntu-latest`. Windows developers should continue
+running `deploy-k8s.sh` through Git Bash or WSL as the existing deployment
+runner expects Bash. The local profile prepares and validates the manifest but
+does not deploy the cloud backup CronJob or require GCS credentials.
+
 The local profile does not create application HPAs because Docker Desktop does
 not expose the `metrics.k8s.io` resource metrics API by default. The production
 profile applies `11a-application-hpa.yaml`; confirm the target cluster provides

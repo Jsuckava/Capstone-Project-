@@ -175,6 +175,8 @@ The following environment variables are **mandatory** and must be defined in you
 | `JWT_SECRET` | A long, secure random string for JWT signing. |
 | `INTERNAL_API_KEY` | Secure key for cross-service authentication. |
 | `POSTGRES_PASS` | Password for the PostgreSQL database cluster. |
+| `POSTGRES_BACKUP_GCS_BUCKET` | Production Google Cloud Storage bucket name for encrypted PostgreSQL backups. |
+| `POSTGRES_BACKUP_ENCRYPTION_KEY` | Strong passphrase used to encrypt PostgreSQL backup archives; store it separately for disaster recovery. |
 | `BOOTSTRAP_REGISTRAR_PASS` | Admin password for the Fabric Certificate Authorities. |
 | `IPFS_ENCRYPTION_KEY` | 32-character key for encrypting IPFS grading sheets. |
 | `MOCK_REGISTRAR_PASS` | Password for the initial bootstrapped registrar account. |

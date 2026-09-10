@@ -619,15 +619,26 @@ jobs:
       - name: Validate deploy-k8s.sh
         run: |
           set -euo pipefail
-          SCRIPT="network/k8s/deploy-k8s.sh"
+          for SCRIPT in network/k8s/deploy-k8s.sh network/k8s/backup_postgres.sh; do
+            if [ ! -f "$SCRIPT" ]; then
+              echo "::error::$SCRIPT is missing."
+              exit 1
+            fi
 
-          if [ ! -f "$SCRIPT" ]; then
-            echo "::error::$SCRIPT is missing."
-            exit 1
-          fi
+            bash -n "$SCRIPT"
+            shellcheck --severity=warning "$SCRIPT"
+          done
 
-          bash -n "$SCRIPT"
-          shellcheck --severity=warning "$SCRIPT"
+      - name: Build PostgreSQL backup image
+        run: |
+          set -euo pipefail
+          docker build \
+            --tag blockgo/postgres-backup:ci \
+            --file network/k8s/postgres-backup/Dockerfile \
+            network/k8s/postgres-backup
+          docker run --rm --env HOME=/tmp --env CLOUDSDK_CONFIG=/tmp/.config/gcloud \
+            blockgo/postgres-backup:ci -lc \
+            'pg_dump --version && gpg --version && gcloud version'
 
       - name: Run offline infrastructure verification
         env:
