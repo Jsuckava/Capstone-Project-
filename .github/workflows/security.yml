@@ -1,0 +1,433 @@
+name: DevSecOps Security Gates
+
+on:
+  workflow_call:
+    inputs:
+      checkout_ref:
+        description: Exact revision to scan; defaults to the triggering revision
+        required: false
+        type: string
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  workflow-security:
+    name: Workflow and Repository Hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout complete history
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install actionlint with checksum verification
+        env:
+          ACTIONLINT_VERSION: "1.7.12"
+          ACTIONLINT_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+        run: |
+          set -euo pipefail
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl --fail --silent --show-error --location \
+            --output "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${archive}"
+          echo "${ACTIONLINT_SHA256}  ${archive}" | sha256sum --check -
+          tar -xzf "$archive" actionlint
+          ./actionlint -color
+
+      - name: Prevent new runtime and credential artifacts
+        env:
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+
+          forbidden_pattern='(^|/)(\.env($|\.)|logs?/|ipfs_data/|keystore/)|(^|/)(server|client)\.key$|_sk$|\.log$'
+          example_pattern='(^|/)\.env[^/]*\.(example|sample|template)$'
+
+          is_forbidden() {
+            local path="$1"
+            [[ "$path" =~ $forbidden_pattern ]] && [[ ! "$path" =~ $example_pattern ]]
+          }
+
+          mapfile -d '' -t tracked < <(git ls-files -z)
+          legacy=()
+          for path in "${tracked[@]}"; do
+            if is_forbidden "$path"; then
+              legacy+=("$path")
+            fi
+          done
+
+          if [ "${#legacy[@]}" -gt 0 ]; then
+            {
+              echo "### Existing repository hygiene debt"
+              echo
+              echo "Tracked runtime/credential artifacts: ${#legacy[@]}"
+              echo
+              echo '```text'
+              printf '%s\n' "${legacy[@]:0:100}"
+              if [ "${#legacy[@]}" -gt 100 ]; then
+                echo "... $(( ${#legacy[@]} - 100 )) more"
+              fi
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            echo "::warning::Found ${#legacy[@]} existing tracked runtime or credential artifact(s). Rotate exposed credentials and complete the documented history cleanup."
+          fi
+
+          base_sha="$EVENT_BASE_SHA"
+          if [[ ! "$base_sha" =~ ^[0-9a-fA-F]{40}$ ]] \
+            || [[ "$base_sha" =~ ^0+$ ]] \
+            || ! git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+            if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+              base_sha="$(git rev-parse HEAD^)"
+            else
+              base_sha="$(git hash-object -t tree /dev/null)"
+            fi
+          fi
+
+          mapfile -d '' -t changed < <(
+            git diff --name-only --diff-filter=ACMR -z "$base_sha" HEAD
+          )
+          introduced=()
+          for path in "${changed[@]}"; do
+            if is_forbidden "$path"; then
+              introduced+=("$path")
+            fi
+          done
+
+          if [ "${#introduced[@]}" -gt 0 ]; then
+            printf '::error::New runtime or credential artifact: %s\n' "${introduced[@]}"
+            exit 1
+          fi
+
+          echo "No new runtime or credential artifacts were introduced."
+
+  dependency-review:
+    name: Pull Request Dependency Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          persist-credentials: false
+
+      - name: Block vulnerable dependency changes
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime
+          retry-on-snapshot-warnings: true
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    if: vars.CODEQL_ADVANCED_SETUP == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+          - language: csharp
+            build-mode: none
+          - language: go
+            build-mode: autobuild
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-and-quality
+
+      - name: Analyze source
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+
+  repository-scan:
+    name: Secrets, Dependencies and IaC
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare changed files for blocking security checks
+        id: changed-files
+        env:
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          mkdir -p \
+            security-results/code-scanning \
+            .security-secret-changes \
+            .security-iac-changes
+
+          base_sha="$EVENT_BASE_SHA"
+          if [[ ! "$base_sha" =~ ^[0-9a-fA-F]{40}$ ]] \
+            || [[ "$base_sha" =~ ^0+$ ]] \
+            || ! git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+            if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+              base_sha="$(git rev-parse HEAD^)"
+            else
+              base_sha="$(git hash-object -t tree /dev/null)"
+            fi
+          fi
+
+          git diff --unified=0 --no-color "$base_sha" HEAD \
+            > .security-secret-changes/changes.patch
+          awk '
+            /^\+\+\+ / { next }
+            /^\+/ { print substr($0, 2) }
+          ' .security-secret-changes/changes.patch \
+            > .security-secret-changes/introduced-content.txt
+          rm -f .security-secret-changes/changes.patch
+
+          if [ -s .security-secret-changes/introduced-content.txt ]; then
+            echo "secret_diff=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "secret_diff=0" >> "$GITHUB_OUTPUT"
+          fi
+
+          changed_count=0
+          iac_count=0
+          while IFS= read -r -d '' path; do
+            changed_count=$((changed_count + 1))
+
+            case "$path" in
+              network/k8s/*.yaml|network/k8s/*.yml|network/docker-compose*.yaml|network/docker-compose*.yml|Dockerfile|*/Dockerfile|*.dockerfile|*.tf|*.tfvars)
+                ;;
+              *)
+                continue
+                ;;
+            esac
+
+            case "$path" in
+              /*|../*|*/../*)
+                echo "::error::Unsafe changed path: $path"
+                exit 1
+                ;;
+            esac
+
+            object_type="$(git cat-file -t "HEAD:$path" 2>/dev/null || true)"
+            if [ "$object_type" != "blob" ]; then
+              continue
+            fi
+
+            destination=".security-iac-changes/$path"
+            mkdir -p "$(dirname "$destination")"
+            git cat-file blob "HEAD:$path" > "$destination"
+            iac_count=$((iac_count + 1))
+          done < <(git diff --name-only --diff-filter=ACMR -z "$base_sha" HEAD)
+
+          echo "changed_count=$changed_count" >> "$GITHUB_OUTPUT"
+          echo "iac_count=$iac_count" >> "$GITHUB_OUTPUT"
+          echo "Prepared $changed_count changed file(s), including $iac_count IaC file(s), for regression security scanning."
+
+      - name: Report dependency findings
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          version: v0.74.0
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          skip-dirs: frontend/node_modules,middleware/node_modules,client-app/bin,client-app/obj,tests/EnrollmentImportChecks/bin,tests/EnrollmentImportChecks/obj,tests/EnrollmentSectioningChecks/bin,tests/EnrollmentSectioningChecks/obj,tmp,network/ipfs_data,network/fabric-k8s-data,network/channel-artifacts-final
+          exit-code: "0"
+          format: table
+
+      - name: Enforce dependency vulnerability gate
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          skip-setup-trivy: true
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          skip-dirs: frontend/node_modules,middleware/node_modules,client-app/bin,client-app/obj,tests/EnrollmentImportChecks/bin,tests/EnrollmentImportChecks/obj,tests/EnrollmentSectioningChecks/bin,tests/EnrollmentSectioningChecks/obj,tmp,network/ipfs_data,network/fabric-k8s-data,network/channel-artifacts-final
+          exit-code: "1"
+          format: sarif
+          limit-severities-for-sarif: true
+          output: security-results/code-scanning/trivy-dependencies.sarif
+
+      - name: Block newly introduced secrets
+        if: always() && steps.changed-files.outputs.secret_diff == '1'
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          skip-setup-trivy: true
+          scan-type: fs
+          scan-ref: .security-secret-changes
+          scanners: secret
+          exit-code: "1"
+          format: sarif
+          limit-severities-for-sarif: true
+          output: security-results/code-scanning/trivy-secret-changes.sarif
+
+      - name: Block new IaC regressions
+        if: always() && steps.changed-files.outputs.iac_count != '0'
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          skip-setup-trivy: true
+          scan-type: fs
+          scan-ref: .security-iac-changes
+          scanners: misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: sarif
+          limit-severities-for-sarif: true
+          output: security-results/code-scanning/trivy-iac-changes.sarif
+
+      - name: Report complete legacy secret and IaC debt
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          skip-setup-trivy: true
+          scan-type: fs
+          scan-ref: .
+          scanners: secret,misconfig
+          severity: HIGH,CRITICAL
+          skip-dirs: frontend/node_modules,middleware/node_modules,client-app/bin,client-app/obj,tests/EnrollmentImportChecks/bin,tests/EnrollmentImportChecks/obj,tests/EnrollmentSectioningChecks/bin,tests/EnrollmentSectioningChecks/obj,tmp
+          exit-code: "0"
+          format: sarif
+          limit-severities-for-sarif: true
+          output: security-results/trivy-legacy-debt.sarif
+
+      - name: Upload dependency findings to code scanning
+        if: always() && hashFiles('security-results/code-scanning/trivy-dependencies.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: security-results/code-scanning/trivy-dependencies.sarif
+          category: trivy-dependencies
+
+      - name: Upload changed-secret findings to code scanning
+        if: always() && hashFiles('security-results/code-scanning/trivy-secret-changes.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: security-results/code-scanning/trivy-secret-changes.sarif
+          category: trivy-secret-changes
+
+      - name: Upload changed-IaC findings to code scanning
+        if: always() && hashFiles('security-results/code-scanning/trivy-iac-changes.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: security-results/code-scanning/trivy-iac-changes.sarif
+          category: trivy-iac-changes
+
+      - name: Generate CycloneDX repository SBOM
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          skip-setup-trivy: true
+          scan-type: fs
+          scan-ref: .
+          skip-dirs: frontend/node_modules,middleware/node_modules,client-app/bin,client-app/obj,tests/EnrollmentImportChecks/bin,tests/EnrollmentImportChecks/obj,tests/EnrollmentSectioningChecks/bin,tests/EnrollmentSectioningChecks/obj,tmp,network/ipfs_data,network/fabric-k8s-data,network/channel-artifacts-final
+          format: cyclonedx
+          output: security-results/blockgo-repository.cdx.json
+          exit-code: "0"
+
+      - name: Upload security evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: repository-security-${{ github.sha }}
+          path: security-results/
+          if-no-files-found: warn
+          retention-days: 30
+
+  security-gate:
+    name: Required Security Gate
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - workflow-security
+      - dependency-review
+      - codeql
+      - repository-scan
+    steps:
+      - name: Evaluate security jobs
+        env:
+          WORKFLOW_RESULT: ${{ needs.workflow-security.result }}
+          DEPENDENCY_RESULT: ${{ needs.dependency-review.result }}
+          CODEQL_RESULT: ${{ needs.codeql.result }}
+          REPOSITORY_RESULT: ${{ needs.repository-scan.result }}
+        run: |
+          set -euo pipefail
+          failed=0
+
+          require_success() {
+            local name="$1"
+            local result="$2"
+            if [ "$result" != "success" ]; then
+              echo "::error::${name} result: ${result}"
+              failed=1
+            else
+              echo "PASS: ${name}"
+            fi
+          }
+
+          require_success "Workflow/repository hygiene" "$WORKFLOW_RESULT"
+          if [ "$DEPENDENCY_RESULT" != "success" ] && [ "$DEPENDENCY_RESULT" != "skipped" ]; then
+            echo "::error::Dependency review result: $DEPENDENCY_RESULT"
+            failed=1
+          else
+            echo "PASS: Dependency review ($DEPENDENCY_RESULT)"
+          fi
+          if [ "$CODEQL_RESULT" = "skipped" ]; then
+            echo "PASS: GitHub CodeQL default setup is authoritative (advanced workflow skipped)"
+          else
+            require_success "CodeQL advanced setup" "$CODEQL_RESULT"
+          fi
+          require_success "Trivy repository scan" "$REPOSITORY_RESULT"
+
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::DevSecOps security gate failed."
+            exit 1
+          fi
+
+          echo "All workflow-managed DevSecOps security checks passed."

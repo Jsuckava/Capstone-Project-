@@ -592,7 +592,7 @@ namespace Client_app.Controllers
                 cmdProfile.Parameters.AddWithValue("name", request.FullName);
                 cmdProfile.Parameters.AddWithValue("dept", (object?)request.Department ?? DBNull.Value);
                 cmdProfile.Parameters.AddWithValue("role", request.Role ?? "");
-                cmdProfile.Parameters.AddWithValue("facultyType", request.Role?.ToLower() == "faculty" ? (object?)(request.FacultyType ?? "full-time") : DBNull.Value);
+                cmdProfile.Parameters.AddWithValue("facultyType", request.Role?.ToLower() == "faculty" ? (object)(request.FacultyType ?? "full-time") : DBNull.Value);
                 
                 if (request.Role?.ToLower() == "student") 
                 {

@@ -52,6 +52,10 @@
               "target": "Package",
               "version": "[33.1.0, )"
             },
+            "MessagePack": {
+              "target": "Package",
+              "version": "[2.5.302, )"
+            },
             "Microsoft.AspNetCore.Authentication.JwtBearer": {
               "target": "Package",
               "version": "[8.0.4, )"
