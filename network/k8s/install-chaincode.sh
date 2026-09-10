@@ -1,7 +1,3 @@
-#!/bin/bash
-
-# Package, install, approve, commit, and initialize the CCaaS chaincode.
-
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

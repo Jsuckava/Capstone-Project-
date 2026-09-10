@@ -49,6 +49,11 @@ __pycache__/
 *.bak
 appsettings.*.json
 .fake
+gha-creds-*.json
+gha-kubeconfig-*
+security-results/
+*.sarif
+*.cdx.json
 network/.local-frontend-port-forward*.log
 network/.local-frontend-port-forward*.pid
 network/.local-couchdb-*-port-forward*.log

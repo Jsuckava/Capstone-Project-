@@ -1,0 +1,255 @@
+name: DevSecOps Security Gates
+
+on:
+  workflow_call:
+    inputs:
+      checkout_ref:
+        description: Exact revision to scan; defaults to the triggering revision
+        required: false
+        type: string
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  workflow-security:
+    name: Workflow and Repository Hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout complete history
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install actionlint with checksum verification
+        env:
+          ACTIONLINT_VERSION: "1.7.12"
+          ACTIONLINT_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+        run: |
+          set -euo pipefail
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl --fail --silent --show-error --location \
+            --output "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${archive}"
+          echo "${ACTIONLINT_SHA256}  ${archive}" | sha256sum --check -
+          tar -xzf "$archive" actionlint
+          ./actionlint -color
+
+      - name: Reject tracked runtime and credential artifacts
+        run: |
+          set -euo pipefail
+
+          mapfile -t forbidden < <(
+            git ls-files | grep -E \
+              '(^|/)(\.env($|\.)|logs?/|ipfs_data/|keystore/)|(^|/)(server|client)\.key$|_sk$|\.log$' \
+              | grep -Ev '(^|/)\.env[^/]*\.(example|sample|template)$' \
+              || true
+          )
+
+          if [ "${#forbidden[@]}" -gt 0 ]; then
+            {
+              echo "### Repository hygiene findings"
+              echo
+              echo "Tracked runtime/credential artifacts: ${#forbidden[@]}"
+              echo
+              echo '```text'
+              printf '%s\n' "${forbidden[@]:0:100}"
+              if [ "${#forbidden[@]}" -gt 100 ]; then
+                echo "... $(( ${#forbidden[@]} - 100 )) more"
+              fi
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            printf '::error::%s\n' \
+              "Found ${#forbidden[@]} tracked runtime or credential artifact(s). Remove them from Git, rotate exposed credentials, and purge sensitive history."
+            exit 1
+          fi
+
+          echo "No forbidden runtime or credential artifacts are tracked."
+
+  dependency-review:
+    name: Pull Request Dependency Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          persist-credentials: false
+
+      - name: Block vulnerable dependency changes
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime
+          retry-on-snapshot-warnings: true
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - javascript-typescript
+          - csharp
+          - go
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-and-quality
+
+      - name: Analyze source
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+
+  repository-scan:
+    name: Secrets, Dependencies and IaC
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          persist-credentials: false
+
+      - name: Scan dependencies and infrastructure
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: sarif
+          output: trivy-repository.sarif
+
+      - name: Upload repository findings to code scanning
+        if: always() && hashFiles('trivy-repository.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-repository.sarif
+          category: trivy-repository
+
+      - name: Scan working tree for secrets
+        if: always()
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret
+          exit-code: "1"
+          format: table
+
+      - name: Generate CycloneDX repository SBOM
+        if: always()
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: cyclonedx
+          output: blockgo-repository.cdx.json
+          exit-code: "0"
+
+      - name: Upload security evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: repository-security-${{ github.sha }}
+          path: |
+            trivy-repository.sarif
+            blockgo-repository.cdx.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  security-gate:
+    name: Required Security Gate
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - workflow-security
+      - dependency-review
+      - codeql
+      - repository-scan
+    steps:
+      - name: Evaluate security jobs
+        env:
+          WORKFLOW_RESULT: ${{ needs.workflow-security.result }}
+          DEPENDENCY_RESULT: ${{ needs.dependency-review.result }}
+          CODEQL_RESULT: ${{ needs.codeql.result }}
+          REPOSITORY_RESULT: ${{ needs.repository-scan.result }}
+        run: |
+          set -euo pipefail
+          failed=0
+
+          require_success() {
+            local name="$1"
+            local result="$2"
+            if [ "$result" != "success" ]; then
+              echo "::error::${name} result: ${result}"
+              failed=1
+            else
+              echo "PASS: ${name}"
+            fi
+          }
+
+          require_success "Workflow/repository hygiene" "$WORKFLOW_RESULT"
+          if [ "$DEPENDENCY_RESULT" != "success" ] && [ "$DEPENDENCY_RESULT" != "skipped" ]; then
+            echo "::error::Dependency review result: $DEPENDENCY_RESULT"
+            failed=1
+          else
+            echo "PASS: Dependency review ($DEPENDENCY_RESULT)"
+          fi
+          require_success "CodeQL" "$CODEQL_RESULT"
+          require_success "Trivy repository scan" "$REPOSITORY_RESULT"
+
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::DevSecOps security gate failed."
+            exit 1
+          fi
+
+          echo "All required DevSecOps security checks passed."

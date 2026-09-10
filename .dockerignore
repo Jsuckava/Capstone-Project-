@@ -3,6 +3,9 @@ node_modules
 bin
 obj
 .git
+gha-creds-*.json
+gha-kubeconfig-*
+security-results
 network/fabric-k8s-data
 network/channel-artifacts-final
 network/ipfs_data

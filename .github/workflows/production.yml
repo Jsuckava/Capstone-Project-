@@ -1,0 +1,223 @@
+name: Production Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type DEPLOY_MAIN to deploy the selected main commit
+        required: true
+        type: string
+      fabric_bootstrap:
+        description: Run the idempotent Fabric channel/chaincode bootstrap
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blockgo-production
+  cancel-in-progress: false
+
+jobs:
+  release-validation:
+    name: Revalidate Release Commit
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: "./.github/workflows/feature and api-endpoints-Testing.yml"
+    with:
+      checkout_ref: ${{ github.sha }}
+    secrets: inherit
+
+  deploy:
+    name: Deploy Immutable Revision to GKE
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    needs:
+      - release-validation
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_BASE_URL }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
+      GKE_REGION: ${{ vars.GKE_REGION }}
+      PRODUCTION_IMAGE_REPOSITORY: ${{ vars.PRODUCTION_IMAGE_REPOSITORY }}
+      PRODUCTION_IMAGE_TAG: ${{ github.sha }}
+      PRODUCTION_BASE_URL: ${{ vars.PRODUCTION_BASE_URL }}
+      BLOCKGO_PRODUCTION_ENV_B64: ${{ secrets.BLOCKGO_PRODUCTION_ENV_B64 }}
+      FABRIC_BOOTSTRAP: ${{ inputs.fabric_bootstrap }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Validate deployment request
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Production deployment is allowed only from main; received $GITHUB_REF."
+            exit 1
+          fi
+
+          if [ "$CONFIRMATION" != "DEPLOY_MAIN" ]; then
+            echo "::error::Deployment confirmation must be exactly DEPLOY_MAIN."
+            exit 1
+          fi
+
+          for variable in \
+            GCP_PROJECT_ID \
+            GKE_CLUSTER_NAME \
+            GKE_REGION \
+            PRODUCTION_IMAGE_REPOSITORY \
+            BLOCKGO_PRODUCTION_ENV_B64
+          do
+            if [ -z "${!variable:-}" ]; then
+              echo "::error::Required production variable or secret is missing: $variable"
+              exit 1
+            fi
+          done
+
+          expected_prefix="${GKE_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/"
+          if [[ "$PRODUCTION_IMAGE_REPOSITORY" != "${expected_prefix}"* ]]; then
+            echo "::error::PRODUCTION_IMAGE_REPOSITORY must be an Artifact Registry path beginning with ${expected_prefix}."
+            exit 1
+          fi
+
+      - name: Checkout exact release revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify selected commit is current main
+        run: |
+          set -euo pipefail
+          main_sha="$(git rev-parse origin/main)"
+          current_sha="$(git rev-parse HEAD)"
+
+          if [ "$current_sha" != "$GITHUB_SHA" ] || [ "$current_sha" != "$main_sha" ]; then
+            echo "::error::Selected revision is not the current main head."
+            echo "Selected: $current_sha"
+            echo "Main:     $main_sha"
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud with OIDC
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          cluster_name: ${{ vars.GKE_CLUSTER_NAME }}
+          location: ${{ vars.GKE_REGION }}
+
+      - name: Configure Artifact Registry authentication
+        run: |
+          set -euo pipefail
+          gcloud auth configure-docker "${GKE_REGION}-docker.pkg.dev" --quiet
+
+      - name: Materialize protected runtime configuration
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$BLOCKGO_PRODUCTION_ENV_B64" | base64 --decode > network/.env
+
+          required=(
+            IPFS_ENCRYPTION_KEY
+            JWT_SECRET
+            INTERNAL_API_KEY
+            BOOTSTRAP_REGISTRAR_PASS
+            BOOTSTRAP_SYSTEM_ADMIN_PASS
+            VAULT_PASSWORD
+            FABRIC_CA_REGISTRAR_PASS
+            FABRIC_CA_FACULTY_PASS
+            FABRIC_CA_DEPARTMENT_PASS
+            POSTGRES_PASS
+            POSTGRES_REPL_PASS
+            COUCHDB_PASS
+          )
+
+          for key in "${required[@]}"; do
+            if ! grep -q "^${key}=" network/.env; then
+              echo "::error::BLOCKGO_PRODUCTION_ENV_B64 is missing $key."
+              exit 1
+            fi
+          done
+
+      - name: Deploy through the repository production profile
+        working-directory: network
+        run: |
+          set -euo pipefail
+          ./k8s/deploy-k8s.sh production apply
+
+      - name: Post-deployment smoke checks
+        run: |
+          set -euo pipefail
+          kubectl get deployments,statefulsets,pods --all-namespaces
+
+          kubectl rollout status deployment/middleware-api \
+            --namespace plv-fabric \
+            --timeout=10m
+          kubectl rollout status deployment/dotnet-api-gateway \
+            --namespace plv-fabric \
+            --timeout=10m
+          kubectl rollout status deployment/frontend \
+            --namespace plv-fabric \
+            --timeout=10m
+
+          if [ -n "${PRODUCTION_BASE_URL:-}" ]; then
+            base_url="${PRODUCTION_BASE_URL%/}"
+            curl --fail --silent --show-error \
+              --retry 12 --retry-all-errors --retry-delay 10 \
+              "${base_url}/api/health" > /dev/null
+            curl --fail --silent --show-error \
+              --retry 12 --retry-all-errors --retry-delay 10 \
+              "${base_url}/login" > /dev/null
+          else
+            echo "::notice::PRODUCTION_BASE_URL is not configured; external smoke checks were skipped."
+          fi
+
+      - name: Write deployment summary
+        if: success()
+        run: |
+          {
+            echo "## Production deployment complete"
+            echo
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Image repository: \`$PRODUCTION_IMAGE_REPOSITORY\`"
+            echo "- Image tag: \`$PRODUCTION_IMAGE_TAG\`"
+            echo "- GKE cluster: \`$GKE_CLUSTER_NAME\`"
+            echo "- Region: \`$GKE_REGION\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Collect failure diagnostics
+        if: failure()
+        run: |
+          kubectl get events --all-namespaces \
+            --sort-by='.lastTimestamp' | tail -n 200 || true
+          kubectl get pods --all-namespaces -o wide || true
+
+      - name: Remove runtime secret file
+        if: always()
+        run: |
+          if [ -f network/.env ]; then
+            shred --force --remove network/.env
+          fi

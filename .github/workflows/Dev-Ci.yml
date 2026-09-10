@@ -1,4 +1,4 @@
-name: Develop-and-Integration — XP TDD/CI (failsafe)
+name: Develop-and-Integration
 
 on:
   push:
@@ -12,6 +12,10 @@ on:
         required: false
         default: false
         type: boolean
+  workflow_call:
+    secrets:
+      PROMOTION_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -177,9 +181,23 @@ jobs:
           go test -race -count=1 ./...
 
   dotnet-tests:
-    name: .NET — Enrollment Import Tests
+    name: .NET — Build, Checks & Dependency Audit
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sectioning_tests
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-only-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sectioning_tests"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -191,15 +209,61 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      - name: Run .NET tests if present
+      - name: Restore and build ASP.NET services
         run: |
           set -euo pipefail
-          PROJECT="tests/EnrollmentImportChecks/EnrollmentImportChecks.csproj"
-          if [ -f "$PROJECT" ]; then
-            dotnet test "$PROJECT" --configuration Release --verbosity minimal
-          else
-            echo "No EnrollmentImportChecks project found; optional .NET test skipped."
+          dotnet restore client-app/For_Testing_Only_Capstone.csproj
+          dotnet build client-app/For_Testing_Only_Capstone.csproj \
+            --configuration Release \
+            --no-restore \
+            --verbosity minimal
+
+      - name: Run repository .NET checks
+        env:
+          SECTIONING_TEST_CONNECTION: Host=localhost;Port=5432;Database=sectioning_tests;Username=postgres;Password=ci-only-postgres-password
+        run: |
+          set -euo pipefail
+
+          projects=(
+            tests/EnrollmentImportChecks/EnrollmentImportChecks.csproj
+            tests/EnrollmentSectioningChecks/EnrollmentSectioningChecks.csproj
+          )
+
+          for project in "${projects[@]}"; do
+            if [ ! -f "$project" ]; then
+              echo "::error::Required check project is missing: $project"
+              exit 1
+            fi
+
+            echo "Running $project"
+            dotnet run \
+              --project "$project" \
+              --configuration Release
+          done
+
+      - name: Audit NuGet dependencies
+        run: |
+          set -euo pipefail
+          report="dotnet-vulnerabilities.txt"
+
+          dotnet list client-app/For_Testing_Only_Capstone.csproj package \
+            --vulnerable \
+            --include-transitive \
+            > "$report"
+
+          cat "$report"
+          if grep -Eq '(^|[[:space:]])(High|Critical)([[:space:]]|$)' "$report"; then
+            echo "::error::NuGet reported high or critical direct/transitive dependencies."
+            exit 1
           fi
+
+  security:
+    name: DevSecOps Security
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: ./.github/workflows/security.yml
 
   infra-preflight:
     name: Infrastructure — K8s Failsafe Preflight
@@ -583,6 +647,7 @@ jobs:
       - middleware-tests
       - chaincode-tests
       - dotnet-tests
+      - security
       - infra-preflight
     steps:
       - name: Evaluate all required CI jobs
@@ -591,6 +656,7 @@ jobs:
           MIDDLEWARE_RESULT: ${{ needs.middleware-tests.result }}
           CHAINCODE_RESULT: ${{ needs.chaincode-tests.result }}
           DOTNET_RESULT: ${{ needs.dotnet-tests.result }}
+          SECURITY_RESULT: ${{ needs.security.result }}
           INFRA_RESULT: ${{ needs.infra-preflight.result }}
         run: |
           set -euo pipefail
@@ -612,6 +678,7 @@ jobs:
           check_result "Middleware" "$MIDDLEWARE_RESULT"
           check_result "Chaincode" "$CHAINCODE_RESULT"
           check_result ".NET" "$DOTNET_RESULT"
+          check_result "DevSecOps security" "$SECURITY_RESULT"
           check_result "Infrastructure" "$INFRA_RESULT"
 
           if [ "$FAILED" -ne 0 ]; then
