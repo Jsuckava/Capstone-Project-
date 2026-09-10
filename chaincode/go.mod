@@ -4,7 +4,7 @@ go 1.25.12
 
 require (
 	github.com/hyperledger/fabric-chaincode-go/v2 v2.3.0
-	github.com/hyperledger/fabric-protos-go-apiv2 v0.3.6
+	github.com/hyperledger/fabric-protos-go-apiv2 v0.3.7
 )
 
 require (
