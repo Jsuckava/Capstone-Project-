@@ -139,6 +139,22 @@ app.get('/api/admin/ledger-transactions', authenticate, authorizeRole(['system_a
     }
 });
 
+app.post('/api/admin/reset-ledger', authenticate, authorizeRole(['system_admin']), async (req, res) => {
+    if (req.body?.confirmation !== 'RESET_NON_GENESIS_DATA') {
+        return res.status(400).json({ error: 'The exact confirmation RESET_NON_GENESIS_DATA is required.' });
+    }
+    const registrar = process.env.BOOTSTRAP_REGISTRAR_EMAIL || 'registrar@plv.edu.ph';
+    try {
+        const contract = await contractForUser(registrar, 'registrar');
+        const result = await contract.submitTransaction('ResetLedgerToGenesis', req.body.confirmation);
+        res.json({ status: 'success', data: JSON.parse(result.toString()) });
+    } catch (error) {
+        onLedgerError(registrar, error);
+        logger.error({ err: error }, 'Ledger world-state reset failed');
+        res.status(error.status || 500).json({ error: process.env.NODE_ENV === 'production' ? 'Unable to reset ledger world state' : error.message });
+    }
+});
+
 app.get('/api/grade-history/:id', authenticate, async (req, res) => {
     let actor;
     try {

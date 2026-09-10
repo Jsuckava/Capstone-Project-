@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using CsvHelper;
 using CsvHelper.Configuration;
+using ClosedXML.Excel;
 
 namespace Client_app.Services;
 
@@ -36,6 +37,13 @@ public static class StudentEnrollmentFile
     {
         var header = Regex.Replace(value.Trim().Trim('\uFEFF').ToLowerInvariant(), @"[^a-z0-9]+", "_").Trim('_');
         return header is "birthdate" or "birth_date" or "birthday" or "dob" ? "date_of_birth" : header;
+    }
+
+    public static string ReadCell(IXLCell cell, string normalizedHeader)
+    {
+        if (normalizedHeader == "date_of_birth" && cell.TryGetValue<DateTime>(out var birthday))
+            return birthday.ToString("MM/dd/yyyy", CultureInfo.InvariantCulture);
+        return cell.GetString().Trim();
     }
 
     public static (HashSet<string> Headers, List<Dictionary<string, string>> Records) ReadCsv(TextReader reader)

@@ -98,8 +98,8 @@ app.post('/api/login', loginLimiter, async (req, res) => {
             return res.status(403).json({ error: 'Account is not active or has not been approved.' });
         }
         if (!canUseLoginIdentifier(account, normalizedUsername)) {
-            await recordSecurityEvent(req, 'STUDENT_EMAIL_LOGIN_REJECTED', 'MEDIUM', normalizedUsername, 'A student attempted to sign in without using the assigned Student ID.');
-            return res.status(401).json({ error: 'Students must sign in using Student ID.' });
+            await recordSecurityEvent(req, 'STUDENT_LOGIN_IDENTIFIER_REJECTED', 'MEDIUM', normalizedUsername, 'A student attempted to sign in with an identifier that did not match the assigned Student ID or email address.');
+            return res.status(401).json({ error: 'Invalid student email or Student ID.' });
         }
         if (!await bcrypt.compare(password, account.password_hash)) {
             await recordSecurityEvent(req, 'FAILED_LOGIN', 'MEDIUM', account.email, 'Login failed because the password did not match.');

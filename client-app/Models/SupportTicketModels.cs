@@ -19,8 +19,7 @@ namespace Client_app.Models
         [StringLength(5000)]
         public string? AdminResponse { get; set; }
 
-        [Required]
-        public string AssignedSpecialist { get; set; } = string.Empty;
+        public string? AssignedSpecialist { get; set; }
     }
 
     public sealed class BroadcastSupportNoticeRequest

@@ -2346,16 +2346,20 @@ namespace BlockGo.Controllers
                 await conn.OpenAsync();
                 if (!await CanAccessGradeRecordAsync(conn, recordId, invokerId, AuthenticatedRole()))
                     return Forbid();
-                
+                var isRegistrar = AuthenticatedRole() == "registrar";
                 using var cmd = new NpgsqlCommand(@"
                     UPDATE pending_grade_records
                     SET status = 'Returned', note = @note, date = @dt
                     WHERE id = @id
-                      AND LOWER(status) IN ('departmentapproved', 'approved', 'submitted')
+                      AND (
+                          (@isRegistrar AND LOWER(status) IN ('departmentapproved', 'approved'))
+                          OR (NOT @isRegistrar AND LOWER(status) IN ('submittedtochairperson', 'submitted', 'chairpersonapproved'))
+                      )
                     RETURNING id, status, faculty_id, course;", conn);
                 cmd.Parameters.AddWithValue("note", note);
                 cmd.Parameters.AddWithValue("dt", DateTime.UtcNow.ToString("o"));
                 cmd.Parameters.AddWithValue("id", recordId);
+                cmd.Parameters.AddWithValue("isRegistrar", isRegistrar);
                 string? returnedId = null;
                 string? facultyId = null;
                 string? course = null;

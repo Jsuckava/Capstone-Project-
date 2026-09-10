@@ -37,6 +37,10 @@ CREATE TABLE IF NOT EXISTS studentprofiles (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS ux_studentprofiles_normalized_full_name
+    ON studentprofiles ((LOWER(REGEXP_REPLACE(BTRIM(full_name), '\s+', ' ', 'g'))))
+    WHERE NULLIF(BTRIM(full_name), '') IS NOT NULL;
+
 -- Create FacultyProfiles table
 CREATE TABLE IF NOT EXISTS facultyprofiles (
     user_id SERIAL PRIMARY KEY,
@@ -205,6 +209,17 @@ CREATE TABLE IF NOT EXISTS curriculum_subjects (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (curriculum_id, year_level, semester, subject_code)
 );
+
+CREATE TABLE IF NOT EXISTS program_curriculum_assignments (
+    program_id INTEGER PRIMARY KEY REFERENCES academic_programs(program_id) ON DELETE CASCADE,
+    curriculum_id BIGINT NOT NULL REFERENCES curriculums(curriculum_id) ON DELETE RESTRICT,
+    assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    assigned_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_program_curriculum_assignment_curriculum
+    ON program_curriculum_assignments(curriculum_id);
 
 CREATE TABLE IF NOT EXISTS support_tickets (
     ticket_id BIGSERIAL PRIMARY KEY,

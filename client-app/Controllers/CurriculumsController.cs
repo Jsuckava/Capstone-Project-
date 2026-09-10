@@ -389,7 +389,8 @@ namespace Client_app.Controllers
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
             await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-            var curriculum = await RequireStatusAsync(connection, transaction, id, new[] { CurriculumStatuses.Approved }, cancellationToken);
+            var curriculum = await RequireStatusAsync(connection, transaction, id,
+                new[] { CurriculumStatuses.PendingApproval, CurriculumStatuses.Approved }, cancellationToken);
             await ValidateCompleteCurriculumAsync(connection, transaction, id, cancellationToken);
             var actor = await GetActorAsync(connection, transaction, cancellationToken);
 
@@ -420,16 +421,19 @@ namespace Client_app.Controllers
                 publish.Parameters.AddWithValue("id", id);
                 await publish.ExecuteNonQueryAsync(cancellationToken);
             }
+            var affectedStudents = await AssignProgramCurriculumAsync(
+                connection, transaction, curriculum.ProgramId, id, actor.Id, cancellationToken);
             await _auditLog.LogAsync(actor.Email, actor.Role, "CURRICULUM_PUBLISHED", "curriculum", id.ToString(),
-                new { status = CurriculumStatuses.Approved }, new { status = CurriculumStatuses.Published },
-                "Registrar published the approved curriculum.", IpAddress(), connection, transaction, cancellationToken);
+                new { status = curriculum.Status }, new { status = CurriculumStatuses.Published },
+                $"Registrar reviewed and published the submitted curriculum and assigned it to the program ({affectedStudents} student(s) synchronized).",
+                IpAddress(), connection, transaction, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             await TryRecordLedgerAuditAsync("CURRICULUM_PUBLISHED", id, actor, new[] { "status", "published_at" }, cancellationToken);
             foreach (var archivedId in archivedIds)
             {
                 await TryRecordLedgerAuditAsync("CURRICULUM_ARCHIVED", archivedId, actor, new[] { "status" }, cancellationToken);
             }
-            return Ok(new { status = "Success", data = await LoadCurriculumAsync(connection, id, cancellationToken) });
+            return Ok(new { status = "Success", affectedStudents, data = await LoadCurriculumAsync(connection, id, cancellationToken) });
         }
 
         [HttpPost("{id:long}/archive")]
@@ -438,54 +442,43 @@ namespace Client_app.Controllers
             TransitionAsync(id, new[] { CurriculumStatuses.Published }, CurriculumStatuses.Archived,
                 "CURRICULUM_ARCHIVED", "Registrar archived the published curriculum.", null, true, cancellationToken);
 
-        [HttpPut("{id:long}/students")]
-        [Authorize(Roles = "registrar")]
-        public async Task<IActionResult> AssignStudent(long id, [FromBody] AssignStudentCurriculumRequest request, CancellationToken cancellationToken)
+        [HttpPut("{id:long}/program-assignment")]
+        [Authorize(Roles = "department_admin")]
+        public async Task<IActionResult> AssignProgram(long id, CancellationToken cancellationToken)
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
             await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-            var curriculum = await RequireStatusAsync(connection, transaction, id, new[] { CurriculumStatuses.Published }, cancellationToken);
-            await using var command = new NpgsqlCommand(@"
-                UPDATE studentprofiles sp
-                SET curriculum_id = @curriculumId
-                FROM users u, academic_programs p
-                WHERE sp.user_id = u.id AND p.program_id = @programId
-                  AND LOWER(u.email) = LOWER(@studentEmail) AND LOWER(u.role) = 'student'
-                  AND (LOWER(sp.department) = LOWER(p.program_name) OR LOWER(sp.department) = LOWER(p.program_code));", connection, transaction);
-            command.Parameters.AddWithValue("curriculumId", id);
-            command.Parameters.AddWithValue("programId", curriculum.ProgramId);
-            command.Parameters.AddWithValue("studentEmail", request.StudentEmail.Trim());
-            if (await command.ExecuteNonQueryAsync(cancellationToken) == 0)
-            {
-                return BadRequest(new { status = "Error", message = "Student not found or the curriculum program does not match the student program." });
-            }
-
-            var enrollmentUpdated = false;
-            await using (var enrollment = new NpgsqlCommand(@"
-                UPDATE student_enrollments se
-                SET curriculum_id = @curriculumId,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE se.enrollment_id = (
-                    SELECT latest.enrollment_id
-                    FROM student_enrollments latest
-                    JOIN users student ON student.id = latest.student_user_id
-                    WHERE LOWER(student.email) = LOWER(@studentEmail)
-                      AND latest.program_id = @programId
-                    ORDER BY latest.updated_at DESC, latest.enrollment_id DESC
-                    LIMIT 1
-                );", connection, transaction))
-            {
-                enrollment.Parameters.AddWithValue("curriculumId", id);
-                enrollment.Parameters.AddWithValue("programId", curriculum.ProgramId);
-                enrollment.Parameters.AddWithValue("studentEmail", request.StudentEmail.Trim());
-                enrollmentUpdated = await enrollment.ExecuteNonQueryAsync(cancellationToken) > 0;
-            }
+            var curriculum = await RequireStatusAsync(connection, transaction, id,
+                new[] { CurriculumStatuses.Published, CurriculumStatuses.Archived }, cancellationToken);
             var actor = await GetActorAsync(connection, transaction, cancellationToken);
-            await _auditLog.LogAsync(actor.Email, actor.Role, "STUDENT_CURRICULUM_ASSIGNED", "curriculum", id.ToString(), null,
-                new { student = request.StudentEmail.Trim().ToLowerInvariant(), enrollmentUpdated },
-                "Registrar assigned a curriculum version to a student profile and its latest enrollment.", IpAddress(), connection, transaction, cancellationToken);
+            await ResolveOwnedProgramAsync(connection, transaction, actor.Id, curriculum.ProgramCode, cancellationToken);
+            var affectedStudents = await AssignProgramCurriculumAsync(
+                connection, transaction, curriculum.ProgramId, id, actor.Id, cancellationToken);
+            await _auditLog.LogAsync(actor.Email, actor.Role, "PROGRAM_CURRICULUM_ASSIGNED", "curriculum", id.ToString(), null,
+                new { curriculum.ProgramId, affectedStudents },
+                "Department Head changed the active curriculum for the academic program.",
+                IpAddress(), connection, transaction, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return Ok(new { status = "Success", message = "Curriculum assigned to student." });
+            await TryRecordLedgerAuditAsync("PROGRAM_CURRICULUM_ASSIGNED", id, actor,
+                new[] { "program_id", "curriculum_id" }, cancellationToken);
+            return Ok(new
+            {
+                status = "Success",
+                message = "The curriculum is now active for every student in the program.",
+                affectedStudents,
+                data = await LoadCurriculumAsync(connection, id, cancellationToken)
+            });
+        }
+
+        [HttpPut("{id:long}/students")]
+        [Authorize(Roles = "registrar")]
+        public IActionResult AssignStudent(long id, [FromBody] AssignStudentCurriculumRequest request)
+        {
+            return StatusCode(StatusCodes.Status410Gone, new
+            {
+                status = "Error",
+                message = "Individual curriculum assignment is disabled. A curriculum is assigned once per academic program by the Department Head."
+            });
         }
 
         [HttpGet("student")]
@@ -494,46 +487,34 @@ namespace Client_app.Controllers
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
             await using var command = new NpgsqlCommand(@"
-                SELECT COALESCE(enrollment.curriculum_id, sp.curriculum_id), COALESCE(
-                    enrollment.curriculum_id,
-                    sp.curriculum_id,
-                    (SELECT c.curriculum_id
-                     FROM curriculums c
-                     JOIN academic_programs p ON p.program_id = c.program_id
-                     WHERE c.status = 'PUBLISHED'
-                       AND (
-                           p.program_id = enrollment.program_id
-                           OR (enrollment.program_id IS NULL AND
-                               (LOWER(p.program_name) = LOWER(sp.department) OR LOWER(p.program_code) = LOWER(sp.department)))
-                       )
-                     ORDER BY c.published_at DESC NULLS LAST, c.curriculum_id DESC LIMIT 1)
-                )
+                SELECT pca.curriculum_id
                 FROM users u
                 JOIN studentprofiles sp ON sp.user_id = u.id
                 LEFT JOIN LATERAL (
-                    SELECT se.curriculum_id, se.program_id
+                    SELECT se.program_id
                     FROM student_enrollments se
                     WHERE se.student_user_id = u.id
                     ORDER BY se.updated_at DESC, se.enrollment_id DESC
                     LIMIT 1
                 ) enrollment ON TRUE
+                JOIN academic_programs p ON p.program_id = enrollment.program_id
+                    OR (enrollment.program_id IS NULL AND
+                        (LOWER(p.program_name) = LOWER(sp.department) OR LOWER(p.program_code) = LOWER(sp.department)))
+                JOIN program_curriculum_assignments pca ON pca.program_id = p.program_id
                 WHERE LOWER(u.email) = LOWER(@actor) AND LOWER(u.role) = 'student';", connection);
             command.Parameters.AddWithValue("actor", ActorEmail());
-            long? assignedId = null;
             long? resolvedId = null;
             await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
             {
                 if (await reader.ReadAsync(cancellationToken))
                 {
-                    assignedId = reader.IsDBNull(0) ? null : reader.GetInt64(0);
-                    resolvedId = reader.IsDBNull(1) ? null : reader.GetInt64(1);
+                    resolvedId = reader.IsDBNull(0) ? null : reader.GetInt64(0);
                 }
             }
-            if (!resolvedId.HasValue) return NotFound(new { status = "Error", message = "No published curriculum is assigned to your program." });
+            if (!resolvedId.HasValue) return NotFound(new { status = "Error", message = "No active curriculum is assigned to your program." });
             var curriculum = await LoadCurriculumAsync(connection, resolvedId.Value, cancellationToken);
-            var canViewArchivedAssignment = assignedId == resolvedId && curriculum.Status == CurriculumStatuses.Archived;
-            if (curriculum.Status != CurriculumStatuses.Published && !canViewArchivedAssignment)
-                return NotFound(new { status = "Error", message = "Your assigned curriculum is not available." });
+            if (curriculum.Status is not (CurriculumStatuses.Published or CurriculumStatuses.Archived))
+                return NotFound(new { status = "Error", message = "Your program curriculum is not available." });
             return Ok(new { status = "Success", data = curriculum });
         }
 
@@ -550,7 +531,9 @@ namespace Client_app.Controllers
                 LEFT JOIN facultysections fs ON fs.user_id = u.id
                 JOIN academic_programs p ON LOWER(p.program_name) = LOWER(COALESCE(fs.department, fp.department))
                                          OR LOWER(p.program_code) = LOWER(COALESCE(fs.department, fp.department))
-                JOIN curriculums c ON c.program_id = p.program_id AND c.status = 'PUBLISHED'
+                JOIN program_curriculum_assignments pca ON pca.program_id = p.program_id
+                JOIN curriculums c ON c.curriculum_id = pca.curriculum_id
+                    AND c.status IN ('PUBLISHED', 'ARCHIVED')
                 WHERE LOWER(u.email) = LOWER(@actor) AND LOWER(u.role) = 'faculty'
                 ORDER BY c.curriculum_id DESC;", connection))
             {
@@ -835,6 +818,63 @@ namespace Client_app.Controllers
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             if (!await reader.ReadAsync(cancellationToken)) throw new UnauthorizedAccessException("Chairpersons may manage only their assigned academic program.");
             return (reader.GetInt32(0), reader.GetString(1), reader.GetString(2));
+        }
+
+        private static async Task<int> AssignProgramCurriculumAsync(
+            NpgsqlConnection connection,
+            NpgsqlTransaction transaction,
+            int programId,
+            long curriculumId,
+            int actorId,
+            CancellationToken cancellationToken)
+        {
+            await using (var assignment = new NpgsqlCommand(@"
+                INSERT INTO program_curriculum_assignments
+                    (program_id, curriculum_id, assigned_by, assigned_at, updated_at)
+                VALUES (@programId, @curriculumId, @actorId, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT (program_id) DO UPDATE
+                SET curriculum_id = EXCLUDED.curriculum_id,
+                    assigned_by = EXCLUDED.assigned_by,
+                    assigned_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP;", connection, transaction))
+            {
+                assignment.Parameters.AddWithValue("programId", programId);
+                assignment.Parameters.AddWithValue("curriculumId", curriculumId);
+                assignment.Parameters.AddWithValue("actorId", actorId);
+                await assignment.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            int affectedStudents;
+            await using (var enrollments = new NpgsqlCommand(@"
+                WITH updated AS (
+                    UPDATE student_enrollments
+                    SET curriculum_id = @curriculumId, updated_at = CURRENT_TIMESTAMP
+                    WHERE program_id = @programId
+                    RETURNING student_user_id
+                )
+                SELECT COUNT(DISTINCT student_user_id)::int FROM updated;", connection, transaction))
+            {
+                enrollments.Parameters.AddWithValue("programId", programId);
+                enrollments.Parameters.AddWithValue("curriculumId", curriculumId);
+                affectedStudents = Convert.ToInt32(await enrollments.ExecuteScalarAsync(cancellationToken));
+            }
+
+            await using (var profiles = new NpgsqlCommand(@"
+                UPDATE studentprofiles sp
+                SET curriculum_id = @curriculumId
+                FROM users u, academic_programs p
+                WHERE sp.user_id = u.id
+                  AND p.program_id = @programId
+                  AND LOWER(u.role) = 'student'
+                  AND (LOWER(sp.department) = LOWER(p.program_name)
+                       OR LOWER(sp.department) = LOWER(p.program_code));", connection, transaction))
+            {
+                profiles.Parameters.AddWithValue("programId", programId);
+                profiles.Parameters.AddWithValue("curriculumId", curriculumId);
+                affectedStudents = Math.Max(affectedStudents, await profiles.ExecuteNonQueryAsync(cancellationToken));
+            }
+
+            return affectedStudents;
         }
 
         private async Task<Actor> GetActorAsync(NpgsqlConnection connection, NpgsqlTransaction? transaction, CancellationToken cancellationToken)

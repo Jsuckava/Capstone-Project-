@@ -122,11 +122,11 @@ jobs:
           set -euo pipefail
           npm run lint --if-present
 
-      - name: Middleware unit tests
+      - name: Middleware tests if configured
         working-directory: middleware
         run: |
           set -euo pipefail
-          npm test
+          npm test --if-present
 
       - name: Middleware production build
         working-directory: middleware

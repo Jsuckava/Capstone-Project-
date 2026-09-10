@@ -156,6 +156,8 @@ func (cc *SmartContract) Invoke(stub shim.ChaincodeStubInterface) *pb.Response {
 	switch function {
 	case "InitLedger":
 		return cc.initLedger(stub)
+	case "ResetLedgerToGenesis":
+		return cc.resetLedgerToGenesis(stub, args)
 	case "IssueGrade":
 		return cc.issueGrade(stub, args)
 	case "IssueBatchGrades":
@@ -218,6 +220,60 @@ func (cc *SmartContract) initLedger(stub shim.ChaincodeStubInterface) *pb.Respon
 		}
 	}
 	return shim.Success([]byte("Ledger Initialized Successfully with Genesis Data"))
+}
+
+func (cc *SmartContract) resetLedgerToGenesis(stub shim.ChaincodeStubInterface, args []string) *pb.Response {
+	if len(args) != 1 || args[0] != "RESET_NON_GENESIS_DATA" {
+		return shim.Error("Reset requires the exact confirmation RESET_NON_GENESIS_DATA")
+	}
+
+	mspID, err := cid.GetMSPID(stub)
+	if err != nil {
+		return shim.Error("Unable to determine the caller organization")
+	}
+	role, found := getSafeAttribute(stub, "role")
+	if !found || mspID != "RegistrarMSP" || role != "registrar" {
+		return shim.Error("Only a cryptographically authenticated Registrar may reset ledger world state")
+	}
+
+	genesis, err := stub.GetState("GENESIS-001")
+	if err != nil {
+		return shim.Error(fmt.Sprintf("Failed to verify genesis state: %v", err))
+	}
+	if genesis == nil {
+		return shim.Error("Genesis state is missing; reset refused")
+	}
+
+	iterator, err := stub.GetStateByRange("", "")
+	if err != nil {
+		return shim.Error(fmt.Sprintf("Failed to enumerate ledger state: %v", err))
+	}
+	defer iterator.Close()
+
+	deleted := 0
+	for iterator.HasNext() {
+		entry, nextErr := iterator.Next()
+		if nextErr != nil {
+			return shim.Error(fmt.Sprintf("Failed while reading ledger state: %v", nextErr))
+		}
+		if entry.Key == "GENESIS-001" {
+			continue
+		}
+		if deleteErr := stub.DelState(entry.Key); deleteErr != nil {
+			return shim.Error(fmt.Sprintf("Failed to delete ledger key %s: %v", entry.Key, deleteErr))
+		}
+		deleted++
+	}
+
+	result, err := json.Marshal(map[string]interface{}{
+		"status":       "Success",
+		"deletedCount": deleted,
+		"preservedKey": "GENESIS-001",
+	})
+	if err != nil {
+		return shim.Error(fmt.Sprintf("Failed to encode reset result: %v", err))
+	}
+	return shim.Success(result)
 }
 
 func (cc *SmartContract) issueGrade(stub shim.ChaincodeStubInterface, args []string) *pb.Response {

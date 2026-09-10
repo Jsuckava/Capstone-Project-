@@ -326,17 +326,16 @@ namespace Client_app.Controllers
                 FROM users u
                 JOIN studentprofiles sp ON sp.user_id = u.id
                 LEFT JOIN LATERAL (
-                    SELECT se.curriculum_id, se.program_id
+                    SELECT se.program_id
                     FROM student_enrollments se
                     WHERE se.student_user_id = u.id
                     ORDER BY se.updated_at DESC, se.enrollment_id DESC LIMIT 1
                 ) enrollment ON TRUE
-                JOIN curriculums c ON c.curriculum_id = COALESCE(
-                    enrollment.curriculum_id,
-                    sp.curriculum_id,
-                    (SELECT published.curriculum_id FROM curriculums published
-                     WHERE published.program_id = enrollment.program_id AND published.status = 'PUBLISHED'
-                     ORDER BY published.published_at DESC NULLS LAST, published.curriculum_id DESC LIMIT 1))
+                JOIN academic_programs p ON p.program_id = enrollment.program_id
+                    OR (enrollment.program_id IS NULL AND
+                        (LOWER(p.program_name) = LOWER(sp.department) OR LOWER(p.program_code) = LOWER(sp.department)))
+                JOIN program_curriculum_assignments pca ON pca.program_id = p.program_id
+                JOIN curriculums c ON c.curriculum_id = pca.curriculum_id
                 JOIN curriculum_subjects cs ON cs.curriculum_id = c.curriculum_id
                 WHERE LOWER(u.email) = LOWER(@email)
                   AND c.status IN ('PUBLISHED', 'ARCHIVED')
@@ -488,15 +487,18 @@ namespace Client_app.Controllers
                 FROM users u
                 JOIN studentprofiles sp ON sp.user_id = u.id
                 LEFT JOIN LATERAL (
-                    SELECT se.curriculum_id
+                    SELECT se.program_id
                     FROM student_enrollments se
                     WHERE se.student_user_id = u.id
                     ORDER BY se.updated_at DESC, se.enrollment_id DESC
                     LIMIT 1
                 ) enrollment ON TRUE
-                JOIN curriculums c
-                  ON c.curriculum_id = COALESCE(enrollment.curriculum_id, sp.curriculum_id)
-                 AND c.status IN ('PUBLISHED', 'ARCHIVED')
+                JOIN academic_programs p ON p.program_id = enrollment.program_id
+                    OR (enrollment.program_id IS NULL AND
+                        (LOWER(p.program_name) = LOWER(sp.department) OR LOWER(p.program_code) = LOWER(sp.department)))
+                JOIN program_curriculum_assignments pca ON pca.program_id = p.program_id
+                JOIN curriculums c ON c.curriculum_id = pca.curriculum_id
+                    AND c.status IN ('PUBLISHED', 'ARCHIVED')
                 JOIN curriculum_subjects cs ON cs.curriculum_id = c.curriculum_id
                 WHERE LOWER(u.email) = LOWER(@email);";
             var parameter = command.CreateParameter(); parameter.ParameterName = "@email"; parameter.Value = email; command.Parameters.Add(parameter);

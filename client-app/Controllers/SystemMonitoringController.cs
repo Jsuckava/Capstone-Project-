@@ -17,6 +17,7 @@ namespace Client_app.Controllers
     {
         private readonly string _connectionString;
         private readonly string _middlewareUrl;
+        private readonly string _frontendUrl;
         private readonly string? _prometheusUrl;
         private readonly string _grafanaUrl;
         private readonly IHttpClientFactory _httpClientFactory;
@@ -29,6 +30,10 @@ namespace Client_app.Controllers
                 ?? configuration.GetConnectionString("PostgresConnection")
                 ?? throw new InvalidOperationException("A PostgreSQL connection is required.");
             _middlewareUrl = configuration["Middleware:Url"] ?? "http://middleware:4000";
+            _frontendUrl = configuration["Monitoring:FrontendUrl"]
+                ?? configuration["Frontend:Url"]
+                ?? Environment.GetEnvironmentVariable("FRONTEND_URL")
+                ?? "http://frontend-service";
             _prometheusUrl = configuration["Monitoring:PrometheusUrl"] ?? Environment.GetEnvironmentVariable("PROMETHEUS_URL");
             _grafanaUrl = configuration["Monitoring:GrafanaUrl"]
                 ?? Environment.GetEnvironmentVariable("GRAFANA_URL")
@@ -143,6 +148,20 @@ namespace Client_app.Controllers
                 services.Add(Service("postgres", "PostgreSQL", "Data", "down", dbStopwatch.ElapsedMilliseconds, SafeMessage(exception), "PostgreSQL"));
             }
 
+            var frontendStopwatch = Stopwatch.StartNew();
+            try
+            {
+                using var client = _httpClientFactory.CreateClient();
+                client.Timeout = TimeSpan.FromSeconds(4);
+                using var response = await client.GetAsync($"{_frontendUrl.TrimEnd('/')}/nginx-health", cancellationToken);
+                services.Add(Service("frontend", "Frontend", "Application", response.IsSuccessStatusCode ? "healthy" : "down",
+                    frontendStopwatch.ElapsedMilliseconds, $"HTTP {(int)response.StatusCode}", _frontendUrl));
+            }
+            catch (Exception exception)
+            {
+                services.Add(Service("frontend", "Frontend", "Application", "down", frontendStopwatch.ElapsedMilliseconds, SafeMessage(exception), _frontendUrl));
+            }
+
             var middlewareStopwatch = Stopwatch.StartNew();
             try
             {
@@ -151,6 +170,31 @@ namespace Client_app.Controllers
                 using var response = await client.GetAsync($"{_middlewareUrl.TrimEnd('/')}/api/ready", cancellationToken);
                 services.Add(Service("middleware", "Fabric Middleware", "Application", response.IsSuccessStatusCode ? "healthy" : "down",
                     middlewareStopwatch.ElapsedMilliseconds, $"HTTP {(int)response.StatusCode}", _middlewareUrl));
+                using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+                if (document.RootElement.TryGetProperty("services", out var middlewareServices) &&
+                    middlewareServices.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var dependency in middlewareServices.EnumerateObject())
+                    {
+                        var ready = dependency.Value.TryGetProperty("ready", out var readyValue) && readyValue.GetBoolean();
+                        var detail = dependency.Value.TryGetProperty("status", out var statusValue)
+                            ? statusValue.GetString() ?? "Ready"
+                            : dependency.Value.TryGetProperty("error", out var errorValue)
+                                ? errorValue.GetString() ?? "Dependency check failed."
+                                : "Dependency check completed.";
+                        var displayName = dependency.Name switch
+                        {
+                            "auth" => "Authentication Service",
+                            "identity" => "Fabric Identity Service",
+                            "ledger" => "Ledger Service",
+                            "upload" => "Grade Upload Service",
+                            "settings" => "Settings Service",
+                            _ => $"Middleware {dependency.Name}"
+                        };
+                        services.Add(Service($"middleware-{dependency.Name}", displayName, "Middleware",
+                            ready ? "healthy" : "down", middlewareStopwatch.ElapsedMilliseconds, detail, _middlewareUrl));
+                    }
+                }
             }
             catch (Exception exception)
             {
