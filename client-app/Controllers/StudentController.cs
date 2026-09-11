@@ -126,7 +126,6 @@ namespace Client_app.Controllers
                 var data = responseDocument.RootElement.TryGetProperty("data", out var dataElement)
                     ? dataElement
                     : responseDocument.RootElement;
-                var records = JsonSerializer.Deserialize<List<AcademicRecord>>(
                 records = JsonSerializer.Deserialize<List<AcademicRecord>>(
                     data.GetRawText(),
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<AcademicRecord>();
@@ -254,13 +253,9 @@ namespace Client_app.Controllers
             }
             catch (Exception exception)
             {
-                _logger.LogError(exception, "Blockchain grade retrieval failed for student {StudentEmail}", email);
-                return StatusCode(StatusCodes.Status502BadGateway, new
                 _logger.LogError(exception, "Grade processing failed for student {StudentEmail}", email);
                 return Ok(new
                 {
-                    status = "Error",
-                    message = "Unable to retrieve grade records from the blockchain. Please try again later."
                     status = "Success",
                     data = Array.Empty<object>(),
                     message = "There are currently no grade records available."
@@ -275,16 +270,9 @@ namespace Client_app.Controllers
             var email = User.Identity?.Name;
             if (string.IsNullOrWhiteSpace(email)) return Unauthorized();
 
-            var responseJson = await _blockchain.GetStudentTransactionsAsync(email);
-            using var responseDocument = JsonDocument.Parse(responseJson);
-            var data = responseDocument.RootElement.TryGetProperty("data", out var dataElement)
-                ? dataElement
-                : responseDocument.RootElement;
             var safeTransactions = new List<object>();
-            if (data.ValueKind == JsonValueKind.Array)
             try
             {
-                foreach (var transaction in data.EnumerateArray())
                 var responseJson = await _blockchain.GetStudentTransactionsAsync(email);
                 using var responseDocument = JsonDocument.Parse(responseJson);
                 var data = responseDocument.RootElement.TryGetProperty("data", out var dataElement)
@@ -292,36 +280,12 @@ namespace Client_app.Controllers
                     : responseDocument.RootElement;
                 if (data.ValueKind == JsonValueKind.Array)
                 {
-                    if (!transaction.TryGetProperty("record", out var recordElement)) continue;
-                    var record = JsonSerializer.Deserialize<AcademicRecord>(recordElement.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    if (record is null || !string.Equals(record.StudentHash, email, StringComparison.OrdinalIgnoreCase)) continue;
                     foreach (var transaction in data.EnumerateArray())
                     {
                         if (!transaction.TryGetProperty("record", out var recordElement)) continue;
                         var record = JsonSerializer.Deserialize<AcademicRecord>(recordElement.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                         if (record is null || !string.Equals(record.StudentHash, email, StringComparison.OrdinalIgnoreCase)) continue;
 
-                    var transactionId = GetJsonString(transaction, "transaction_id");
-                    safeTransactions.Add(new
-                    {
-                        transactionId,
-                        transactionHash = GetJsonString(transaction, "transaction_hash", transactionId),
-                        transactionType = GetJsonString(transaction, "transaction_type", "GRADE_UPDATED"),
-                        studentId = string.IsNullOrWhiteSpace(record.StudentId) ? record.StudentNo : record.StudentId,
-                        subjectCode = record.SubjectCode,
-                        subjectTitle = record.SubjectTitle,
-                        professor = string.IsNullOrWhiteSpace(record.ProfessorName) ? record.FacultyId : record.ProfessorName,
-                        facultyId = record.FacultyId,
-                        program = string.IsNullOrWhiteSpace(record.Program) ? record.Course : record.Program,
-                        section = record.Section,
-                        yearLevel = ParseYearLevel(record.YearLevel, record.Section),
-                        semester = record.Semester,
-                        schoolYear = record.SchoolYear,
-                        term = string.IsNullOrWhiteSpace(record.Term) ? InferTerm(record.Grade) : record.Term,
-                        grade = GetDisplayGrade(record.Grade, record.Term),
-                        status = record.Status,
-                        timestamp = NormalizeTransactionTimestamp(GetJsonString(transaction, "timestamp", record.Timestamp))
-                    });
                         var transactionId = GetJsonString(transaction, "transaction_id");
                         safeTransactions.Add(new
                         {

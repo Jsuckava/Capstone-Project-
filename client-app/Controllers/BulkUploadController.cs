@@ -430,11 +430,6 @@ namespace BlockGo.Controllers
                                 return (idx >= 0 && idx < parts.Length) ? parts[idx]?.Trim() : null;
                             };
 
-                            var facultyEmail = getVal("faculty_email") ?? getVal("email") ?? parts[0]?.Trim();
-                            var subject = getVal("subject") ?? getVal("subject_code") ?? parts[1]?.Trim();
-                            var section = getVal("section") ?? getVal("class_section") ?? "";
-                            var yearLevel = getVal("year_level") ?? getVal("year") ?? "";
-                            var dept = getVal("department") ?? department ?? "";
                             var facultyEmail = getVal("faculty_email") ?? getVal("email") ?? getVal("faculty") ?? getVal("faculty_id") ?? getVal("instructor") ?? parts[0]?.Trim();
                             var subject = getVal("subject") ?? getVal("subject_code") ?? getVal("subject_name") ?? getVal("course_code") ?? (parts.Length > 1 ? parts[1]?.Trim() : "");
                             var section = getVal("section") ?? getVal("class_section") ?? getVal("section_name") ?? (parts.Length > 2 ? parts[2]?.Trim() : "");
@@ -445,9 +440,6 @@ namespace BlockGo.Controllers
                                 throw new Exception("Faculty email and subject are required.");
 
                             // Verify faculty exists
-                            using var checkCmd = new NpgsqlCommand(
-                                "SELECT id FROM Users WHERE LOWER(email) = LOWER(@email) AND role = 'faculty'", conn);
-                            checkCmd.Parameters.AddWithValue("email", facultyEmail.Trim());
                             using var checkCmd = new NpgsqlCommand(@"
                                 SELECT u.id FROM Users u
                                 LEFT JOIN FacultyProfiles fp ON fp.user_id = u.id
@@ -595,8 +587,6 @@ namespace BlockGo.Controllers
                 using var chairCmd = new NpgsqlCommand(@"
                     SELECT ap.department FROM Users u
                     JOIN AdminProfiles ap ON ap.user_id = u.id
-                    WHERE LOWER(u.email) = LOWER(@email) AND u.role IN ('department_admin', 'deptAdmin')", conn);
-                chairCmd.Parameters.AddWithValue("email", User.Identity?.Name ?? "");
                     WHERE (LOWER(u.email) = LOWER(@ident) OR LOWER(u.username) = LOWER(@ident))
                       AND (u.role IN ('department_admin', 'deptAdmin', 'chairperson', 'admin') OR u.role ILIKE '%chair%' OR u.role ILIKE '%dept%')
                     LIMIT 1", conn);
@@ -604,7 +594,6 @@ namespace BlockGo.Controllers
                 var chairDept = await chairCmd.ExecuteScalarAsync() as string;
 
                 if (string.IsNullOrWhiteSpace(chairDept))
-                    return Forbid();
                 {
                     chairDept = User.FindFirst("department")?.Value ?? department;
                 }
@@ -659,10 +648,6 @@ namespace BlockGo.Controllers
                                 return (idx >= 0 && idx < parts.Length) ? parts[idx]?.Trim() : null;
                             };
 
-                            var facultyEmail = getVal("faculty_email") ?? getVal("email") ?? parts[0]?.Trim();
-                            var subject = getVal("subject") ?? getVal("subject_code") ?? parts[1]?.Trim();
-                            var section = getVal("section") ?? getVal("class_section") ?? "";
-                            var yearLevel = getVal("year_level") ?? getVal("year") ?? "";
                             var facultyEmail = getVal("faculty_email") ?? getVal("email") ?? getVal("faculty") ?? getVal("faculty_id") ?? getVal("instructor") ?? parts[0]?.Trim();
                             var subject = getVal("subject") ?? getVal("subject_code") ?? getVal("subject_name") ?? getVal("course_code") ?? (parts.Length > 1 ? parts[1]?.Trim() : "");
                             var section = getVal("section") ?? getVal("class_section") ?? getVal("section_name") ?? (parts.Length > 2 ? parts[2]?.Trim() : "");
@@ -672,9 +657,6 @@ namespace BlockGo.Controllers
                             if (string.IsNullOrWhiteSpace(facultyEmail) || string.IsNullOrWhiteSpace(subject))
                                 throw new Exception("Faculty email and subject are required.");
 
-                            using var checkCmd = new NpgsqlCommand(
-                                "SELECT id FROM Users WHERE LOWER(email) = LOWER(@email) AND role = 'faculty'", conn);
-                            checkCmd.Parameters.AddWithValue("email", facultyEmail.Trim());
                             using var checkCmd = new NpgsqlCommand(@"
                                 SELECT u.id FROM Users u
                                 LEFT JOIN FacultyProfiles fp ON fp.user_id = u.id
@@ -729,10 +711,6 @@ namespace BlockGo.Controllers
                         {
                             var getVal = (string col) => headerMap.ContainsKey(col) ? row.Cell(headerMap[col]).Value.ToString().Trim() : null;
 
-                            var facultyEmail = getVal("faculty_email") ?? getVal("email") ?? row.Cell(1).Value.ToString()?.Trim();
-                            var subject = getVal("subject") ?? getVal("subject_code") ?? row.Cell(2).Value.ToString()?.Trim() ?? "";
-                            var section = getVal("section") ?? getVal("class_section") ?? "";
-                            var yearLevel = getVal("year_level") ?? getVal("year") ?? "";
                             var facultyEmail = getVal("faculty_email") ?? getVal("email") ?? getVal("faculty") ?? getVal("faculty_id") ?? getVal("instructor") ?? row.Cell(1).Value.ToString()?.Trim();
                             var subject = getVal("subject") ?? getVal("subject_code") ?? getVal("subject_name") ?? getVal("course_code") ?? (row.Cell(2).Value.ToString()?.Trim() ?? "");
                             var section = getVal("section") ?? getVal("class_section") ?? getVal("section_name") ?? "";
@@ -742,9 +720,6 @@ namespace BlockGo.Controllers
                             if (string.IsNullOrWhiteSpace(facultyEmail) || string.IsNullOrWhiteSpace(subject))
                                 throw new Exception("Faculty email and subject are required.");
 
-                            using var checkCmd = new NpgsqlCommand(
-                                "SELECT id FROM Users WHERE LOWER(email) = LOWER(@email) AND role = 'faculty'", conn);
-                            checkCmd.Parameters.AddWithValue("email", facultyEmail.Trim());
                             using var checkCmd = new NpgsqlCommand(@"
                                 SELECT u.id FROM Users u
                                 LEFT JOIN FacultyProfiles fp ON fp.user_id = u.id

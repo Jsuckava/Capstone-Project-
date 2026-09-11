@@ -585,20 +585,16 @@ namespace Client_app.Controllers
             request.Role = NormalizeSystemRole(request.Role);
             var inputCode = request.VerificationCode?.Trim();
 
-            // 1. Verify Code
-            if (!_cache.TryGetValue($"verification_{normalizedEmail}", out string? cachedCode) || cachedCode != inputCode)
             // 1. Verify Code if not registrar or if code was provided
             bool isRegistrar = User.IsInRole("registrar");
             if (!isRegistrar)
             {
-                return BadRequest(new { status = "Error", message = "The verification code is incorrect or has expired. Please try again." });
                 if (!_cache.TryGetValue($"verification_{normalizedEmail}", out string? cachedCode) || cachedCode != inputCode)
                 {
                     return BadRequest(new { status = "Error", message = "The verification code is incorrect or has expired. Please try again." });
                 }
                 _cache.Remove($"verification_{normalizedEmail}");
             }
-            _cache.Remove($"verification_{normalizedEmail}");
             else if (!string.IsNullOrEmpty(inputCode))
             {
                 _cache.Remove($"verification_{normalizedEmail}");
@@ -672,8 +668,6 @@ namespace Client_app.Controllers
 
                 var userStatus = isRegistrar ? "APPROVED" : "pending";
                 using var cmdUser = new NpgsqlCommand(@"
-                    INSERT INTO Users (email, password_hash, role, status) 
-                    VALUES (@email, crypt(@password, gen_salt('bf', 12)), @role, 'pending') RETURNING id", conn, transaction);
                     INSERT INTO Users (email, password_hash, role, status, is_active) 
                     VALUES (@email, crypt(@password, gen_salt('bf', 12)), @role, @status, TRUE) RETURNING id", conn, transaction);
                 cmdUser.Parameters.AddWithValue("email", normalizedEmail);
@@ -686,8 +680,6 @@ namespace Client_app.Controllers
                 string profileQuery = "";
                 if (request.Role?.ToLower() == "student")
                 {
-                    profileQuery = @"INSERT INTO StudentProfiles (user_id, full_name, student_no, department, date_of_birth) 
-                                   VALUES (@uid, @name, @studentno, @dept, @dob)";
                     profileQuery = @"INSERT INTO StudentProfiles (user_id, full_name, student_no, department, date_of_birth, assignment_status) 
                                    VALUES (@uid, @name, @studentno, @dept, @dob, @assignStatus)";
                 }
