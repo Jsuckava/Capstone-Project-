@@ -122,11 +122,11 @@ jobs:
           set -euo pipefail
           npm run lint --if-present
 
-      - name: Middleware tests if configured
+      - name: Middleware unit tests
         working-directory: middleware
         run: |
           set -euo pipefail
-          npm test --if-present
+          npm test
 
       - name: Middleware production build
         working-directory: middleware
@@ -619,26 +619,15 @@ jobs:
       - name: Validate deploy-k8s.sh
         run: |
           set -euo pipefail
-          for SCRIPT in network/k8s/deploy-k8s.sh network/k8s/backup_postgres.sh; do
-            if [ ! -f "$SCRIPT" ]; then
-              echo "::error::$SCRIPT is missing."
-              exit 1
-            fi
+          SCRIPT="network/k8s/deploy-k8s.sh"
 
-            bash -n "$SCRIPT"
-            shellcheck --severity=warning "$SCRIPT"
-          done
+          if [ ! -f "$SCRIPT" ]; then
+            echo "::error::$SCRIPT is missing."
+            exit 1
+          fi
 
-      - name: Build PostgreSQL backup image
-        run: |
-          set -euo pipefail
-          docker build \
-            --tag blockgo/postgres-backup:ci \
-            --file network/k8s/postgres-backup/Dockerfile \
-            network/k8s/postgres-backup
-          docker run --rm --env HOME=/tmp --env CLOUDSDK_CONFIG=/tmp/.config/gcloud \
-            blockgo/postgres-backup:ci -lc \
-            'pg_dump --version && gpg --version && gcloud version'
+          bash -n "$SCRIPT"
+          shellcheck --severity=warning "$SCRIPT"
 
       - name: Run offline infrastructure verification
         env:
