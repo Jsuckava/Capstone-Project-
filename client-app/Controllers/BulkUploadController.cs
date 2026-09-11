@@ -241,6 +241,7 @@ namespace BlockGo.Controllers
                 return StatusCode(500, new { status = "Error", message = ex.Message });
             }
         }
+
         [HttpPost("approve-grades")]
         [Authorize(Roles = "department_admin,chairperson")]
         public async Task<IActionResult> ApproveGradesForDept([FromBody] ApproveGradesRequest request)
@@ -367,6 +368,434 @@ namespace BlockGo.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { status = "Error", message = ex.Message });
+            }
+        }
+
+        [HttpPost("bulk-faculty-sections-upload")]
+        [Authorize(Roles = "registrar,department_admin")]
+        [HttpPost("bulk-faculty-load")]
+        [HttpPost("bulk-faculty-sections")]
+        [HttpPost("bulk-faculty-load-csv")]
+        [HttpPost("/api/bulk-faculty-load")]
+        [HttpPost("/api/bulk-faculty-sections")]
+        [HttpPost("/api/bulk-faculty-sections-upload")]
+        [Authorize(Roles = "registrar,department_admin,chairperson,admin")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> BulkFacultySectionsUpload([FromForm] IFormFile file, [FromForm] string? department)
+        {
+            _logger.LogInformation("Bulk faculty sections upload initiated by: {User}", User.Identity?.Name);
+
+            if (file == null || file.Length == 0)
+                return BadRequest(new { status = "Error", message = "CSV file required." });
+
+            var ext = Path.GetExtension(file.FileName).ToLower();
+            if (ext != ".csv" && ext != ".xlsx")
+                return BadRequest(new { status = "Error", message = "Only .csv and .xlsx files are supported." });
+
+            var tempFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ext);
+
+            try
+            {
+                using (var fileStream = new FileStream(tempFile, FileMode.Create))
+                    await file.CopyToAsync(fileStream);
+
+                using var conn = new NpgsqlConnection(_connectionString);
+                await conn.OpenAsync();
+                int count = 0;
+                var errors = new List<string>();
+
+                if (ext == ".csv")
+                {
+                    using var reader = new StreamReader(tempFile);
+                    var header = await reader.ReadLineAsync();
+                    var headerFields = header == null
+                        ? new List<string>()
+                        : ParseCsvLine(header).Select(f => f?.Trim().ToLower().Replace(" ", "_") ?? "").ToList();
+
+                    int lineNum = 1;
+                    while (!reader.EndOfStream)
+                    {
+                        lineNum++;
+                        var line = await reader.ReadLineAsync();
+                        if (string.IsNullOrEmpty(line)) continue;
+
+                        var parts = ParseCsvLine(line);
+                        if (parts.Length < 2) continue;
+
+                        try
+                        {
+                            var getVal = (string col) =>
+                            {
+                                var idx = headerFields?.IndexOf(col) ?? -1;
+                                return (idx >= 0 && idx < parts.Length) ? parts[idx]?.Trim() : null;
+                            };
+
+                            var facultyEmail = getVal("faculty_email") ?? getVal("email") ?? parts[0]?.Trim();
+                            var subject = getVal("subject") ?? getVal("subject_code") ?? parts[1]?.Trim();
+                            var section = getVal("section") ?? getVal("class_section") ?? "";
+                            var yearLevel = getVal("year_level") ?? getVal("year") ?? "";
+                            var dept = getVal("department") ?? department ?? "";
+                            var facultyEmail = getVal("faculty_email") ?? getVal("email") ?? getVal("faculty") ?? getVal("faculty_id") ?? getVal("instructor") ?? parts[0]?.Trim();
+                            var subject = getVal("subject") ?? getVal("subject_code") ?? getVal("subject_name") ?? getVal("course_code") ?? (parts.Length > 1 ? parts[1]?.Trim() : "");
+                            var section = getVal("section") ?? getVal("class_section") ?? getVal("section_name") ?? (parts.Length > 2 ? parts[2]?.Trim() : "");
+                            var yearLevel = getVal("year_level") ?? getVal("year") ?? getVal("yearlevel") ?? (parts.Length > 3 ? parts[3]?.Trim() : "");
+                            var dept = getVal("department") ?? getVal("dept") ?? getVal("course") ?? department ?? "";
+
+                            if (string.IsNullOrWhiteSpace(facultyEmail) || string.IsNullOrWhiteSpace(subject))
+                                throw new Exception("Faculty email and subject are required.");
+
+                            // Verify faculty exists
+                            using var checkCmd = new NpgsqlCommand(
+                                "SELECT id FROM Users WHERE LOWER(email) = LOWER(@email) AND role = 'faculty'", conn);
+                            checkCmd.Parameters.AddWithValue("email", facultyEmail.Trim());
+                            using var checkCmd = new NpgsqlCommand(@"
+                                SELECT u.id FROM Users u
+                                LEFT JOIN FacultyProfiles fp ON fp.user_id = u.id
+                                WHERE (LOWER(u.email) = LOWER(@identifier) 
+                                    OR LOWER(u.username) = LOWER(@identifier) 
+                                    OR LOWER(fp.full_name) = LOWER(@identifier)
+                                    OR LOWER(u.email) = LOWER(@identifierWithDomain))
+                                  AND u.role = 'faculty'
+                                LIMIT 1", conn);
+                            checkCmd.Parameters.AddWithValue("identifier", facultyEmail.Trim());
+                            checkCmd.Parameters.AddWithValue("identifierWithDomain", facultyEmail.Contains("@") ? facultyEmail.Trim() : $"{facultyEmail.Trim()}@plv.edu.ph");
+                            var facultyId = await checkCmd.ExecuteScalarAsync();
+
+                            if (facultyId == null)
+                                throw new Exception($"Faculty account {facultyEmail} not found.");
+
+                            // Insert or update FacultySections
+                            using var cmd = new NpgsqlCommand(@"
+                                INSERT INTO FacultySections (user_id, department, subject, section, year_level)
+                                VALUES (@uid, @dept, @subject, @section, @year)
+                                ON CONFLICT (user_id, department, subject, section) DO NOTHING", conn);
+                            cmd.Parameters.AddWithValue("uid", facultyId);
+                            cmd.Parameters.AddWithValue("dept", string.IsNullOrWhiteSpace(dept) ? (object)DBNull.Value : dept);
+                            cmd.Parameters.AddWithValue("subject", subject.Trim());
+                            cmd.Parameters.AddWithValue("section", string.IsNullOrWhiteSpace(section) ? (object)DBNull.Value : section);
+                            cmd.Parameters.AddWithValue("year", string.IsNullOrWhiteSpace(yearLevel) ? (object)DBNull.Value : yearLevel);
+                            await cmd.ExecuteNonQueryAsync();
+                            count++;
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add($"Line {lineNum}: {ex.Message}");
+                        }
+                    }
+                }
+                else if (ext == ".xlsx")
+                {
+                    using var wb = new XLWorkbook(tempFile);
+                    var ws = wb.Worksheet(1);
+                    var headerRow = ws.FirstRowUsed();
+                    var headerMap = new Dictionary<string, int>();
+                    if (headerRow != null)
+                    {
+                        foreach (var cell in headerRow.CellsUsed())
+                            headerMap[cell.Value.ToString().Trim().ToLower().Replace(" ", "_")] = cell.Address.ColumnNumber;
+                    }
+
+                    int rowNum = 1;
+                    foreach (var row in ws.RowsUsed().Skip(1))
+                    {
+                        rowNum++;
+                        try
+                        {
+                            var getVal = (string col) => headerMap.ContainsKey(col) ? row.Cell(headerMap[col]).Value.ToString().Trim() : null;
+
+                            var facultyEmail = getVal("faculty_email") ?? getVal("email") ?? row.Cell(1).Value.ToString()?.Trim();
+                            var subject = getVal("subject") ?? getVal("subject_code") ?? row.Cell(2).Value.ToString()?.Trim() ?? "";
+                            var section = getVal("section") ?? getVal("class_section") ?? "";
+                            var yearLevel = getVal("year_level") ?? getVal("year") ?? "";
+                            var dept = getVal("department") ?? department ?? "";
+
+                            if (string.IsNullOrWhiteSpace(facultyEmail) || string.IsNullOrWhiteSpace(subject))
+                                throw new Exception("Faculty email and subject are required.");
+
+                            using var checkCmd = new NpgsqlCommand(
+                                "SELECT id FROM Users WHERE LOWER(email) = LOWER(@email) AND role = 'faculty'", conn);
+                            checkCmd.Parameters.AddWithValue("email", facultyEmail.Trim());
+                            var facultyId = await checkCmd.ExecuteScalarAsync();
+
+                            if (facultyId == null)
+                                throw new Exception($"Faculty account {facultyEmail} not found.");
+
+                            using var cmd = new NpgsqlCommand(@"
+                                INSERT INTO FacultySections (user_id, department, subject, section, year_level)
+                                VALUES (@uid, @dept, @subject, @section, @year)
+                                ON CONFLICT (user_id, department, subject, section) DO NOTHING", conn);
+                            cmd.Parameters.AddWithValue("uid", facultyId);
+                            cmd.Parameters.AddWithValue("dept", string.IsNullOrWhiteSpace(dept) ? (object)DBNull.Value : dept);
+                            cmd.Parameters.AddWithValue("subject", subject.Trim());
+                            cmd.Parameters.AddWithValue("section", string.IsNullOrWhiteSpace(section) ? (object)DBNull.Value : section);
+                            cmd.Parameters.AddWithValue("year", string.IsNullOrWhiteSpace(yearLevel) ? (object)DBNull.Value : yearLevel);
+                            await cmd.ExecuteNonQueryAsync();
+                            count++;
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add($"Row {rowNum}: {ex.Message}");
+                        }
+                    }
+                }
+
+                return Ok(new
+                {
+                    status = errors.Count == 0 ? "Success" : "Partial Success",
+                    message = $"{count} faculty-section assignments loaded.",
+                    processed = count,
+                    errors = errors.Any() ? errors : null
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Bulk faculty sections upload error");
+                return StatusCode(500, new { status = "Error", message = ex.Message });
+            }
+            finally
+            {
+                if (System.IO.File.Exists(tempFile)) System.IO.File.Delete(tempFile);
+            }
+        }
+
+        [HttpPost("bulk-faculty-load-chairperson")]
+        [Authorize(Roles = "department_admin,chairperson")]
+        [HttpPost("assign-faculty-bulk")]
+        [HttpPost("/api/assign-faculty-bulk")]
+        [HttpPost("/api/chairperson/assign-faculty-bulk")]
+        [HttpPost("/api/bulk-faculty-load-chairperson")]
+        [Authorize(Roles = "department_admin,chairperson,registrar,admin")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> BulkFacultyLoadChairperson([FromForm] IFormFile file, [FromForm] string? department)
+        {
+            _logger.LogInformation("Chairperson bulk faculty load initiated by: {User}", User.Identity?.Name);
+
+            if (file == null || file.Length == 0)
+                return BadRequest(new { status = "Error", message = "CSV file required." });
+
+            var ext = Path.GetExtension(file.FileName).ToLower();
+            if (ext != ".csv" && ext != ".xlsx")
+                return BadRequest(new { status = "Error", message = "Only .csv and .xlsx files are supported." });
+
+            var tempFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ext);
+
+            try
+            {
+                using (var fileStream = new FileStream(tempFile, FileMode.Create))
+                    await file.CopyToAsync(fileStream);
+
+                using var conn = new NpgsqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                // Verify chairperson department authorization
+                var userIdentifier = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                                     ?? User.FindFirst("email")?.Value
+                                     ?? User.Identity?.Name ?? "";
+
+                using var chairCmd = new NpgsqlCommand(@"
+                    SELECT ap.department FROM Users u
+                    JOIN AdminProfiles ap ON ap.user_id = u.id
+                    WHERE LOWER(u.email) = LOWER(@email) AND u.role IN ('department_admin', 'deptAdmin')", conn);
+                chairCmd.Parameters.AddWithValue("email", User.Identity?.Name ?? "");
+                    WHERE (LOWER(u.email) = LOWER(@ident) OR LOWER(u.username) = LOWER(@ident))
+                      AND (u.role IN ('department_admin', 'deptAdmin', 'chairperson', 'admin') OR u.role ILIKE '%chair%' OR u.role ILIKE '%dept%')
+                    LIMIT 1", conn);
+                chairCmd.Parameters.AddWithValue("ident", userIdentifier);
+                var chairDept = await chairCmd.ExecuteScalarAsync() as string;
+
+                if (string.IsNullOrWhiteSpace(chairDept))
+                    return Forbid();
+                {
+                    chairDept = User.FindFirst("department")?.Value ?? department;
+                }
+
+                if (string.IsNullOrWhiteSpace(chairDept) && !string.IsNullOrWhiteSpace(department))
+                {
+                    chairDept = department;
+                }
+
+                if (string.IsNullOrWhiteSpace(chairDept))
+                {
+                    using var anyDeptCmd = new NpgsqlCommand(@"
+                        SELECT ap.department FROM AdminProfiles ap
+                        JOIN Users u ON u.id = ap.user_id
+                        WHERE LOWER(u.email) = LOWER(@ident) OR LOWER(u.username) = LOWER(@ident)
+                        LIMIT 1", conn);
+                    anyDeptCmd.Parameters.AddWithValue("ident", userIdentifier);
+                    chairDept = await anyDeptCmd.ExecuteScalarAsync() as string;
+                }
+
+                if (string.IsNullOrWhiteSpace(chairDept))
+                {
+                    chairDept = "General";
+                }
+
+                int count = 0;
+                var errors = new List<string>();
+
+                if (ext == ".csv")
+                {
+                    using var reader = new StreamReader(tempFile);
+                    var header = await reader.ReadLineAsync();
+                    var headerFields = header == null
+                        ? new List<string>()
+                        : ParseCsvLine(header).Select(f => f?.Trim().ToLower().Replace(" ", "_") ?? "").ToList();
+
+                    int lineNum = 1;
+                    while (!reader.EndOfStream)
+                    {
+                        lineNum++;
+                        var line = await reader.ReadLineAsync();
+                        if (string.IsNullOrEmpty(line)) continue;
+
+                        var parts = ParseCsvLine(line);
+                        if (parts.Length < 2) continue;
+
+                        try
+                        {
+                            var getVal = (string col) =>
+                            {
+                                var idx = headerFields?.IndexOf(col) ?? -1;
+                                return (idx >= 0 && idx < parts.Length) ? parts[idx]?.Trim() : null;
+                            };
+
+                            var facultyEmail = getVal("faculty_email") ?? getVal("email") ?? parts[0]?.Trim();
+                            var subject = getVal("subject") ?? getVal("subject_code") ?? parts[1]?.Trim();
+                            var section = getVal("section") ?? getVal("class_section") ?? "";
+                            var yearLevel = getVal("year_level") ?? getVal("year") ?? "";
+                            var facultyEmail = getVal("faculty_email") ?? getVal("email") ?? getVal("faculty") ?? getVal("faculty_id") ?? getVal("instructor") ?? parts[0]?.Trim();
+                            var subject = getVal("subject") ?? getVal("subject_code") ?? getVal("subject_name") ?? getVal("course_code") ?? (parts.Length > 1 ? parts[1]?.Trim() : "");
+                            var section = getVal("section") ?? getVal("class_section") ?? getVal("section_name") ?? (parts.Length > 2 ? parts[2]?.Trim() : "");
+                            var yearLevel = getVal("year_level") ?? getVal("year") ?? getVal("yearlevel") ?? (parts.Length > 3 ? parts[3]?.Trim() : "");
+                            var deptToUse = string.IsNullOrWhiteSpace(department) ? chairDept : department;
+
+                            if (string.IsNullOrWhiteSpace(facultyEmail) || string.IsNullOrWhiteSpace(subject))
+                                throw new Exception("Faculty email and subject are required.");
+
+                            using var checkCmd = new NpgsqlCommand(
+                                "SELECT id FROM Users WHERE LOWER(email) = LOWER(@email) AND role = 'faculty'", conn);
+                            checkCmd.Parameters.AddWithValue("email", facultyEmail.Trim());
+                            using var checkCmd = new NpgsqlCommand(@"
+                                SELECT u.id FROM Users u
+                                LEFT JOIN FacultyProfiles fp ON fp.user_id = u.id
+                                WHERE (LOWER(u.email) = LOWER(@identifier) 
+                                    OR LOWER(u.username) = LOWER(@identifier) 
+                                    OR LOWER(fp.full_name) = LOWER(@identifier)
+                                    OR LOWER(u.email) = LOWER(@identifierWithDomain))
+                                  AND u.role = 'faculty'
+                                LIMIT 1", conn);
+                            checkCmd.Parameters.AddWithValue("identifier", facultyEmail.Trim());
+                            checkCmd.Parameters.AddWithValue("identifierWithDomain", facultyEmail.Contains("@") ? facultyEmail.Trim() : $"{facultyEmail.Trim()}@plv.edu.ph");
+                            var facultyId = await checkCmd.ExecuteScalarAsync();
+
+                            if (facultyId == null)
+                                throw new Exception($"Faculty account {facultyEmail} not found.");
+
+                            using var cmd = new NpgsqlCommand(@"
+                                INSERT INTO FacultySections (user_id, department, subject, section, year_level)
+                                VALUES (@uid, @dept, @subject, @section, @year)
+                                ON CONFLICT (user_id, department, subject, section) DO NOTHING", conn);
+                            cmd.Parameters.AddWithValue("uid", facultyId);
+                            cmd.Parameters.AddWithValue("dept", string.IsNullOrWhiteSpace(deptToUse) ? (object)DBNull.Value : deptToUse);
+                            cmd.Parameters.AddWithValue("subject", subject.Trim());
+                            cmd.Parameters.AddWithValue("section", string.IsNullOrWhiteSpace(section) ? (object)DBNull.Value : section);
+                            cmd.Parameters.AddWithValue("year", string.IsNullOrWhiteSpace(yearLevel) ? (object)DBNull.Value : yearLevel);
+                            await cmd.ExecuteNonQueryAsync();
+                            count++;
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add($"Line {lineNum}: {ex.Message}");
+                        }
+                    }
+                }
+                else if (ext == ".xlsx")
+                {
+                    using var wb = new XLWorkbook(tempFile);
+                    var ws = wb.Worksheet(1);
+                    var headerRow = ws.FirstRowUsed();
+                    var headerMap = new Dictionary<string, int>();
+                    if (headerRow != null)
+                    {
+                        foreach (var cell in headerRow.CellsUsed())
+                            headerMap[cell.Value.ToString().Trim().ToLower().Replace(" ", "_")] = cell.Address.ColumnNumber;
+                    }
+
+                    int rowNum = 1;
+                    foreach (var row in ws.RowsUsed().Skip(1))
+                    {
+                        rowNum++;
+                        try
+                        {
+                            var getVal = (string col) => headerMap.ContainsKey(col) ? row.Cell(headerMap[col]).Value.ToString().Trim() : null;
+
+                            var facultyEmail = getVal("faculty_email") ?? getVal("email") ?? row.Cell(1).Value.ToString()?.Trim();
+                            var subject = getVal("subject") ?? getVal("subject_code") ?? row.Cell(2).Value.ToString()?.Trim() ?? "";
+                            var section = getVal("section") ?? getVal("class_section") ?? "";
+                            var yearLevel = getVal("year_level") ?? getVal("year") ?? "";
+                            var facultyEmail = getVal("faculty_email") ?? getVal("email") ?? getVal("faculty") ?? getVal("faculty_id") ?? getVal("instructor") ?? row.Cell(1).Value.ToString()?.Trim();
+                            var subject = getVal("subject") ?? getVal("subject_code") ?? getVal("subject_name") ?? getVal("course_code") ?? (row.Cell(2).Value.ToString()?.Trim() ?? "");
+                            var section = getVal("section") ?? getVal("class_section") ?? getVal("section_name") ?? "";
+                            var yearLevel = getVal("year_level") ?? getVal("year") ?? getVal("yearlevel") ?? "";
+                            var deptToUse = string.IsNullOrWhiteSpace(department) ? chairDept : department;
+
+                            if (string.IsNullOrWhiteSpace(facultyEmail) || string.IsNullOrWhiteSpace(subject))
+                                throw new Exception("Faculty email and subject are required.");
+
+                            using var checkCmd = new NpgsqlCommand(
+                                "SELECT id FROM Users WHERE LOWER(email) = LOWER(@email) AND role = 'faculty'", conn);
+                            checkCmd.Parameters.AddWithValue("email", facultyEmail.Trim());
+                            using var checkCmd = new NpgsqlCommand(@"
+                                SELECT u.id FROM Users u
+                                LEFT JOIN FacultyProfiles fp ON fp.user_id = u.id
+                                WHERE (LOWER(u.email) = LOWER(@identifier) 
+                                    OR LOWER(u.username) = LOWER(@identifier) 
+                                    OR LOWER(fp.full_name) = LOWER(@identifier)
+                                    OR LOWER(u.email) = LOWER(@identifierWithDomain))
+                                  AND u.role = 'faculty'
+                                LIMIT 1", conn);
+                            checkCmd.Parameters.AddWithValue("identifier", facultyEmail.Trim());
+                            checkCmd.Parameters.AddWithValue("identifierWithDomain", facultyEmail.Contains("@") ? facultyEmail.Trim() : $"{facultyEmail.Trim()}@plv.edu.ph");
+                            var facultyId = await checkCmd.ExecuteScalarAsync();
+
+                            if (facultyId == null)
+                                throw new Exception($"Faculty account {facultyEmail} not found.");
+
+                            using var cmd = new NpgsqlCommand(@"
+                                INSERT INTO FacultySections (user_id, department, subject, section, year_level)
+                                VALUES (@uid, @dept, @subject, @section, @year)
+                                ON CONFLICT (user_id, department, subject, section) DO NOTHING", conn);
+                            cmd.Parameters.AddWithValue("uid", facultyId);
+                            cmd.Parameters.AddWithValue("dept", string.IsNullOrWhiteSpace(deptToUse) ? (object)DBNull.Value : deptToUse);
+                            cmd.Parameters.AddWithValue("subject", subject.Trim());
+                            cmd.Parameters.AddWithValue("section", string.IsNullOrWhiteSpace(section) ? (object)DBNull.Value : section);
+                            cmd.Parameters.AddWithValue("year", string.IsNullOrWhiteSpace(yearLevel) ? (object)DBNull.Value : yearLevel);
+                            await cmd.ExecuteNonQueryAsync();
+                            count++;
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add($"Row {rowNum}: {ex.Message}");
+                        }
+                    }
+                }
+
+                return Ok(new
+                {
+                    status = errors.Count == 0 ? "Success" : "Partial Success",
+                    message = $"{count} faculty-section assignments loaded by chairperson.",
+                    processed = count,
+                    errors = errors.Any() ? errors : null
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Chairperson bulk faculty load error");
+                return StatusCode(500, new { status = "Error", message = ex.Message });
+            }
+            finally
+            {
+                if (System.IO.File.Exists(tempFile)) System.IO.File.Delete(tempFile);
             }
         }
     }

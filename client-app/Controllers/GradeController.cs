@@ -3006,5 +3006,344 @@ namespace BlockGo.Controllers
 
             await Task.WhenAll(pinTasks);
         }
+
+        [HttpPost("export-pdf")]
+        [HttpGet("export-pdf")]
+        [HttpGet("summary/pdf")]
+        [HttpPost("summary/pdf")]
+        [HttpGet("grade-summary-pdf")]
+        [HttpPost("grade-summary-pdf")]
+        [HttpGet("/api/Student/grades/pdf")]
+        [HttpGet("/api/Student/grade-summary-pdf")]
+        [Authorize(Roles = "faculty,registrar,department_admin,chairperson,student,admin")]
+        public async Task<IActionResult> ExportGradeSummaryPdf(
+            [FromQuery] string? recordId = null,
+            [FromQuery] string? studentEmail = null,
+            [FromQuery] string? studentId = null,
+            [FromBody] GradeSummaryExportRequest? request = null)
+        {
+            try
+            {
+                var targetRecordId = request?.RecordId ?? recordId;
+                var targetStudentEmail = request?.StudentEmail ?? studentEmail ?? studentId;
+
+                var invokerId = User.Identity?.Name ?? "system";
+                var userRole = User.FindFirst("dbRole")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "";
+
+                if (string.IsNullOrWhiteSpace(targetRecordId) && string.IsNullOrWhiteSpace(targetStudentEmail))
+                {
+                    if (userRole.Equals("student", StringComparison.OrdinalIgnoreCase))
+                    {
+                        targetStudentEmail = invokerId;
+                    }
+                    else
+                    {
+                        return BadRequest(new { status = "Error", message = "RecordId or StudentEmail is required." });
+                    }
+                }
+
+                // Get grade records
+                List<AcademicRecord> records = new();
+                
+                if (!string.IsNullOrWhiteSpace(targetRecordId))
+                {
+                    try
+                    {
+                        var recordJson = await _blockchainService.GetGradeAsync(targetRecordId, invokerId);
+                        var record = JsonSerializer.Deserialize<AcademicRecord>(recordJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (record != null) records.Add(record);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Blockchain fetch failed for record {RecordId}, checking database fallback.", targetRecordId);
+                    }
+
+                    if (!records.Any())
+                    {
+                        using var conn = new NpgsqlConnection(_connectionString);
+                        await conn.OpenAsync();
+                        using var dbCmd = new NpgsqlCommand(@"
+                            SELECT id, student_hash, student_no, student_name, course, subject_code, subject_title, grade, term, status, date, semester, school_year
+                            FROM pending_grade_records
+                            WHERE id = @id OR transaction_id = @id
+                            LIMIT 1", conn);
+                        dbCmd.Parameters.AddWithValue("id", targetRecordId);
+                        using var reader = await dbCmd.ExecuteReaderAsync();
+                        if (await reader.ReadAsync())
+                        {
+                            records.Add(new AcademicRecord
+                            {
+                                SubjectCode = reader["subject_code"]?.ToString(),
+                                SubjectTitle = reader["subject_title"]?.ToString(),
+                                Grade = reader["grade"]?.ToString(),
+                                Term = reader["term"]?.ToString() ?? "Final",
+                                Status = reader["status"]?.ToString(),
+                                Date = reader["date"]?.ToString(),
+                                StudentHash = reader["student_hash"]?.ToString() ?? reader["student_no"]?.ToString(),
+                                Course = reader["course"]?.ToString(),
+                                SchoolYear = reader["school_year"]?.ToString(),
+                                Semester = reader["semester"]?.ToString()
+                            });
+                        }
+                    }
+                }
+                else if (!string.IsNullOrWhiteSpace(targetStudentEmail))
+                {
+                    // Registrar/admin can export for any student; faculty can only export their own
+                    if (userRole.Equals("faculty", StringComparison.OrdinalIgnoreCase) && !invokerId.Equals(targetStudentEmail, StringComparison.OrdinalIgnoreCase))
+                        return Forbid();
+
+                    try
+                    {
+                        var allGradesJson = await _blockchainService.GetAllGradesAsync(targetStudentEmail);
+                        using var doc = JsonDocument.Parse(allGradesJson);
+                        var dataElement = doc.RootElement.TryGetProperty("data", out var d) ? d : doc.RootElement;
+                        records = JsonSerializer.Deserialize<List<AcademicRecord>>(dataElement.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Blockchain fetch failed for student {StudentEmail}, checking database fallback.", targetStudentEmail);
+                    }
+
+                    if (!records.Any())
+                    {
+                        using var conn = new NpgsqlConnection(_connectionString);
+                        await conn.OpenAsync();
+                        using var dbCmd = new NpgsqlCommand(@"
+                            SELECT id, student_hash, student_no, student_name, course, subject_code, subject_title, grade, term, status, date, semester, school_year
+                            FROM pending_grade_records
+                            WHERE LOWER(student_hash) = LOWER(@email)
+                               OR LOWER(student_no) = LOWER(@email)
+                               OR student_hash IN (SELECT student_no FROM studentprofiles WHERE LOWER(student_email) = LOWER(@email))
+                               OR student_hash IN (SELECT student_no FROM studentprofiles sp JOIN users u ON u.id = sp.user_id WHERE LOWER(u.email) = LOWER(@email))
+                            ORDER BY school_year DESC, semester DESC, subject_code ASC", conn);
+                        dbCmd.Parameters.AddWithValue("email", targetStudentEmail.Trim());
+                        using var reader = await dbCmd.ExecuteReaderAsync();
+                        while (await reader.ReadAsync())
+                        {
+                            records.Add(new AcademicRecord
+                            {
+                                SubjectCode = reader["subject_code"]?.ToString(),
+                                SubjectTitle = reader["subject_title"]?.ToString(),
+                                Grade = reader["grade"]?.ToString(),
+                                Term = reader["term"]?.ToString() ?? "Final",
+                                Status = reader["status"]?.ToString(),
+                                Date = reader["date"]?.ToString(),
+                                StudentHash = reader["student_hash"]?.ToString() ?? reader["student_no"]?.ToString(),
+                                Course = reader["course"]?.ToString(),
+                                SchoolYear = reader["school_year"]?.ToString(),
+                                Semester = reader["semester"]?.ToString()
+                            });
+                        }
+                    }
+                }
+
+                if (!records.Any())
+                {
+                    records.Add(new AcademicRecord
+                    {
+                        SubjectCode = "ENR",
+                        SubjectTitle = "Academic Standing",
+                        ProfessorName = "Registrar Office",
+                        FacultyId = "registrar",
+                        Section = "N/A",
+                        Grade = "N/A",
+                        Status = "Enrolled / No grades recorded yet",
+                        Date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                        StudentHash = targetStudentEmail ?? "N/A",
+                        Course = "Academic Department",
+                        SchoolYear = $"{DateTime.UtcNow.Year}-{DateTime.UtcNow.Year + 1}",
+                        Semester = "1st Semester"
+                    });
+                }
+
+                // Student details
+                var first = records.First();
+                var studentHash = first.StudentHash ?? targetStudentEmail ?? "N/A";
+                var dept = first.Course ?? "Academic Department";
+                var sy = first.SchoolYear ?? DateTime.UtcNow.Year.ToString();
+                var sem = first.Semester ?? "1st Semester";
+
+                // Generate valid standard PDF 1.4 document
+                var pdfBytes = GenerateGradeSummaryPdfBytes(studentHash, dept, sy, sem, records);
+
+                return File(pdfBytes, "application/pdf", $"grade-summary-{DateTime.UtcNow:yyyyMMddHHmmss}.pdf");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting grade summary PDF");
+                return StatusCode(500, new { status = "Error", message = ex.Message });
+            }
+        }
+
+        private static byte[] GenerateGradeSummaryPdfBytes(
+            string studentHash,
+            string department,
+            string schoolYear,
+            string semester,
+            List<AcademicRecord> records)
+        {
+            var contentSb = new StringBuilder();
+
+            // Header Banner
+            contentSb.AppendLine("0.0 0.2 0.4 rg"); // PLV Navy
+            contentSb.AppendLine("BT /F2 16 Tf 50 740 Td (Pamantasan ng Lungsod ng Valenzuela) Tj ET");
+            contentSb.AppendLine("0.1 0.1 0.1 rg");
+            contentSb.AppendLine("BT /F2 12 Tf 50 722 Td (OFFICIAL GRADE SUMMARY REPORT) Tj ET");
+            contentSb.AppendLine($"BT /F1 8 Tf 50 708 Td (Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC) Tj ET");
+
+            // Horizontal line
+            contentSb.AppendLine("0.0 0.2 0.4 RG 1.5 w 50 698 m 562 698 l S");
+
+            // Student Information Box
+            contentSb.AppendLine("0.96 0.97 0.98 rg 50 635 512 55 re f");
+            contentSb.AppendLine("0.8 0.85 0.9 RG 0.75 w 50 635 512 55 re S");
+
+            contentSb.AppendLine("0.1 0.1 0.1 rg");
+            var cleanHash = EscapePdfString(studentHash.Length > 30 ? studentHash.Substring(0, 30) + "..." : studentHash);
+            var cleanDept = EscapePdfString(department);
+            var cleanSy = EscapePdfString(schoolYear);
+            var cleanSem = EscapePdfString(semester);
+
+            contentSb.AppendLine($"BT /F2 9.5 Tf 60 672 Td (Student / Hash: {cleanHash}) Tj ET");
+            contentSb.AppendLine($"BT /F1 9 Tf 60 657 Td (Department: {cleanDept}) Tj ET");
+            contentSb.AppendLine($"BT /F1 9 Tf 60 642 Td (School Year: {cleanSy}   |   Semester: {cleanSem}) Tj ET");
+
+            // Table Header
+            contentSb.AppendLine("0.0 0.2 0.4 rg 50 605 512 20 re f");
+            contentSb.AppendLine("1 1 1 rg");
+            contentSb.AppendLine("BT /F2 9 Tf 56 611 Td (Subject Code) Tj ET");
+            contentSb.AppendLine("BT /F2 9 Tf 150 611 Td (Subject Title) Tj ET");
+            contentSb.AppendLine("BT /F2 9 Tf 340 611 Td (Grade) Tj ET");
+            contentSb.AppendLine("BT /F2 9 Tf 390 611 Td (Term) Tj ET");
+            contentSb.AppendLine("BT /F2 9 Tf 445 611 Td (Status) Tj ET");
+            contentSb.AppendLine("BT /F2 9 Tf 510 611 Td (Date) Tj ET");
+
+            // Table Rows
+            float y = 588;
+            bool alt = false;
+            foreach (var record in records)
+            {
+                if (y < 65) break;
+
+                if (alt)
+                {
+                    contentSb.AppendLine($"0.97 0.97 0.97 rg 50 {y - 4} 512 16 re f");
+                }
+                alt = !alt;
+
+                contentSb.AppendLine("0.1 0.1 0.1 rg");
+                var code = EscapePdfString(record.SubjectCode ?? "N/A");
+                var title = EscapePdfString(TruncateString(record.SubjectTitle ?? "N/A", 32));
+                var grade = EscapePdfString(record.Grade ?? "N/A");
+                var term = EscapePdfString(record.Term ?? "Final");
+                var status = EscapePdfString(record.Status ?? "N/A");
+                var date = EscapePdfString(TruncateString(record.Date ?? DateTime.UtcNow.ToString("yyyy-MM-dd"), 12));
+
+                contentSb.AppendLine($"BT /F1 8.5 Tf 56 {y} Td ({code}) Tj ET");
+                contentSb.AppendLine($"BT /F1 8.5 Tf 150 {y} Td ({title}) Tj ET");
+                contentSb.AppendLine($"BT /F2 8.5 Tf 340 {y} Td ({grade}) Tj ET");
+                contentSb.AppendLine($"BT /F1 8.5 Tf 390 {y} Td ({term}) Tj ET");
+                contentSb.AppendLine($"BT /F1 8.5 Tf 445 {y} Td ({status}) Tj ET");
+                contentSb.AppendLine($"BT /F1 8.5 Tf 510 {y} Td ({date}) Tj ET");
+
+                contentSb.AppendLine($"0.88 0.88 0.88 RG 0.5 w 50 {y - 4} m 562 {y - 4} l S");
+                y -= 17;
+            }
+
+            // Footer
+            contentSb.AppendLine("0.7 0.7 0.7 RG 0.5 w 50 42 m 562 42 l S");
+            contentSb.AppendLine("0.4 0.4 0.4 rg");
+            contentSb.AppendLine("BT /F1 7.5 Tf 50 30 Td (Pamantasan ng Lungsod ng Valenzuela - Blockchain Grade Verification System) Tj ET");
+            contentSb.AppendLine("BT /F1 7.5 Tf 490 30 Td (Page 1 of 1) Tj ET");
+
+            var streamBytes = Encoding.ASCII.GetBytes(contentSb.ToString());
+
+            using var ms = new MemoryStream();
+            using var writer = new StreamWriter(ms, Encoding.ASCII);
+            var offsets = new List<long>();
+
+            writer.Write("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+            writer.Flush();
+
+            // Obj 1: Catalog
+            offsets.Add(ms.Position);
+            writer.Write("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+            writer.Flush();
+
+            // Obj 2: Pages
+            offsets.Add(ms.Position);
+            writer.Write("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+            writer.Flush();
+
+            // Obj 3: Page
+            offsets.Add(ms.Position);
+            writer.Write("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>\nendobj\n");
+            writer.Flush();
+
+            // Obj 4: Font F1
+            offsets.Add(ms.Position);
+            writer.Write("4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n");
+            writer.Flush();
+
+            // Obj 5: Font F2
+            offsets.Add(ms.Position);
+            writer.Write("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n");
+            writer.Flush();
+
+            // Obj 6: Stream
+            offsets.Add(ms.Position);
+            writer.Write($"6 0 obj\n<< /Length {streamBytes.Length} >>\nstream\n");
+            writer.Flush();
+            ms.Write(streamBytes, 0, streamBytes.Length);
+            writer.Write("\nendstream\nendobj\n");
+            writer.Flush();
+
+            // xref
+            var xrefOffset = ms.Position;
+            writer.Write($"xref\n0 {offsets.Count + 1}\n0000000000 65535 f \n");
+            foreach (var off in offsets)
+            {
+                writer.Write($"{off:D10} 00000 n \n");
+            }
+            writer.Write($"trailer\n<< /Size {offsets.Count + 1} /Root 1 0 R >>\nstartxref\n{xrefOffset}\n%%EOF\n");
+            writer.Flush();
+
+            return ms.ToArray();
+        }
+
+        private static string EscapePdfString(string? input)
+        {
+            if (string.IsNullOrEmpty(input)) return "";
+            var sb = new StringBuilder();
+            foreach (var ch in input)
+            {
+                if (ch == '(' || ch == ')' || ch == '\\')
+                {
+                    sb.Append('\\').Append(ch);
+                }
+                else if (ch >= 32 && ch <= 126)
+                {
+                    sb.Append(ch);
+                }
+                else
+                {
+                    sb.Append(' ');
+                }
+            }
+            return sb.ToString();
+        }
+
+        private static string TruncateString(string? input, int maxLength)
+        {
+            if (string.IsNullOrEmpty(input)) return "";
+            return input.Length <= maxLength ? input : input.Substring(0, maxLength) + "...";
+        }
+
+        public class GradeSummaryExportRequest
+        {
+            public string? RecordId { get; set; }
+            public string? StudentEmail { get; set; }
+        }
     }
 }

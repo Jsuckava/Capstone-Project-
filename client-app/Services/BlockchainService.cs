@@ -23,6 +23,7 @@ namespace BlockGo.Services
             
             var apiKey = configuration["InternalApiKey"] ?? throw new InvalidOperationException("Internal API Key not configured.");
             _httpClient.DefaultRequestHeaders.Add("x-api-key", apiKey);
+            _httpClient.Timeout = TimeSpan.FromSeconds(2);
         }
 
         public async Task<string> GetAllGradesAsync(string invokerUsername)

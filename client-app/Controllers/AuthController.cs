@@ -18,6 +18,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
+using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
 using ClosedXML.Excel;
 
 
@@ -520,6 +523,7 @@ namespace Client_app.Controllers
         public async Task<IActionResult> SendVerificationCode([FromBody] VerificationRequest request)
         {
             if (User.Identity?.IsAuthenticated == true)
+            if (User.Identity?.IsAuthenticated == true && !User.IsInRole("registrar"))
             {
                 return StatusCode(StatusCodes.Status410Gone, new { status = "Error", message = "Public registration has been disabled. Accounts are created by authorized administrators." });
             }
@@ -568,7 +572,7 @@ namespace Client_app.Controllers
         [Authorize(Roles = "registrar")]
         public async Task<IActionResult> RequestAccess([FromBody] SignupRequest request)
         {
-            if (User.Identity?.IsAuthenticated == true)
+            if (User.Identity?.IsAuthenticated == true && !User.IsInRole("registrar"))
             {
                 return StatusCode(StatusCodes.Status410Gone, new { status = "Error", message = "Public registration has been disabled. Accounts are created by authorized administrators." });
             }
@@ -583,10 +587,22 @@ namespace Client_app.Controllers
 
             // 1. Verify Code
             if (!_cache.TryGetValue($"verification_{normalizedEmail}", out string? cachedCode) || cachedCode != inputCode)
+            // 1. Verify Code if not registrar or if code was provided
+            bool isRegistrar = User.IsInRole("registrar");
+            if (!isRegistrar)
             {
                 return BadRequest(new { status = "Error", message = "The verification code is incorrect or has expired. Please try again." });
+                if (!_cache.TryGetValue($"verification_{normalizedEmail}", out string? cachedCode) || cachedCode != inputCode)
+                {
+                    return BadRequest(new { status = "Error", message = "The verification code is incorrect or has expired. Please try again." });
+                }
+                _cache.Remove($"verification_{normalizedEmail}");
             }
             _cache.Remove($"verification_{normalizedEmail}");
+            else if (!string.IsNullOrEmpty(inputCode))
+            {
+                _cache.Remove($"verification_{normalizedEmail}");
+            }
 
             try
             {
@@ -654,12 +670,16 @@ namespace Client_app.Controllers
                         "Date of birth (mm/dd/yyyy) is required for students." : "Password is required." });
                 }
 
+                var userStatus = isRegistrar ? "APPROVED" : "pending";
                 using var cmdUser = new NpgsqlCommand(@"
                     INSERT INTO Users (email, password_hash, role, status) 
                     VALUES (@email, crypt(@password, gen_salt('bf', 12)), @role, 'pending') RETURNING id", conn, transaction);
+                    INSERT INTO Users (email, password_hash, role, status, is_active) 
+                    VALUES (@email, crypt(@password, gen_salt('bf', 12)), @role, @status, TRUE) RETURNING id", conn, transaction);
                 cmdUser.Parameters.AddWithValue("email", normalizedEmail);
                 cmdUser.Parameters.AddWithValue("password", finalPassword);
                 cmdUser.Parameters.AddWithValue("role", request.Role?.ToLower() ?? "student");
+                cmdUser.Parameters.AddWithValue("status", userStatus);
                 
                 int userId = (int)(await cmdUser.ExecuteScalarAsync() ?? throw new Exception("Failed to retrieve new User ID"));
 
@@ -668,6 +688,8 @@ namespace Client_app.Controllers
                 {
                     profileQuery = @"INSERT INTO StudentProfiles (user_id, full_name, student_no, department, date_of_birth) 
                                    VALUES (@uid, @name, @studentno, @dept, @dob)";
+                    profileQuery = @"INSERT INTO StudentProfiles (user_id, full_name, student_no, department, date_of_birth, assignment_status) 
+                                   VALUES (@uid, @name, @studentno, @dept, @dob, @assignStatus)";
                 }
                 else if (request.Role?.ToLower() == "faculty")
                 {
@@ -688,6 +710,7 @@ namespace Client_app.Controllers
                 if (request.Role?.ToLower() == "student") 
                 {
                     cmdProfile.Parameters.AddWithValue("studentno", (object?)request.StudentNo ?? DBNull.Value);
+                    cmdProfile.Parameters.AddWithValue("assignStatus", isRegistrar ? "Unassigned" : "Pending");
                     if (parsedDob.HasValue)
                     {
                         cmdProfile.Parameters.AddWithValue("dob", parsedDob.Value.Date);
@@ -995,6 +1018,7 @@ namespace Client_app.Controllers
         }
 
         [HttpGet("students/unassigned-enrolled")]
+        [HttpGet("students/unassigned")]
         [Authorize(Roles = "registrar")]
         public async Task<IActionResult> GetUnassignedEnrolledStudents(
             [FromQuery] string? department, [FromQuery] string? yearLevel,
@@ -3469,6 +3493,153 @@ namespace Client_app.Controllers
             }
         }
 
+        [Authorize(Roles = "registrar")]
+        [HttpPost("manual-student-create")]
+        [HttpPost("create-student")]
+        [HttpPost("students/create")]
+        [HttpPost("student")]
+        [HttpPost("/api/Student/create")]
+        [HttpPost("/api/Student")]
+        [HttpPost("/api/Auth/create-student")]
+        public async Task<IActionResult> ManualStudentCreate([FromBody] ManualStudentRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.FirstName) || 
+                string.IsNullOrWhiteSpace(request.LastName) || string.IsNullOrWhiteSpace(request.DateOfBirth) ||
+                string.IsNullOrWhiteSpace(request.StudentNumber) || string.IsNullOrWhiteSpace(request.Department))
+                return BadRequest(new { status = "Error", message = "Email, FirstName, LastName, DateOfBirth, StudentNumber, and Department are required." });
+
+            try
+            {
+                using var conn = new NpgsqlConnection(_connectionString);
+                await conn.OpenAsync();
+                
+                var email = request.Email.Trim().ToLower();
+                var studentNo = request.StudentNumber.Trim();
+                var firstName = request.FirstName.Trim();
+                var lastName = request.LastName.Trim();
+                var middleName = request.MiddleName?.Trim() ?? "";
+                var fullName = string.IsNullOrEmpty(middleName) ? $"{firstName} {lastName}" : $"{firstName} {middleName} {lastName}";
+                var department = request.Department.Trim();
+                var section = request.Section?.Trim() ?? "";
+                var phone = request.Phone?.Trim() ?? "";
+                var address = request.Address?.Trim() ?? "";
+                var sex = request.Sex?.Trim() ?? "";
+
+                if (!DateTime.TryParseExact(request.DateOfBirth, "MM/dd/yyyy", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var dobDate))
+                    return BadRequest(new { status = "Error", message = "DateOfBirth must be in MM/dd/yyyy format." });
+
+                if (!System.Text.RegularExpressions.Regex.IsMatch(studentNo, @"^\d{2,4}-\d{4,}$"))
+                    return BadRequest(new { status = "Error", message = "StudentNumber must be in xx-xxxx or xxxx-xxxx format." });
+
+                using var tx = await conn.BeginTransactionAsync();
+
+                // Check if user already exists
+                using var checkCmd = new NpgsqlCommand(@"
+                    SELECT u.id, u.role FROM Users u
+                    WHERE LOWER(u.email) = LOWER(@email) OR LOWER(u.email) = LOWER(@studentNo)
+                    LIMIT 1", conn, tx);
+                checkCmd.Parameters.AddWithValue("email", email);
+                checkCmd.Parameters.AddWithValue("studentNo", studentNo);
+                
+                using (var reader = await checkCmd.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        var existingRole = reader.GetString(1);
+                        if (!string.Equals(existingRole, "student", StringComparison.OrdinalIgnoreCase))
+                            return BadRequest(new { status = "Error", message = "This email is already associated with a non-student account." });
+                        return BadRequest(new { status = "Error", message = "This student already exists in the system." });
+                    }
+                }
+
+                // Create User account
+                var password = dobDate.ToString("MM/dd/yyyy");
+                using var cmdUser = new NpgsqlCommand(@"
+                    INSERT INTO Users (username, email, password_hash, role, status, is_active) 
+                    VALUES (@username, @email, crypt(@password, gen_salt('bf', 12)), 'student', 'APPROVED', TRUE) 
+                    RETURNING id", conn, tx);
+                cmdUser.Parameters.AddWithValue("username", studentNo.ToLower());
+                cmdUser.Parameters.AddWithValue("email", email);
+                cmdUser.Parameters.AddWithValue("password", password);
+                var userId = (int)(await cmdUser.ExecuteScalarAsync() ?? throw new Exception("Failed to create user account"));
+
+                // Create Student Profile
+                using var cmdProfile = new NpgsqlCommand(@"
+                    INSERT INTO StudentProfiles (user_id, full_name, student_no, department, section, date_of_birth, student_email, middle_name, sex, phone, address, assignment_status, year_level)
+                    VALUES (@uid, @fullName, @studentNo, @dept, @section, @dob, @studentEmail, @middleName, @sex, @phone, @address, 'Unassigned', '1')", conn, tx);
+                cmdProfile.Parameters.AddWithValue("uid", userId);
+                cmdProfile.Parameters.AddWithValue("fullName", fullName);
+                cmdProfile.Parameters.AddWithValue("studentNo", studentNo);
+                cmdProfile.Parameters.AddWithValue("dept", department);
+                cmdProfile.Parameters.AddWithValue("section", string.IsNullOrEmpty(section) ? (object)DBNull.Value : section);
+                cmdProfile.Parameters.AddWithValue("dob", dobDate.Date);
+                cmdProfile.Parameters.AddWithValue("studentEmail", email);
+                cmdProfile.Parameters.AddWithValue("middleName", string.IsNullOrEmpty(middleName) ? (object)DBNull.Value : middleName);
+                cmdProfile.Parameters.AddWithValue("sex", string.IsNullOrEmpty(sex) ? (object)DBNull.Value : sex);
+                cmdProfile.Parameters.AddWithValue("phone", string.IsNullOrEmpty(phone) ? (object)DBNull.Value : phone);
+                cmdProfile.Parameters.AddWithValue("address", string.IsNullOrEmpty(address) ? (object)DBNull.Value : address);
+                await cmdProfile.ExecuteNonQueryAsync();
+
+                // Register on blockchain
+                try
+                {
+                    using var httpClient = _httpClientFactory.CreateClient("FabricCAClient");
+                    var apiKey = Environment.GetEnvironmentVariable("INTERNAL_API_KEY") ?? _configuration["InternalApiKey"];
+                    if (!string.IsNullOrEmpty(apiKey))
+                        httpClient.DefaultRequestHeaders.Add("x-api-key", apiKey);
+                    
+                    var middlewareUrl = _configuration["Middleware:Url"] ?? _configuration["MIDDLEWARE_URL"] ?? "http://127.0.0.1:4000";
+                    var payload = new { email = studentNo, role = "student", password = password };
+                    var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                    var fabResponse = await httpClient.PostAsync($"{middlewareUrl}/api/fabric/register-user", content);
+                    
+                    if (!fabResponse.IsSuccessStatusCode)
+                        _logger.LogWarning("Blockchain registration warning for student {StudentNo}: {Status}", studentNo, fabResponse.StatusCode);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Optional blockchain registration failed for student {StudentNo}", studentNo);
+                }
+
+                await _auditLog.LogAsync(User.Identity?.Name ?? "registrar", "registrar", "STUDENT_CREATED_MANUAL", 
+                    "student", userId.ToString(), null, 
+                    new { studentNo, email, fullName, department, section },
+                    "Registrar manually created a single student account.",
+                    HttpContext.Connection.RemoteIpAddress?.ToString(), conn, tx);
+
+                await tx.CommitAsync();
+                await NotifyAcademicDataChangedAsync("student_created", department, User.Identity?.Name);
+
+                return Ok(new { 
+                    status = "Success", 
+                    message = $"Student {studentNo} created successfully.",
+                    studentNo,
+                    email,
+                    fullName
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating student manually");
+                return StatusCode(500, new { status = "Error", message = ex.Message });
+            }
+        }
+
+        public class ManualStudentRequest
+        {
+            public string Email { get; set; } = string.Empty;
+            public string FirstName { get; set; } = string.Empty;
+            public string LastName { get; set; } = string.Empty;
+            public string? MiddleName { get; set; }
+            public string DateOfBirth { get; set; } = string.Empty;
+            public string StudentNumber { get; set; } = string.Empty;
+            public string Department { get; set; } = string.Empty;
+            public string? Section { get; set; }
+            public string? Phone { get; set; }
+            public string? Address { get; set; }
+            public string? Sex { get; set; }
+        }
+
         [Authorize(Roles = "department_admin,registrar")]
         [HttpPut("shared-state/{key}")]
         public async Task<IActionResult> SaveSharedClientState(string key, [FromBody] SharedClientStateRequest request)
@@ -3505,6 +3676,124 @@ namespace Client_app.Controllers
             {
                 return StatusCode(500, new { status = "Error", message = ex.Message });
             }
+        }
+
+        [AllowAnonymous]
+        [HttpPost("login")]
+        [HttpPost("/api/login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequest request)
+        {
+            var identifier = (request.Username ?? request.Email ?? "").Trim().ToLower();
+            var password = request.Password ?? "";
+
+            if (string.IsNullOrEmpty(identifier) || string.IsNullOrEmpty(password))
+                return BadRequest(new { error = "Username and password are required." });
+
+            try
+            {
+                using var conn = new NpgsqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                var baseIdentifier = identifier.Split('@')[0];
+                using var cmd = new NpgsqlCommand(@"
+                    SELECT u.id, u.email, u.password_hash, u.role, u.status, u.is_active, sp.student_no
+                    FROM users u
+                    LEFT JOIN studentprofiles sp ON u.id = sp.user_id
+                    WHERE LOWER(u.email) = @identifier OR LOWER(sp.student_no) = @identifier
+                       OR LOWER(u.email) = @baseIdentifier OR LOWER(sp.student_no) = @baseIdentifier
+                       OR LOWER(u.username) = @identifier
+                    ORDER BY CASE
+                        WHEN LOWER(u.email) = @identifier THEN 1
+                        WHEN LOWER(sp.student_no) = @identifier THEN 2
+                        WHEN LOWER(u.email) = @baseIdentifier THEN 3
+                        WHEN LOWER(sp.student_no) = @baseIdentifier THEN 4
+                        ELSE 5 END
+                    LIMIT 1", conn);
+                cmd.Parameters.AddWithValue("identifier", identifier);
+                cmd.Parameters.AddWithValue("baseIdentifier", baseIdentifier);
+
+                using var reader = await cmd.ExecuteReaderAsync();
+                if (!await reader.ReadAsync())
+                    return Unauthorized(new { error = "Invalid email or password" });
+
+                var email = reader.GetString(1);
+                var hash = reader.GetString(2);
+                var role = reader.GetString(3);
+                var status = reader.GetString(4);
+                var isActive = reader.GetBoolean(5);
+
+                if (!string.Equals(status, "approved", StringComparison.OrdinalIgnoreCase) || !isActive)
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Account is not active or has not been approved." });
+
+                reader.Close();
+
+                // Verify password using crypt in postgres
+                using var verifyCmd = new NpgsqlCommand("SELECT crypt(@password, @hash) = @hash", conn);
+                verifyCmd.Parameters.AddWithValue("password", password);
+                verifyCmd.Parameters.AddWithValue("hash", hash);
+                var isPasswordValid = Convert.ToBoolean(await verifyCmd.ExecuteScalarAsync());
+
+                if (!isPasswordValid)
+                    return Unauthorized(new { error = "Invalid email or password" });
+
+                // Normalize role
+                var normalizedRole = NormalizeRoleForToken(role);
+
+                // Create JWT token matching Program.cs
+                var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? _configuration["Jwt:Secret"] ?? "69d19178f703d20d9e17e207d0d8b3cc4712718f48532c7227498ea9d438a774";
+                var jwtKey = SHA256.HashData(Encoding.UTF8.GetBytes(jwtSecret.Trim()));
+
+                var tokenHandler = new JwtSecurityTokenHandler();
+                var tokenDescriptor = new SecurityTokenDescriptor
+                {
+                    Subject = new ClaimsIdentity(new[]
+                    {
+                        new Claim("username", email),
+                        new Claim("email", email),
+                        new Claim("dbRole", normalizedRole),
+                        new Claim(ClaimTypes.Role, normalizedRole),
+                        new Claim(ClaimTypes.Name, email)
+                    }),
+                    Expires = DateTime.UtcNow.AddHours(12),
+                    SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(jwtKey), SecurityAlgorithms.HmacSha256Signature)
+                };
+
+                var token = tokenHandler.CreateToken(tokenDescriptor);
+                var tokenString = tokenHandler.WriteToken(token);
+
+                return Ok(new
+                {
+                    status = "success",
+                    token = tokenString,
+                    message = "Login successful.",
+                    role = normalizedRole,
+                    email
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Login error");
+                return StatusCode(500, new { error = "Internal server error" });
+            }
+        }
+
+        private static string NormalizeRoleForToken(string value)
+        {
+            var normalized = value.Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
+            return normalized switch
+            {
+                "systemadmin" or "sysadmin" or "system_administrator" => "system_admin",
+                "deptadmin" or "dept_admin" or "department" or "departmentadmin" or "chairperson" or "department_head" or "admin" => "department_admin",
+                "instructor" => "faculty",
+                var r => r
+            };
+        }
+
+        public class LoginRequest
+        {
+            public string? Username { get; set; }
+            public string? Email { get; set; }
+            public string? Password { get; set; }
         }
     }
 }

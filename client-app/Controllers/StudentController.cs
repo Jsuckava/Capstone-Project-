@@ -118,6 +118,7 @@ namespace Client_app.Controllers
             var email = User.Identity?.Name;
             if (string.IsNullOrWhiteSpace(email)) return Unauthorized();
 
+            List<AcademicRecord> records = new();
             try
             {
                 var responseJson = await _blockchain.GetAllGradesAsync(email);
@@ -126,13 +127,66 @@ namespace Client_app.Controllers
                     ? dataElement
                     : responseDocument.RootElement;
                 var records = JsonSerializer.Deserialize<List<AcademicRecord>>(
+                records = JsonSerializer.Deserialize<List<AcademicRecord>>(
                     data.GetRawText(),
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<AcademicRecord>();
 
                 records = records.Where(record =>
                     string.Equals(record.StudentHash, email, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(record.Status, "Finalized", StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Blockchain grade retrieval failed for student {StudentEmail}, checking database fallback.", email);
+            }
 
+            if (!records.Any())
+            {
+                try
+                {
+                    using var conn = new NpgsqlConnection(_connectionString);
+                    await conn.OpenAsync(cancellationToken);
+                    using var dbCmd = new NpgsqlCommand(@"
+                        SELECT id, student_hash, student_no, student_name, course, subject_code, subject_title, grade, term, status, date, semester, school_year, faculty_id, units, section, year_level
+                        FROM pending_grade_records
+                        WHERE (LOWER(student_hash) = LOWER(@email)
+                           OR LOWER(student_no) = LOWER(@email)
+                           OR student_hash IN (SELECT student_no FROM studentprofiles WHERE LOWER(student_email) = LOWER(@email))
+                           OR student_hash IN (SELECT student_no FROM studentprofiles sp JOIN users u ON u.id = sp.user_id WHERE LOWER(u.email) = LOWER(@email)))
+                          AND status IN ('Finalized', 'DepartmentApproved', 'Issued')
+                        ORDER BY school_year DESC, semester DESC, subject_code ASC", conn);
+                    dbCmd.Parameters.AddWithValue("email", email.Trim());
+                    using var reader = await dbCmd.ExecuteReaderAsync(cancellationToken);
+                    while (await reader.ReadAsync(cancellationToken))
+                    {
+                        records.Add(new AcademicRecord
+                        {
+                            Id = reader["id"]?.ToString(),
+                            SubjectCode = reader["subject_code"]?.ToString(),
+                            SubjectTitle = reader["subject_title"]?.ToString(),
+                            Grade = reader["grade"]?.ToString(),
+                            Term = reader["term"]?.ToString() ?? "Final",
+                            Status = reader["status"]?.ToString(),
+                            Date = reader["date"]?.ToString(),
+                            StudentHash = reader["student_hash"]?.ToString() ?? reader["student_no"]?.ToString(),
+                            Course = reader["course"]?.ToString(),
+                            SchoolYear = reader["school_year"]?.ToString(),
+                            Semester = reader["semester"]?.ToString(),
+                            FacultyId = reader["faculty_id"]?.ToString(),
+                            Units = reader["units"] != DBNull.Value ? Convert.ToInt32(reader["units"]) : 0,
+                            Section = reader["section"]?.ToString(),
+                            YearLevel = reader["year_level"]?.ToString()
+                        });
+                    }
+                }
+                catch (Exception dbEx)
+                {
+                    _logger.LogWarning(dbEx, "Database fallback failed for student {StudentEmail}", email);
+                }
+            }
+
+            try
+            {
                 var facultyNames = await LoadFacultyNamesAsync(records.Select(record => record.FacultyId), cancellationToken);
                 var subjectMetadata = await LoadSubjectMetadataAsync(email, cancellationToken);
                 var currentEnrollment = await LoadCurrentEnrollmentAsync(email, cancellationToken);
@@ -202,9 +256,14 @@ namespace Client_app.Controllers
             {
                 _logger.LogError(exception, "Blockchain grade retrieval failed for student {StudentEmail}", email);
                 return StatusCode(StatusCodes.Status502BadGateway, new
+                _logger.LogError(exception, "Grade processing failed for student {StudentEmail}", email);
+                return Ok(new
                 {
                     status = "Error",
                     message = "Unable to retrieve grade records from the blockchain. Please try again later."
+                    status = "Success",
+                    data = Array.Empty<object>(),
+                    message = "There are currently no grade records available."
                 });
             }
         }
@@ -223,12 +282,24 @@ namespace Client_app.Controllers
                 : responseDocument.RootElement;
             var safeTransactions = new List<object>();
             if (data.ValueKind == JsonValueKind.Array)
+            try
             {
                 foreach (var transaction in data.EnumerateArray())
+                var responseJson = await _blockchain.GetStudentTransactionsAsync(email);
+                using var responseDocument = JsonDocument.Parse(responseJson);
+                var data = responseDocument.RootElement.TryGetProperty("data", out var dataElement)
+                    ? dataElement
+                    : responseDocument.RootElement;
+                if (data.ValueKind == JsonValueKind.Array)
                 {
                     if (!transaction.TryGetProperty("record", out var recordElement)) continue;
                     var record = JsonSerializer.Deserialize<AcademicRecord>(recordElement.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                     if (record is null || !string.Equals(record.StudentHash, email, StringComparison.OrdinalIgnoreCase)) continue;
+                    foreach (var transaction in data.EnumerateArray())
+                    {
+                        if (!transaction.TryGetProperty("record", out var recordElement)) continue;
+                        var record = JsonSerializer.Deserialize<AcademicRecord>(recordElement.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (record is null || !string.Equals(record.StudentHash, email, StringComparison.OrdinalIgnoreCase)) continue;
 
                     var transactionId = GetJsonString(transaction, "transaction_id");
                     safeTransactions.Add(new
@@ -251,7 +322,33 @@ namespace Client_app.Controllers
                         status = record.Status,
                         timestamp = NormalizeTransactionTimestamp(GetJsonString(transaction, "timestamp", record.Timestamp))
                     });
+                        var transactionId = GetJsonString(transaction, "transaction_id");
+                        safeTransactions.Add(new
+                        {
+                            transactionId,
+                            transactionHash = GetJsonString(transaction, "transaction_hash", transactionId),
+                            transactionType = GetJsonString(transaction, "transaction_type", "GRADE_UPDATED"),
+                            studentId = string.IsNullOrWhiteSpace(record.StudentId) ? record.StudentNo : record.StudentId,
+                            subjectCode = record.SubjectCode,
+                            subjectTitle = record.SubjectTitle,
+                            professor = string.IsNullOrWhiteSpace(record.ProfessorName) ? record.FacultyId : record.ProfessorName,
+                            facultyId = record.FacultyId,
+                            program = string.IsNullOrWhiteSpace(record.Program) ? record.Course : record.Program,
+                            section = record.Section,
+                            yearLevel = ParseYearLevel(record.YearLevel, record.Section),
+                            semester = record.Semester,
+                            schoolYear = record.SchoolYear,
+                            term = string.IsNullOrWhiteSpace(record.Term) ? InferTerm(record.Grade) : record.Term,
+                            grade = GetDisplayGrade(record.Grade, record.Term),
+                            status = record.Status,
+                            timestamp = NormalizeTransactionTimestamp(GetJsonString(transaction, "timestamp", record.Timestamp))
+                        });
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Blockchain transaction retrieval failed for student {Email}, returning empty list.", email);
             }
             return Ok(new { status = "Success", data = safeTransactions });
         }

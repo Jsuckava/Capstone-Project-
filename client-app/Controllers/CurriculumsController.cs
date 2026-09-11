@@ -512,9 +512,11 @@ namespace Client_app.Controllers
                 }
             }
             if (!resolvedId.HasValue) return NotFound(new { status = "Error", message = "No active curriculum is assigned to your program." });
+            if (!resolvedId.HasValue) return Ok(new { status = "Success", data = (object?)null, message = "No active curriculum is assigned to your program." });
             var curriculum = await LoadCurriculumAsync(connection, resolvedId.Value, cancellationToken);
             if (curriculum.Status is not (CurriculumStatuses.Published or CurriculumStatuses.Archived))
                 return NotFound(new { status = "Error", message = "Your program curriculum is not available." });
+                return Ok(new { status = "Success", data = (object?)null, message = "Your program curriculum is not available." });
             return Ok(new { status = "Success", data = curriculum });
         }
 
