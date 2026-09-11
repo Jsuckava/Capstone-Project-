@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "c:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\EnrollmentImportChecks.csproj": {}
+    "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\EnrollmentImportChecks.csproj": {}
   },
   "projects": {
-    "c:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\EnrollmentImportChecks.csproj": {
+    "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\EnrollmentImportChecks.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "c:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\EnrollmentImportChecks.csproj",
+        "projectUniqueName": "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\EnrollmentImportChecks.csproj",
         "projectName": "EnrollmentImportChecks",
-        "projectPath": "c:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\EnrollmentImportChecks.csproj",
+        "projectPath": "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\EnrollmentImportChecks.csproj",
         "packagesPath": "C:\\Users\\pascu\\.nuget\\packages\\",
-        "outputPath": "c:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\obj\\",
+        "outputPath": "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\pascu\\AppData\\Roaming\\NuGet\\NuGet.Config"

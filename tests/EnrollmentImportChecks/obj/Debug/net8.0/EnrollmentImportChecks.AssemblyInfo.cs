@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("EnrollmentImportChecks")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+56033b486f2753def34af8ed36545bcde56f1087")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8dd2867c9ef8280bf083f622516f2faf28de4e47")]
 [assembly: System.Reflection.AssemblyProductAttribute("EnrollmentImportChecks")]
 [assembly: System.Reflection.AssemblyTitleAttribute("EnrollmentImportChecks")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
