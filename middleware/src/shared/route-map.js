@@ -3,7 +3,7 @@ const { serviceUrl } = require('./config');
 const routeDefinitions = [
     { service: 'auth', paths: [/^\/api\/login$/, /^\/api\/crypto\/hash-password$/, /^\/api\/forgot-password$/, /^\/api\/reset-password$/, /^\/api\/bootstrap$/] },
     { service: 'identity', paths: [/^\/api\/fabric\/register-user$/, /^\/api\/(enroll|register|revoke)$/, /^\/api\/wallet\/[^/]+$/] },
-    { service: 'ledger', paths: [/^\/api\/all-grades$/, /^\/api\/student-transactions$/, /^\/api\/admin\/ledger-transactions$/, /^\/api\/admin\/reset-ledger$/, /^\/api\/grade-history\/[^/]+$/, /^\/api\/fabric\/audit-event$/, /^\/api\/issue-grade$/, /^\/api\/get-grade\/[^/]+$/, /^\/api\/update-grade$/, /^\/api\/(approve-grade|finalize-grade|return-grade)\/[^/]+$/, /^\/api\/batch-issue-grade$/] },
+    { service: 'ledger', paths: [/^\/api\/all-grades$/, /^\/api\/student-transactions$/, /^\/api\/grade-history\/[^/]+$/, /^\/api\/fabric\/audit-event$/, /^\/api\/issue-grade$/, /^\/api\/get-grade\/[^/]+$/, /^\/api\/update-grade$/, /^\/api\/(approve-grade|finalize-grade|return-grade)\/[^/]+$/, /^\/api\/batch-issue-grade$/] },
     { service: 'upload', paths: [/^\/api\/(batch-upload|upload-grades)$/] },
     { service: 'settings', paths: [/^\/api\/SystemSettings(?:\/.*)?$/] }
 ];

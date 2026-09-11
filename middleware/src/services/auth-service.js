@@ -9,7 +9,6 @@ const { requireInternalKey } = require('../shared/auth');
 const { requestJson } = require('../shared/internal-http');
 const createLogger = require('../shared/logger');
 const { normalizeAuthRole } = require('../shared/roles');
-const { canUseLoginIdentifier, normalizeLoginIdentifier } = require('../shared/login-identifier');
 const { createServiceApp, installErrorHandler, listen } = require('../shared/service-app');
 
 const serviceName = 'auth-service';
@@ -76,7 +75,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     try {
         const { username, password } = req.body || {};
         if (!username || !password) return res.status(400).json({ error: 'Username and password are required.' });
-        const normalizedUsername = normalizeLoginIdentifier(username);
+        const normalizedUsername = String(username).trim().toLowerCase();
         const baseUsername = normalizedUsername.split('@')[0];
         const result = await dbRead.query(`
             SELECT u.*, sp.student_no
@@ -96,10 +95,6 @@ app.post('/api/login', loginLimiter, async (req, res) => {
         if (String(account.status).toLowerCase() !== 'approved' || account.is_active === false) {
             await recordSecurityEvent(req, 'INACTIVE_ACCOUNT_LOGIN', 'HIGH', account.email, 'A login was attempted for an inactive or unapproved account.');
             return res.status(403).json({ error: 'Account is not active or has not been approved.' });
-        }
-        if (!canUseLoginIdentifier(account, normalizedUsername)) {
-            await recordSecurityEvent(req, 'STUDENT_LOGIN_IDENTIFIER_REJECTED', 'MEDIUM', normalizedUsername, 'A student attempted to sign in with an identifier that did not match the assigned Student ID or email address.');
-            return res.status(401).json({ error: 'Invalid student email or Student ID.' });
         }
         if (!await bcrypt.compare(password, account.password_hash)) {
             await recordSecurityEvent(req, 'FAILED_LOGIN', 'MEDIUM', account.email, 'Login failed because the password did not match.');
