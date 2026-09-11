@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Npgsql;
+using NpgsqlTypes;
 using System.Security.Cryptography;
 
 namespace Client_app.Controllers
@@ -18,7 +19,7 @@ namespace Client_app.Controllers
         private static readonly IReadOnlyDictionary<string, (string Label, string Scope)> Specialists =
             new Dictionary<string, (string Label, string Scope)>(StringComparer.OrdinalIgnoreCase)
             {
-                ["IT_ADMIN"] = ("IT Admin", "Overall"),
+                ["IT_ADMIN"] = ("IT Support 1", "General Support"),
                 ["FRONTEND_DEVELOPER"] = ("Web Developer", "Frontend"),
                 ["BACKEND_DEVELOPER"] = ("API Issues", "Backend Developer"),
                 ["NETWORK_SPECIALIST"] = ("Network and Docker Issues", "Network Specialist")
@@ -110,10 +111,11 @@ namespace Client_app.Controllers
         public async Task<IActionResult> Create([FromBody] CreateSupportTicketRequest request, CancellationToken cancellationToken)
         {
             var assignedSpecialist = NormalizeSpecialist(request.AssignedSpecialist);
-            if (!Specialists.ContainsKey(assignedSpecialist))
+            if (assignedSpecialist is not null && !Specialists.ContainsKey(assignedSpecialist))
                 return BadRequest(new { status = "Error", message = "Select a valid support specialty." });
-            var specialist = Specialists[assignedSpecialist];
-            var title = $"{specialist.Label} support request";
+            var title = assignedSpecialist is not null
+                ? $"{Specialists[assignedSpecialist].Label} support request"
+                : "System support request";
             await using var connection = new NpgsqlConnection(_connectionString);
             await connection.OpenAsync(cancellationToken);
             await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
@@ -124,7 +126,7 @@ namespace Client_app.Controllers
                 RETURNING ticket_id;", connection, transaction);
             command.Parameters.AddWithValue("title", title);
             command.Parameters.AddWithValue("description", request.Description.Trim());
-            command.Parameters.AddWithValue("assignedSpecialist", assignedSpecialist);
+            command.Parameters.Add("assignedSpecialist", NpgsqlDbType.Varchar).Value = (object?)assignedSpecialist ?? DBNull.Value;
             command.Parameters.AddWithValue("actor", ActorEmail());
             var result = await command.ExecuteScalarAsync(cancellationToken);
             if (result is null) return Forbid();
@@ -140,11 +142,14 @@ namespace Client_app.Controllers
         [Authorize(Roles = "system_admin")]
         public async Task<IActionResult> Update(long ticketId, [FromBody] UpdateSupportTicketRequest request, CancellationToken cancellationToken)
         {
-            var status = request.Status.Trim().ToUpperInvariant();
+            var requestedStatus = request.Status.Trim().ToUpperInvariant();
+            var status = requestedStatus == "ASSIGNED" ? "IN_PROGRESS" : requestedStatus;
             if (!Statuses.Contains(status)) return BadRequest(new { status = "Error", message = "Invalid ticket status." });
             var assignedSpecialist = NormalizeSpecialist(request.AssignedSpecialist);
-            if (!Specialists.ContainsKey(assignedSpecialist))
+            if (assignedSpecialist is not null && !Specialists.ContainsKey(assignedSpecialist))
                 return BadRequest(new { status = "Error", message = "Select a valid support specialist." });
+            if (requestedStatus == "ASSIGNED" && assignedSpecialist is null)
+                return BadRequest(new { status = "Error", message = "Select a support specialist before assigning the ticket." });
             if (status is "RESOLVED" or "CLOSED" && string.IsNullOrWhiteSpace(request.AdminResponse))
                 return BadRequest(new { status = "Error", message = "An administrator response is required to resolve or close a ticket." });
             await using var connection = new NpgsqlConnection(_connectionString);
@@ -154,25 +159,52 @@ namespace Client_app.Controllers
             await using var command = new NpgsqlCommand(@"
                 UPDATE support_tickets
                 SET status = @status, admin_response = @response,
-                    assigned_specialist = @assignedSpecialist,
+                    assigned_specialist = COALESCE(@assignedSpecialist, assigned_specialist),
                     updated_at = CURRENT_TIMESTAMP,
                     resolved_at = CASE WHEN @status IN ('RESOLVED', 'CLOSED') THEN CURRENT_TIMESTAMP ELSE NULL END
-                WHERE ticket_id = @ticketId RETURNING ticket_id;", connection, transaction);
+                WHERE ticket_id = @ticketId
+                RETURNING (SELECT email FROM users WHERE id = support_tickets.registrar_id);", connection, transaction);
             command.Parameters.AddWithValue("status", status);
             command.Parameters.AddWithValue("response", (object?)request.AdminResponse?.Trim() ?? DBNull.Value);
-            command.Parameters.AddWithValue("assignedSpecialist", assignedSpecialist);
+            command.Parameters.Add("assignedSpecialist", NpgsqlDbType.Varchar).Value = (object?)assignedSpecialist ?? DBNull.Value;
             command.Parameters.AddWithValue("ticketId", ticketId);
-            if (await command.ExecuteScalarAsync(cancellationToken) is null) return NotFound(new { status = "Error", message = "Ticket not found." });
+            var registrarEmail = (string?)await command.ExecuteScalarAsync(cancellationToken);
+            if (registrarEmail is null) return NotFound(new { status = "Error", message = "Ticket not found." });
             await _auditLog.LogAsync(ActorEmail(), "system_admin", "SUPPORT_TICKET_UPDATED", "support_ticket", ticketId.ToString(), null,
                 new { status, hasResponse = !string.IsNullOrWhiteSpace(request.AdminResponse), assignedSpecialist },
                 "System Administrator updated and assigned a Registrar support ticket.",
                 HttpContext.Connection.RemoteIpAddress?.ToString(), connection, transaction, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            var notification = new
+            {
+                ticketId,
+                status,
+                assignedSpecialist,
+                assignedSpecialistLabel = assignedSpecialist is not null ? Specialists[assignedSpecialist].Label : null,
+                adminResponse = request.AdminResponse?.Trim(),
+                updatedAt = DateTimeOffset.UtcNow
+            };
+            var registrarGroup = $"private_{registrarEmail.Trim()}";
+            await _chatHubContext.Clients.Group(registrarGroup)
+                .SendAsync("SupportTicketUpdated", notification, cancellationToken);
+            if (status is "RESOLVED" or "CLOSED")
+            {
+                var displayStatus = status == "CLOSED" ? "closed" : "resolved";
+                var message = $"Support ticket #{ticketId} was {displayStatus}: {request.AdminResponse?.Trim()}";
+                await _chatHubContext.Clients.Group(registrarGroup).SendAsync("SupportNotice", new
+                {
+                    noticeId = $"TICKET-{ticketId}",
+                    message,
+                    displayMessage = message,
+                    createdAt = DateTimeOffset.UtcNow
+                }, cancellationToken);
+            }
             return Ok(new { status = "Success", message = "Ticket updated." });
         }
 
         private string ActorEmail() => User.Identity?.Name ?? throw new UnauthorizedAccessException("Authenticated identity is missing.");
-        private static string NormalizeSpecialist(string value) => value.Trim().ToUpperInvariant();
+        private static string? NormalizeSpecialist(string? value) =>
+            string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
 
         private static char RandomLetter() => (char)('A' + RandomNumberGenerator.GetInt32(26));
 

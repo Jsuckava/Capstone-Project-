@@ -10,7 +10,7 @@
         "projectUniqueName": "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\EnrollmentImportChecks.csproj",
         "projectName": "EnrollmentImportChecks",
         "projectPath": "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\EnrollmentImportChecks.csproj",
-        "packagesPath": "C:\\Users\\pascu\\.nuget\\packages",
+        "packagesPath": "C:\\Users\\pascu\\.nuget\\packages\\",
         "outputPath": "C:\\Users\\pascu\\Documents\\GitHub2\\GitHub\\Capstone-Project-\\For_Testing_Only_Capstone\\tests\\EnrollmentImportChecks\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
@@ -20,7 +20,7 @@
           "net8.0"
         ],
         "sources": {
-          "C:\\Users\\pascu\\.nuget\\packages": {}
+          "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
           "net8.0": {
@@ -34,7 +34,7 @@
           ]
         },
         "restoreAuditProperties": {
-          "enableAudit": "false",
+          "enableAudit": "true",
           "auditLevel": "low",
           "auditMode": "direct"
         },
@@ -44,6 +44,10 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
+            "ClosedXML": {
+              "target": "Package",
+              "version": "[0.105.0, )"
+            },
             "CsvHelper": {
               "target": "Package",
               "version": "[33.1.0, )"

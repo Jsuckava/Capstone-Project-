@@ -1,0 +1,108 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgres-backup
+  namespace: plv-main-campus
+  labels:
+    app.kubernetes.io/name: postgres-backup
+automountServiceAccountToken: true
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: plv-main-campus
+  labels:
+    app.kubernetes.io/name: postgres-backup
+spec:
+  schedule: "0 */12 * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 7200
+      ttlSecondsAfterFinished: 604800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: postgres-backup
+        spec:
+          serviceAccountName: postgres-backup
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: postgres-backup
+            image: registry.example.com/plv-repo/postgres-backup:latest
+            imagePullPolicy: Always
+            args:
+            - /opt/blockgo/backup_postgres.sh
+            env:
+            - name: HOME
+              value: /tmp
+            - name: CLOUDSDK_CONFIG
+              value: /tmp/.config/gcloud
+            - name: PGHOST
+              value: postgres.plv-main-campus.svc.cluster.local
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: blockgo-secrets
+                  key: POSTGRES_USER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: blockgo-secrets
+                  key: POSTGRES_PASS
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: blockgo-secrets
+                  key: POSTGRES_DB
+            - name: POSTGRES_BACKUP_GCS_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: blockgo-secrets
+                  key: POSTGRES_BACKUP_GCS_BUCKET
+            - name: POSTGRES_BACKUP_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: blockgo-secrets
+                  key: POSTGRES_BACKUP_ENCRYPTION_KEY
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+                ephemeral-storage: 256Mi
+              limits:
+                cpu: "1"
+                memory: 512Mi
+                ephemeral-storage: 2Gi
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            volumeMounts:
+            - name: backup-script
+              mountPath: /opt/blockgo/backup_postgres.sh
+              subPath: backup_postgres.sh
+              readOnly: true
+            - name: temporary-files
+              mountPath: /tmp
+          volumes:
+          - name: backup-script
+            configMap:
+              name: postgres-backup-script
+              defaultMode: 0555
+          - name: temporary-files
+            emptyDir:
+              sizeLimit: 2Gi

@@ -1,0 +1,80 @@
+name: Staging Quality Gate
+
+on:
+  push:
+    branches: [Staging-and-Testing]
+  pull_request:
+    branches: [Staging-and-Testing]
+  workflow_dispatch:
+    inputs:
+      promote:
+        description: Promote the validated staging commit to main
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  staging-validation:
+    name: Integration, DAST and Supply-Chain Validation
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: "./.github/workflows/feature and api-endpoints-Testing.yml"
+    with:
+      checkout_ref: ${{ github.sha }}
+    secrets: inherit
+
+  staging-gate:
+    name: Required Staging Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs:
+      - staging-validation
+    steps:
+      - name: Verify staging validation
+        env:
+          VALIDATION_RESULT: ${{ needs.staging-validation.result }}
+        run: |
+          set -euo pipefail
+          if [ "$VALIDATION_RESULT" != "success" ]; then
+            echo "::error::Staging validation result: $VALIDATION_RESULT"
+            exit 1
+          fi
+          echo "Staging commit $GITHUB_SHA passed the complete release gate."
+
+  promote:
+    name: Promote to main
+    needs:
+      - staging-gate
+    if: >-
+      success() &&
+      (
+        (
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/Staging-and-Testing'
+        )
+        ||
+        (
+          github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/Staging-and-Testing' &&
+          inputs.promote == true
+        )
+      )
+    permissions:
+      contents: read
+    uses: ./.github/workflows/promote.yml
+    with:
+      source_branch: Staging-and-Testing
+      target_branch: main
+      tested_sha: ${{ github.sha }}
+    secrets:
+      PROMOTION_TOKEN: ${{ secrets.PROMOTION_TOKEN }}

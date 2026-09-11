@@ -46,6 +46,9 @@ test('keeps the signed-in account in sessionStorage and shows its role URL', asy
 
   await waitFor(() => expect(window.location.pathname).toBe('/faculty'));
   expect(screen.queryByRole('button', { name: /new login tab/i })).not.toBeInTheDocument();
+  const chatButton = screen.getByRole('button', { name: /^open chat$/i });
+  expect(chatButton).toHaveClass('h-11', 'w-11', 'rounded-full', 'hover:w-32');
+  expect(screen.getByText(/^open chat$/i)).toHaveClass('opacity-0', 'group-hover:opacity-100');
   expect(sessionStorage.getItem('blockgo.auth.token')).toBe(token);
   expect(localStorage.getItem('token')).toBeNull();
 });

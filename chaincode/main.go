@@ -156,6 +156,8 @@ func (cc *SmartContract) Invoke(stub shim.ChaincodeStubInterface) *pb.Response {
 	switch function {
 	case "InitLedger":
 		return cc.initLedger(stub)
+	case "ResetLedgerToGenesis":
+		return cc.resetLedgerToGenesis(stub, args)
 	case "IssueGrade":
 		return cc.issueGrade(stub, args)
 	case "IssueBatchGrades":
@@ -218,6 +220,60 @@ func (cc *SmartContract) initLedger(stub shim.ChaincodeStubInterface) *pb.Respon
 		}
 	}
 	return shim.Success([]byte("Ledger Initialized Successfully with Genesis Data"))
+}
+
+func (cc *SmartContract) resetLedgerToGenesis(stub shim.ChaincodeStubInterface, args []string) *pb.Response {
+	if len(args) != 1 || args[0] != "RESET_NON_GENESIS_DATA" {
+		return shim.Error("Reset requires the exact confirmation RESET_NON_GENESIS_DATA")
+	}
+
+	mspID, err := cid.GetMSPID(stub)
+	if err != nil {
+		return shim.Error("Unable to determine the caller organization")
+	}
+	role, found := getSafeAttribute(stub, "role")
+	if !found || mspID != "RegistrarMSP" || role != "registrar" {
+		return shim.Error("Only a cryptographically authenticated Registrar may reset ledger world state")
+	}
+
+	genesis, err := stub.GetState("GENESIS-001")
+	if err != nil {
+		return shim.Error(fmt.Sprintf("Failed to verify genesis state: %v", err))
+	}
+	if genesis == nil {
+		return shim.Error("Genesis state is missing; reset refused")
+	}
+
+	iterator, err := stub.GetStateByRange("", "")
+	if err != nil {
+		return shim.Error(fmt.Sprintf("Failed to enumerate ledger state: %v", err))
+	}
+	defer iterator.Close()
+
+	deleted := 0
+	for iterator.HasNext() {
+		entry, nextErr := iterator.Next()
+		if nextErr != nil {
+			return shim.Error(fmt.Sprintf("Failed while reading ledger state: %v", nextErr))
+		}
+		if entry.Key == "GENESIS-001" {
+			continue
+		}
+		if deleteErr := stub.DelState(entry.Key); deleteErr != nil {
+			return shim.Error(fmt.Sprintf("Failed to delete ledger key %s: %v", entry.Key, deleteErr))
+		}
+		deleted++
+	}
+
+	result, err := json.Marshal(map[string]interface{}{
+		"status":       "Success",
+		"deletedCount": deleted,
+		"preservedKey": "GENESIS-001",
+	})
+	if err != nil {
+		return shim.Error(fmt.Sprintf("Failed to encode reset result: %v", err))
+	}
+	return shim.Success(result)
 }
 
 func (cc *SmartContract) issueGrade(stub shim.ChaincodeStubInterface, args []string) *pb.Response {
@@ -357,6 +413,15 @@ func (cc *SmartContract) returnGrade(stub shim.ChaincodeStubInterface, args []st
 	if err := json.Unmarshal(recordJSON, &record); err != nil {
 		return shim.Error(fmt.Sprintf("Failed to unmarshal record: %v", err))
 	}
+	if record.Status == statusReturned && record.Note == note {
+		return shim.Success(recordJSON)
+	}
+	if isDepartmentAdmin && record.Status != statusIssued && record.Status != statusCorrected && record.Status != statusDepartmentApproved {
+		return shim.Error("Invalid grade transition: Department Admin may return only issued, corrected, or department-approved grades")
+	}
+	if isRegistrar && record.Status != statusIssued && record.Status != statusCorrected && record.Status != statusDepartmentApproved && record.Status != statusFinalized {
+		return shim.Error("Invalid grade transition: Registrar cannot return a grade in its current status")
+	}
 
 	record.Status = statusReturned
 	record.Note = note
@@ -432,6 +497,9 @@ func (cc *SmartContract) updateGrade(stub shim.ChaincodeStubInterface, args []st
 	if err := json.Unmarshal(existingJSON, &existing); err != nil {
 		return shim.Error(fmt.Sprintf("Failed to unmarshal existing record: %v", err))
 	}
+	if existing.Status != statusReturned {
+		return shim.Error("Invalid grade transition: only a returned grade can be corrected")
+	}
 
 	submitterID, _ := cid.GetID(stub)
 	var email string
@@ -443,7 +511,7 @@ func (cc *SmartContract) updateGrade(stub shim.ChaincodeStubInterface, args []st
 	
 	if existing.FacultyID != submitterID && existing.FacultyID != email {
 		
-		if updated.Status == statusReturned && (role == "department_admin" || role == "deptAdmin" || role == "registrar") {
+		if existing.Status == statusReturned && (role == "department_admin" || role == "deptAdmin" || role == "registrar") {
 			
 		} else {
 			return shim.Error("Only the original professor who issued the grade can update it")
@@ -497,6 +565,12 @@ func (cc *SmartContract) approveGrade(stub shim.ChaincodeStubInterface, args []s
 	if err := json.Unmarshal(recordJSON, &record); err != nil {
 		return shim.Error(fmt.Sprintf("Failed to unmarshal record: %v", err))
 	}
+	if record.Status == statusDepartmentApproved {
+		return shim.Success(recordJSON)
+	}
+	if record.Status != statusIssued && record.Status != statusCorrected {
+		return shim.Error("Invalid grade transition: only issued or corrected grades can be department-approved")
+	}
 
 	record.Status = statusDepartmentApproved
 	record.Version++
@@ -538,6 +612,12 @@ func (cc *SmartContract) finalizeRecord(stub shim.ChaincodeStubInterface, args [
 	var record AcademicRecord
 	if err := json.Unmarshal(recordJSON, &record); err != nil {
 		return shim.Error(fmt.Sprintf("Failed to unmarshal record: %v", err))
+	}
+	if record.Status == statusFinalized {
+		return shim.Success(recordJSON)
+	}
+	if record.Status != statusDepartmentApproved {
+		return shim.Error("Invalid grade transition: Registrar may finalize only department-approved grades")
 	}
 
 	record.Status = statusFinalized

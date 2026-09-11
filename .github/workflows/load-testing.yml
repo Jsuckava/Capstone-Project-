@@ -1,0 +1,197 @@
+name: Load Testing - Blockchain Bottleneck
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_users:
+        description: "Maximum number of concurrent virtual users"
+        required: true
+        default: "500"
+        type: string
+
+      hold_duration:
+        description: "How long to hold maximum load"
+        required: true
+        default: "3m"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blockchain-load-test
+  cancel-in-progress: false
+
+env:
+  TARGET_USERS: ${{ inputs.target_users || '500' }}
+  HOLD_DURATION: ${{ inputs.hold_duration || '3m' }}
+
+jobs:
+  k6-blockchain-load-test:
+
+    name: Blockchain Grade Submission Load Test
+    runs-on: [self-hosted, linux, x64]
+
+    timeout-minutes: 30
+
+    env:
+      API_URL: http://localhost:8080/api
+      LOAD_TEST_EMAIL: ${{ secrets.LOAD_TEST_EMAIL }}
+      LOAD_TEST_PASSWORD: ${{ secrets.LOAD_TEST_PASSWORD }}
+      STUDENT_ID_PREFIX: ${{ vars.LOAD_TEST_STUDENT_PREFIX }}
+      STUDENT_COUNT: ${{ vars.LOAD_TEST_STUDENT_COUNT }}
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      - name: Show load test configuration
+        shell: bash
+        run: |
+          echo "=========================================="
+          echo " BLOCKGO LOAD TEST CONFIGURATION"
+          echo "=========================================="
+          echo "Runner       : $RUNNER_NAME"
+          echo "API URL      : $API_URL"
+          echo "Target Users : $TARGET_USERS"
+          echo "Hold Duration: $HOLD_DURATION"
+          echo "=========================================="
+
+
+      - name: Validate load test configuration
+        shell: bash
+        run: |
+          echo "Checking configuration..."
+
+          if [ -z "$LOAD_TEST_EMAIL" ]; then
+            echo "::error::LOAD_TEST_EMAIL secret is missing."
+            exit 1
+          fi
+
+          if [ -z "$LOAD_TEST_PASSWORD" ]; then
+            echo "::error::LOAD_TEST_PASSWORD secret is missing."
+            exit 1
+          fi
+
+          if [ -z "$STUDENT_ID_PREFIX" ]; then
+            echo "::error::LOAD_TEST_STUDENT_PREFIX variable is missing."
+            exit 1
+          fi
+
+          if [ -z "$STUDENT_COUNT" ]; then
+            echo "::error::LOAD_TEST_STUDENT_COUNT variable is missing."
+            exit 1
+          fi
+
+          echo "Configuration OK."
+
+
+      - name: Check BlockGo local server
+        shell: bash
+        run: |
+          echo "Checking BlockGo at http://localhost:8080..."
+
+          for i in {1..20}; do
+
+            if curl \
+              --silent \
+              --show-error \
+              --connect-timeout 5 \
+              http://localhost:8080/ \
+              > /dev/null; then
+
+              echo "BlockGo is reachable."
+              exit 0
+
+            fi
+
+            echo "Attempt $i/20 - BlockGo not ready yet."
+            sleep 5
+
+          done
+
+          echo "::error::BlockGo is not reachable at http://localhost:8080/"
+          echo "Make sure Docker/Kubernetes and the application are running."
+          exit 1
+
+
+      - name: Check Kubernetes status
+        shell: bash
+        continue-on-error: true
+        run: |
+          echo "=========================================="
+          echo " KUBERNETES STATUS"
+          echo "=========================================="
+
+          kubectl get pods -A
+
+          echo ""
+          echo "=========================================="
+          echo " SERVICES"
+          echo "=========================================="
+
+          kubectl get services -A
+
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
+
+      - name: Verify k6 installation
+        shell: bash
+        run: |
+          k6 version
+
+
+      - name: Verify k6 test script
+        shell: bash
+        run: |
+          if [ ! -f "./tests/LoadTests/k6-grade-submission.js" ]; then
+
+            echo "::error::k6-grade-submission.js not found."
+            echo "Expected:"
+            echo "./tests/LoadTests/k6-grade-submission.js"
+
+            exit 1
+
+          fi
+
+          echo "Load test script found."
+
+      - name: Run blockchain grade submission load test
+        shell: bash
+        run: |
+
+          echo "=========================================="
+          echo " BLOCKGO BLOCKCHAIN LOAD TEST"
+          echo "=========================================="
+          echo ""
+          echo "API:"
+          echo "$API_URL"
+          echo ""
+          echo "Maximum VUs:"
+          echo "$TARGET_USERS"
+          echo ""
+          echo "Maximum load duration:"
+          echo "$HOLD_DURATION"
+          echo ""
+          echo "=========================================="
+
+          k6 run \
+            --summary-export=k6-summary.json \
+            ./tests/LoadTests/k6-grade-submission.js
+
+      - name: Upload k6 results
+        if: always()
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: blockchain-load-test-results-${{ github.run_number }}
+
+          path: |
+            k6-summary.json
+
+          retention-days: 14
+          if-no-files-found: warn

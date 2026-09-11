@@ -650,6 +650,14 @@ EOF
         "${migration_config_args[@]}" \
         -n plv-main-campus --dry-run=client -o yaml | kubectl apply -f -
 
+    if [[ ! -s "./k8s/backup_postgres.sh" ]]; then
+        echo "ERROR: ./k8s/backup_postgres.sh is missing or empty."
+        exit 1
+    fi
+    kubectl create configmap postgres-backup-script \
+        --from-file=backup_postgres.sh=./k8s/backup_postgres.sh \
+        -n plv-main-campus --dry-run=client -o yaml | kubectl apply -f -
+
     if [[ ! -f "./swarm.key" ]]; then
         echo "Generating missing IPFS swarm.key for this environment."
         printf "/key/swarm/psk/1.0.0/\n/base16/\n1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a\n" > ./swarm.key
@@ -688,7 +696,7 @@ EOF
     require_keys "$clean_env" FABRIC_CA_REGISTRAR_PASS FABRIC_CA_FACULTY_PASS FABRIC_CA_DEPARTMENT_PASS
 
     if [[ "$PROFILE" == "production" ]]; then
-        require_keys "$clean_env" POSTGRES_PASS POSTGRES_REPL_PASS COUCHDB_PASS
+        require_keys "$clean_env" POSTGRES_PASS POSTGRES_REPL_PASS COUCHDB_PASS POSTGRES_BACKUP_GCS_BUCKET POSTGRES_BACKUP_ENCRYPTION_KEY
     fi
 
     append_default "$clean_env" POSTGRES_USER "postgres"
@@ -763,7 +771,8 @@ prepare_manifests() {
             frontend \
             registrar-chaincode \
             faculty-chaincode \
-            department-chaincode; do
+            department-chaincode \
+            postgres-backup; do
             sed -i "s|${image_name}:latest|${image_name}:${LOCAL_IMAGE_TAG}|g" "$TMP_K8S_DIR"/*.yaml
         done
         sed -i 's/imagePullPolicy: Always/imagePullPolicy: Never/g' "$TMP_K8S_DIR"/*.yaml
@@ -800,7 +809,8 @@ prepare_manifests() {
             frontend \
             registrar-chaincode \
             faculty-chaincode \
-            department-chaincode; do
+            department-chaincode \
+            postgres-backup; do
             sed -i \
                 "s|registry.example.com/plv-repo/${image_name}:latest|${PRODUCTION_IMAGE_REPOSITORY%/}/${image_name}:${PRODUCTION_IMAGE_TAG}|g" \
                 "$TMP_K8S_DIR"/*.yaml
@@ -934,12 +944,14 @@ setup_gke_cluster() {
             --enable-ip-alias \
             --enable-shielded-nodes \
             --enable-dataplane-v2 \
+            --workload-pool "${GCP_PROJECT_ID}.svc.id.goog" \
             --addons GcePersistentDiskCsiDriver,HttpLoadBalancing \
             "${node_service_account_args[@]}"
     else
         echo "Using existing regional GKE cluster $GKE_CLUSTER_NAME."
         gcloud container clusters update "$GKE_CLUSTER_NAME" \
             --project "$GCP_PROJECT_ID" --region "$GKE_REGION" \
+            --workload-pool "${GCP_PROJECT_ID}.svc.id.goog" \
             --update-addons GcePersistentDiskCsiDriver=ENABLED
     fi
 
@@ -1240,6 +1252,7 @@ prepare_production_source_images() {
     docker build -t "${repository}/client-app:${tag}" -f ../client-app/Dockerfile ../client-app
     docker build -t "${repository}/frontend:${tag}" -f ../frontend/Dockerfile ../frontend
     docker build -t "${repository}/registrar-chaincode:${tag}" -f ../chaincode/Dockerfile ../chaincode
+    docker build -t "${repository}/postgres-backup:${tag}" -f ./k8s/postgres-backup/Dockerfile ./k8s/postgres-backup
     docker image tag "${repository}/registrar-chaincode:${tag}" "${repository}/faculty-chaincode:${tag}"
     docker image tag "${repository}/registrar-chaincode:${tag}" "${repository}/department-chaincode:${tag}"
 
@@ -1250,7 +1263,8 @@ prepare_production_source_images() {
         frontend \
         registrar-chaincode \
         faculty-chaincode \
-        department-chaincode; do
+        department-chaincode \
+        postgres-backup; do
         echo "Publishing ${repository}/${image_name}:${tag}..."
         docker push "${repository}/${image_name}:${tag}"
     done
@@ -1276,7 +1290,8 @@ verify_deployment_inputs() {
         frontend \
         registrar-chaincode \
         faculty-chaincode \
-        department-chaincode; do
+        department-chaincode \
+        postgres-backup; do
         expected_image="${image_repository}${image_name}:${image_tag}"
         if ! grep -R -F -q "image: ${expected_image}" "$TMP_K8S_DIR"; then
             echo "ERROR: Prepared manifests do not reference ${expected_image}."
@@ -1295,6 +1310,9 @@ verify_deployment_inputs() {
         ../migrations/006_chat_conversation_states.sql \
         ../migrations/007_group_chats.sql \
         ../migrations/008_support_ticket_specialist_assignments.sql \
+        ./k8s/backup_postgres.sh \
+        ./k8s/15-postgres-backup.yaml \
+        ./k8s/postgres-backup/Dockerfile \
         ./k8s/couchdb-health-probe-json-patch.json \
         ../monitoring/grafana-dashboard.json \
         ../monitoring/grafana-kubernetes-memory.json \
@@ -1636,6 +1654,7 @@ configure_peer_channel_endpoint_aliases() {
         apply_manifest "$TMP_K8S_DIR/11a-application-hpa.yaml"
         apply_manifest "$TMP_K8S_DIR/15-main-ingress.yaml"
         apply_manifest "$TMP_K8S_DIR/15-couchdb-backup.yaml"
+        apply_manifest "$TMP_K8S_DIR/15-postgres-backup.yaml"
         apply_manifest "$TMP_K8S_DIR/16-firewall-config.yaml"
     else
         kubectl delete horizontalpodautoscaler \

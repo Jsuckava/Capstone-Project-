@@ -33,8 +33,13 @@ CREATE TABLE IF NOT EXISTS studentprofiles (
     middle_name VARCHAR(100),
     address TEXT,
     student_email VARCHAR(255),
+    batch_year INTEGER,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_studentprofiles_normalized_full_name
+    ON studentprofiles ((LOWER(REGEXP_REPLACE(BTRIM(full_name), '\s+', ' ', 'g'))))
+    WHERE NULLIF(BTRIM(full_name), '') IS NOT NULL;
 
 -- Create FacultyProfiles table
 CREATE TABLE IF NOT EXISTS facultyprofiles (
@@ -205,6 +210,17 @@ CREATE TABLE IF NOT EXISTS curriculum_subjects (
     UNIQUE (curriculum_id, year_level, semester, subject_code)
 );
 
+CREATE TABLE IF NOT EXISTS program_curriculum_assignments (
+    program_id INTEGER PRIMARY KEY REFERENCES academic_programs(program_id) ON DELETE CASCADE,
+    curriculum_id BIGINT NOT NULL REFERENCES curriculums(curriculum_id) ON DELETE RESTRICT,
+    assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    assigned_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_program_curriculum_assignment_curriculum
+    ON program_curriculum_assignments(curriculum_id);
+
 CREATE TABLE IF NOT EXISTS support_tickets (
     ticket_id BIGSERIAL PRIMARY KEY,
     registrar_id INTEGER NOT NULL REFERENCES users(id),
@@ -299,6 +315,7 @@ CREATE TABLE IF NOT EXISTS student_enrollments (
     school_year VARCHAR(20) NOT NULL,
     semester VARCHAR(20) NOT NULL CHECK (semester IN ('FIRST', 'SECOND', 'MIDYEAR')),
     year_level SMALLINT NOT NULL CHECK (year_level BETWEEN 1 AND 4),
+    batch_year INTEGER,
     section VARCHAR(50),
     status VARCHAR(20) NOT NULL DEFAULT 'ENROLLED'
         CHECK (status IN ('ENROLLED', 'DROPPED', 'WITHDRAWN', 'COMPLETED')),
@@ -306,6 +323,12 @@ CREATE TABLE IF NOT EXISTS student_enrollments (
     enrolled_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (student_user_id, school_year, semester)
+);
+
+CREATE TABLE IF NOT EXISTS student_id_sequences (
+    enrollment_year INTEGER PRIMARY KEY CHECK (enrollment_year BETWEEN 2000 AND 9999),
+    last_sequence INTEGER NOT NULL CHECK (last_sequence > 0),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE UNIQUE INDEX idx_unique_faculty_section ON FacultySections(user_id, department, section, subject);
@@ -318,6 +341,8 @@ ALTER TABLE studentprofiles ADD COLUMN IF NOT EXISTS sex VARCHAR(20);
 ALTER TABLE studentprofiles ADD COLUMN IF NOT EXISTS middle_name VARCHAR(100);
 ALTER TABLE studentprofiles ADD COLUMN IF NOT EXISTS address TEXT;
 ALTER TABLE studentprofiles ADD COLUMN IF NOT EXISTS student_email VARCHAR(255);
+ALTER TABLE studentprofiles ADD COLUMN IF NOT EXISTS batch_year INTEGER;
+ALTER TABLE student_enrollments ADD COLUMN IF NOT EXISTS batch_year INTEGER;
 
 -- Chat Messages table
 CREATE TABLE IF NOT EXISTS chat_messages (

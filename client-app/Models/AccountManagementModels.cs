@@ -64,6 +64,19 @@ namespace Client_app.Models
         public string NewPassword { get; set; } = string.Empty;
     }
 
+    public sealed record BulkStaffAccountItemResult(
+        int RowNumber,
+        string StaffId,
+        bool Success,
+        ManagedAccountResult? Account,
+        string? Error);
+
+    public sealed record BulkStaffAccountResult(
+        int Total,
+        int Created,
+        int Failed,
+        IReadOnlyCollection<BulkStaffAccountItemResult> Results);
+
     public sealed record ManagedAccountResult(
         int Id,
         string AccountId,

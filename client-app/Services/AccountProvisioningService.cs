@@ -402,15 +402,59 @@ namespace Client_app.Services
                 await update.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            await using (var resetRequestTable = new NpgsqlCommand("SELECT to_regclass('public.password_reset_requests') IS NOT NULL;", connection, transaction))
+            await using (var resetRequestTable = new NpgsqlCommand(@"
+                SELECT to_regclass('public.password_reset_requests') IS NOT NULL,
+                       EXISTS (
+                           SELECT 1
+                           FROM information_schema.columns
+                           WHERE table_schema = 'public'
+                             AND table_name = 'password_reset_requests'
+                             AND column_name = 'used_at'
+                       ),
+                       EXISTS (
+                           SELECT 1
+                           FROM information_schema.columns
+                           WHERE table_schema = 'public'
+                             AND table_name = 'password_reset_requests'
+                             AND column_name = 'request_status'
+                       );", connection, transaction))
             {
-                var hasResetRequestTable = Convert.ToBoolean(await resetRequestTable.ExecuteScalarAsync(cancellationToken));
+                var hasResetRequestTable = false;
+                var hasLegacyUsedAt = false;
+                var hasApprovalStatus = false;
+                await using (var reader = await resetRequestTable.ExecuteReaderAsync(cancellationToken))
+                {
+                    if (await reader.ReadAsync(cancellationToken))
+                    {
+                        hasResetRequestTable = reader.GetBoolean(0);
+                        hasLegacyUsedAt = reader.GetBoolean(1);
+                        hasApprovalStatus = reader.GetBoolean(2);
+                    }
+                }
+
                 if (hasResetRequestTable)
                 {
-                    await using var expireRequests = new NpgsqlCommand(@"
-                        UPDATE password_reset_requests
-                        SET used_at = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT
-                        WHERE user_id = @userId AND used_at IS NULL;", connection, transaction);
+                    var completeRequestSql = hasApprovalStatus
+                        ? @"
+                            UPDATE password_reset_requests
+                            SET request_status = 'COMPLETED',
+                                completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP)
+                            WHERE user_id = @userId
+                              AND request_status IN ('PENDING', 'APPROVED');"
+                        : hasLegacyUsedAt
+                            ? @"
+                                UPDATE password_reset_requests
+                                SET used_at = (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT
+                                WHERE user_id = @userId AND used_at IS NULL;"
+                            : null;
+
+                    if (completeRequestSql is null)
+                    {
+                        throw new InvalidOperationException(
+                            "The password reset request table does not match a supported schema.");
+                    }
+
+                    await using var expireRequests = new NpgsqlCommand(completeRequestSql, connection, transaction);
                     expireRequests.Parameters.AddWithValue("userId", userId);
                     await expireRequests.ExecuteNonQueryAsync(cancellationToken);
                 }
