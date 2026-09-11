@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../client-app/Services/StudentEnrollmentFile.cs" Link="StudentEnrollmentFile.cs" />
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
     <PackageReference Include="CsvHelper" Version="33.1.0" />
   </ItemGroup>
 </Project>

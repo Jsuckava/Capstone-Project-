@@ -184,6 +184,7 @@ jobs:
     name: .NET — Build, Checks & Dependency Audit
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
     services:
       postgres:
         image: postgres:16-alpine
@@ -198,6 +199,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -209,14 +211,38 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      - name: Restore and build ASP.NET services
+      - name: Restore ASP.NET service dependencies
         run: |
           set -euo pipefail
           dotnet restore client-app/For_Testing_Only_Capstone.csproj
+
+      - name: Build ASP.NET services
+        run: |
+          set -euo pipefail
           dotnet build client-app/For_Testing_Only_Capstone.csproj \
             --configuration Release \
             --no-restore \
             --verbosity minimal
+
+      - name: Restore test project dependencies
+        run: |
+          set -euo pipefail
+          dotnet restore tests/EnrollmentImportChecks/EnrollmentImportChecks.csproj
+          dotnet restore tests/EnrollmentSectioningChecks/EnrollmentSectioningChecks.csproj
+
+      - name: Build Enrollment Import Checks
+        run: |
+          set -euo pipefail
+          dotnet build tests/EnrollmentImportChecks/EnrollmentImportChecks.csproj \
+            --configuration Release \
+            --no-restore
+
+      - name: Build Enrollment Sectioning Checks
+        run: |
+          set -euo pipefail
+          dotnet build tests/EnrollmentSectioningChecks/EnrollmentSectioningChecks.csproj \
+            --configuration Release \
+            --no-restore
 
       - name: Run repository .NET checks
         env:
@@ -236,14 +262,18 @@ jobs:
             fi
 
             echo "Running $project"
+
             dotnet run \
               --project "$project" \
-              --configuration Release
+              --configuration Release \
+              --no-build \
+              --no-restore
           done
 
       - name: Audit NuGet dependencies
         run: |
           set -euo pipefail
+
           report="dotnet-vulnerabilities.txt"
 
           dotnet list client-app/For_Testing_Only_Capstone.csproj package \
@@ -252,6 +282,7 @@ jobs:
             > "$report"
 
           cat "$report"
+
           if grep -Eq '(^|[[:space:]])(High|Critical)([[:space:]]|$)' "$report"; then
             echo "::error::NuGet reported high or critical direct/transitive dependencies."
             exit 1
